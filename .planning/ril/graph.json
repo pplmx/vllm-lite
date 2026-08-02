@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 12,
+  "round": 13,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T18:43:35+00:00",
+  "updated_at": "2026-08-02T18:51:24+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 12,
+      "touched_round": 13,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -1070,7 +1070,7 @@
       "version": 2,
       "created_at": "2026-08-02T18:43:34+00:00",
       "updated_at": "2026-08-02T18:43:35+00:00",
-      "touched_round": 12,
+      "touched_round": 13,
       "title": "Speculative verification built verify_positions=[0..n] but RoPE uses absolute positions => wrong positions for any sequence past pos 0 (corrupts accept/reject); empty-drafts path was correct, drafts path inconsistent",
       "severity": 0.85,
       "category": "correctness"
@@ -1111,6 +1111,56 @@
       "touched_round": 12,
       "source": "code trace: positions flow unchanged forward_logits->forward_with_paged_kv->run_decoder_layers->LayerCtx.positions->RoPE (num_computed_tokens is separate, KV-slot only). test @ e2975ad6: PositionRecordingModel asserts verify positions >=2 after 2-token prefill; FAILS pre-fix (got 0 in [0,1,2,3]); vllm-core 626/626",
       "title": "VERIFY TASK-017: verification uses true sequence positions; load-bearing test",
+      "confidence": 0.97
+    },
+    "ISS-017": {
+      "id": "ISS-017",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:51:24+00:00",
+      "updated_at": "2026-08-02T18:51:24+00:00",
+      "touched_round": 13,
+      "title": "Batched draft generation advanced positions by current_positions.len() not last_pos+1 => draft positions [P,1,2,...] instead of [P,P+1,P+2,...] (wrong RoPE for drafts past the first); per-seq path was correct, legacy batched path diverged (same class as ISS-016)",
+      "severity": 0.8,
+      "category": "correctness"
+    },
+    "TASK-018": {
+      "id": "TASK-018",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:51:24+00:00",
+      "updated_at": "2026-08-02T18:51:24+00:00",
+      "touched_round": 13,
+      "title": "fix batched draft positions to last_pos+1; position-recording regression test (draft model)",
+      "category": "correctness",
+      "severity": 0.8,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "CHG-011": {
+      "id": "CHG-011",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:51:24+00:00",
+      "updated_at": "2026-08-02T18:51:24+00:00",
+      "touched_round": 13,
+      "commit": "4ff10e61",
+      "title": "fix(core): batched draft positions advance last_pos+1 (was len() => [P,1,2] wrong RoPE)"
+    },
+    "EV-026": {
+      "id": "EV-026",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:51:24+00:00",
+      "updated_at": "2026-08-02T18:51:24+00:00",
+      "touched_round": 13,
+      "source": "test @ 4ff10e61: PositionRecordingModel as draft model asserts draft positions >=2 after 2-token prefill; FAILS pre-fix (got 1 in [2,1]); per-seq path already used last_pos+1 (inconsistency confirms bug); vllm-core 627/627",
+      "title": "VERIFY TASK-018: batched draft positions advance from true base; load-bearing test",
       "confidence": 0.97
     }
   },
@@ -1528,6 +1578,36 @@
       "to": "TASK-017",
       "type": "implements",
       "created_at": "2026-08-02T18:43:35+00:00"
+    },
+    {
+      "from": "ISS-017",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-02T18:51:24+00:00"
+    },
+    {
+      "from": "TASK-018",
+      "to": "ISS-017",
+      "type": "addresses",
+      "created_at": "2026-08-02T18:51:24+00:00"
+    },
+    {
+      "from": "CHG-011",
+      "to": "ISS-017",
+      "type": "resolves",
+      "created_at": "2026-08-02T18:51:24+00:00"
+    },
+    {
+      "from": "CHG-011",
+      "to": "TASK-018",
+      "type": "implements",
+      "created_at": "2026-08-02T18:51:24+00:00"
+    },
+    {
+      "from": "ISS-016",
+      "to": "ISS-017",
+      "type": "causes",
+      "created_at": "2026-08-02T18:51:24+00:00"
     }
   ]
 }
