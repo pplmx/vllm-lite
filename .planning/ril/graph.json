@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 8,
+  "round": 9,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T18:06:18+00:00",
+  "updated_at": "2026-08-02T18:14:19+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -33,7 +33,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 8,
+      "touched_round": 9,
       "title": "vllm-model",
       "role": "model architectures, kernels, paged tensor store"
     },
@@ -924,6 +924,56 @@
       "source": "test @ e7ec21f8: single size-4 MRoPE section == standard RoPE/HF reference; regression test fails pre-fix (second half was [3,4] unchanged); vllm-model 545/545",
       "title": "VERIFY TASK-013: MRoPE rotates both halves per standard convention",
       "confidence": 0.98
+    },
+    "ISS-014": {
+      "id": "ISS-014",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:14:18+00:00",
+      "updated_at": "2026-08-02T18:14:18+00:00",
+      "touched_round": 9,
+      "title": "GGUF Q4_K_M support overstated in docs (gguf.rs references nonexistent dequantize_q4_k; dequant docs hide zero-filling stub; AGENTS.md lists it as supported) — actually a deferred stub (ADR-009)",
+      "severity": 0.4,
+      "category": "docs"
+    },
+    "TASK-014": {
+      "id": "TASK-014",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:14:18+00:00",
+      "updated_at": "2026-08-02T18:14:19+00:00",
+      "touched_round": 9,
+      "title": "correct GGUF docs to deferred-stub reality (gguf.rs module doc, dequantize_to_fN docs, AGENTS.md)",
+      "category": "docs",
+      "severity": 0.4,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "CHG-007": {
+      "id": "CHG-007",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:14:18+00:00",
+      "updated_at": "2026-08-02T18:14:18+00:00",
+      "touched_round": 9,
+      "commit": "a042acec",
+      "title": "docs: correct overstated GGUF Q4_K_M claims to deferred-stub reality (ADR-009)"
+    },
+    "EV-022": {
+      "id": "EV-022",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:14:18+00:00",
+      "updated_at": "2026-08-02T18:14:18+00:00",
+      "touched_round": 9,
+      "source": "code read @ a042acec: load_gguf_tensors returns empty HashMap (honest stub citing ADR-009); dequantize_to_f32 returns vec![0.0; total] ignoring data/scales; dequantize_q4_k absent repo-wide (grep). clippy + fmt + doc green.",
+      "title": "VERIFY TASK-014: GGUF is detection+scaffold only; docs now match the honestly-stubbed loader",
+      "confidence": 0.95
     }
   },
   "edges": [
@@ -1250,6 +1300,30 @@
       "to": "COMP-003",
       "type": "governs",
       "created_at": "2026-08-02T18:06:18+00:00"
+    },
+    {
+      "from": "ISS-014",
+      "to": "COMP-003",
+      "type": "located_in",
+      "created_at": "2026-08-02T18:14:18+00:00"
+    },
+    {
+      "from": "TASK-014",
+      "to": "ISS-014",
+      "type": "addresses",
+      "created_at": "2026-08-02T18:14:18+00:00"
+    },
+    {
+      "from": "CHG-007",
+      "to": "ISS-014",
+      "type": "resolves",
+      "created_at": "2026-08-02T18:14:18+00:00"
+    },
+    {
+      "from": "CHG-007",
+      "to": "TASK-014",
+      "type": "implements",
+      "created_at": "2026-08-02T18:14:18+00:00"
     }
   ]
 }
