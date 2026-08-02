@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 15,
+  "round": 16,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T19:25:03+00:00",
+  "updated_at": "2026-08-02T19:47:09+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -33,7 +33,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 15,
+      "touched_round": 16,
       "title": "vllm-model",
       "role": "model architectures, kernels, paged tensor store"
     },
@@ -1262,6 +1262,56 @@
       "source": "empirical probe: 20-token prefill into blocks [5,9] read back [16,17,18,19,4,..,0,1,0,0] pre-fix (scrambled); decode token pos 20 -> block 1 slot 4 (wrong) vs block 9 slot 4 (correct). test_multi_block_kv_roundtrip_non_contiguous_blocks FAILS pre-fix, passes post-fix; vllm-model 547/547",
       "title": "VERIFY TASK-020: multi-block KV round-trip correct with non-contiguous blocks; load-bearing test",
       "confidence": 0.98
+    },
+    "ISS-020": {
+      "id": "ISS-020",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T19:47:09+00:00",
+      "updated_at": "2026-08-02T19:47:09+00:00",
+      "touched_round": 16,
+      "title": "Quantized paged KV cache stored one scale per LAYER but quantizes per BLOCK: write_kv read-modify-write treated stored int8 as raw (first token stuck at 127, corrupts scale) + read_kv dequantized all blocks with the last block's scale => multi-block quantized KV scrambled. Opt-in feature (kv_quantization off by default).",
+      "severity": 0.7,
+      "category": "correctness"
+    },
+    "TASK-021": {
+      "id": "TASK-021",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T19:47:09+00:00",
+      "updated_at": "2026-08-02T19:47:09+00:00",
+      "touched_round": 16,
+      "title": "per-block scales (Vec<Vec<f32>>); write_kv dequant-before-modify; read_kv per-block dequant; wrapper per-block get_scale; multi-block round-trip test",
+      "category": "correctness",
+      "severity": 0.7,
+      "confidence": 0.95,
+      "effort": 2,
+      "unlock_factor": 1
+    },
+    "CHG-014": {
+      "id": "CHG-014",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T19:47:09+00:00",
+      "updated_at": "2026-08-02T19:47:09+00:00",
+      "touched_round": 16,
+      "commit": "2056619c",
+      "title": "fix(model): quantized KV per-block scale (was per-layer => multi-block scramble); write dequant-before-modify + read per-block dequant"
+    },
+    "EV-029": {
+      "id": "EV-029",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T19:47:09+00:00",
+      "updated_at": "2026-08-02T19:47:09+00:00",
+      "touched_round": 16,
+      "source": "empirical: 20-token prefill blocks [100x16, 1x4] read back [127,100,..]/[127,1,..] pre-fix; post-fix block0~100 block1~1. test_quantized_multi_block_roundtrip_per_block_scale FAILS pre-fix (token0=127); vllm-model 548/548, workspace 1944/1944, clippy --all-features green",
+      "title": "VERIFY TASK-021: multi-block quantized KV round-trips per-block; load-bearing test",
+      "confidence": 0.97
     }
   },
   "edges": [
@@ -1756,6 +1806,30 @@
       "to": "TASK-020",
       "type": "implements",
       "created_at": "2026-08-02T19:25:03+00:00"
+    },
+    {
+      "from": "ISS-020",
+      "to": "COMP-003",
+      "type": "located_in",
+      "created_at": "2026-08-02T19:47:09+00:00"
+    },
+    {
+      "from": "TASK-021",
+      "to": "ISS-020",
+      "type": "addresses",
+      "created_at": "2026-08-02T19:47:09+00:00"
+    },
+    {
+      "from": "CHG-014",
+      "to": "ISS-020",
+      "type": "resolves",
+      "created_at": "2026-08-02T19:47:09+00:00"
+    },
+    {
+      "from": "CHG-014",
+      "to": "TASK-021",
+      "type": "implements",
+      "created_at": "2026-08-02T19:47:09+00:00"
     }
   ]
 }
