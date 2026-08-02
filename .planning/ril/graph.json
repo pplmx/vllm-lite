@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 14,
+  "round": 15,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T19:06:10+00:00",
+  "updated_at": "2026-08-02T19:25:03+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -33,7 +33,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 10,
+      "touched_round": 15,
       "title": "vllm-model",
       "role": "model architectures, kernels, paged tensor store"
     },
@@ -1212,6 +1212,56 @@
       "source": "empirical: production_app (auth configured) GET /health/live w/o key => 401 pre-fix, 200 post-fix; /v1/models still 401 (no bypass); admin_gating debug/shutdown auth still enforced; vllm-server 648/648",
       "title": "VERIFY TASK-019: health probes exempt, non-health still authed; load-bearing test",
       "confidence": 0.97
+    },
+    "ISS-019": {
+      "id": "ISS-019",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T19:25:03+00:00",
+      "updated_at": "2026-08-02T19:25:03+00:00",
+      "touched_round": 15,
+      "title": "Multi-block KV cache writes indexed blocks wrong: write_prefill_kv used block_ids[token_idx] (one-per-token) and read_decode_kv used raw block index as block id; both diverge from read_kv (block_ids[global_pos/block_size]) => KV scrambled for any prompt > 1 block (all real inference). Hidden because all tests used single block / contiguous block_ids=[0].",
+      "severity": 0.95,
+      "category": "correctness"
+    },
+    "TASK-020": {
+      "id": "TASK-020",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T19:25:03+00:00",
+      "updated_at": "2026-08-02T19:25:03+00:00",
+      "touched_round": 15,
+      "title": "fix write_prefill_kv + read_decode_kv block indexing to block_ids[global_pos/block_size]; multi-block non-contiguous value round-trip test",
+      "category": "correctness",
+      "severity": 0.95,
+      "confidence": 0.95,
+      "effort": 2,
+      "unlock_factor": 1
+    },
+    "CHG-013": {
+      "id": "CHG-013",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T19:25:03+00:00",
+      "updated_at": "2026-08-02T19:25:03+00:00",
+      "touched_round": 15,
+      "commit": "d1c23c73",
+      "title": "fix(model): KV write paths use block_ids[global_pos/block_size] matching read_kv (was block_ids[token_idx] / raw index => multi-block corruption)"
+    },
+    "EV-028": {
+      "id": "EV-028",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T19:25:03+00:00",
+      "updated_at": "2026-08-02T19:25:03+00:00",
+      "touched_round": 15,
+      "source": "empirical probe: 20-token prefill into blocks [5,9] read back [16,17,18,19,4,..,0,1,0,0] pre-fix (scrambled); decode token pos 20 -> block 1 slot 4 (wrong) vs block 9 slot 4 (correct). test_multi_block_kv_roundtrip_non_contiguous_blocks FAILS pre-fix, passes post-fix; vllm-model 547/547",
+      "title": "VERIFY TASK-020: multi-block KV round-trip correct with non-contiguous blocks; load-bearing test",
+      "confidence": 0.98
     }
   },
   "edges": [
@@ -1682,6 +1732,30 @@
       "to": "TASK-019",
       "type": "implements",
       "created_at": "2026-08-02T19:06:10+00:00"
+    },
+    {
+      "from": "ISS-019",
+      "to": "COMP-003",
+      "type": "located_in",
+      "created_at": "2026-08-02T19:25:03+00:00"
+    },
+    {
+      "from": "TASK-020",
+      "to": "ISS-019",
+      "type": "addresses",
+      "created_at": "2026-08-02T19:25:03+00:00"
+    },
+    {
+      "from": "CHG-013",
+      "to": "ISS-019",
+      "type": "resolves",
+      "created_at": "2026-08-02T19:25:03+00:00"
+    },
+    {
+      "from": "CHG-013",
+      "to": "TASK-020",
+      "type": "implements",
+      "created_at": "2026-08-02T19:25:03+00:00"
     }
   ]
 }
