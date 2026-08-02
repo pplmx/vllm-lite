@@ -191,7 +191,9 @@ fn read_block_bytes(cache: &PagedKvCache, block_id: usize) -> Result<Vec<u8>, Fe
         // Dequantize in-place on the owned Vec<f32> to avoid a
         // per-layer intermediate allocation in the multi-node hot path.
         if cache.quantized {
-            let scale = cache.get_scale(layer_idx);
+            // RIL ISS-020: the scale is per-block; dequantize this block with
+            // its own recorded scale (a per-layer scale was incorrect).
+            let scale = cache.get_scale(layer_idx, block_id);
             k.iter_mut().for_each(|x| *x *= scale);
             v.iter_mut().for_each(|x| *x *= scale);
         }

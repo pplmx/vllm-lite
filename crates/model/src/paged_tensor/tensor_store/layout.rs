@@ -22,13 +22,19 @@ impl PagedKvCache {
     }
 
     #[must_use]
-    pub fn get_scale(&self, layer_idx: usize) -> f32 {
-        self.scales.get(layer_idx).copied().unwrap_or(1.0)
+    pub fn get_scale(&self, layer_idx: usize, block_id: usize) -> f32 {
+        self.scales
+            .get(layer_idx)
+            .and_then(|layer| layer.get(block_id))
+            .copied()
+            .unwrap_or(1.0)
     }
 
-    pub(super) fn update_scale(&mut self, layer_idx: usize, new_scale: f32) {
-        if layer_idx < self.scales.len() {
-            self.scales[layer_idx] = new_scale;
+    pub(super) fn update_scale(&mut self, layer_idx: usize, block_id: usize, new_scale: f32) {
+        if let Some(layer) = self.scales.get_mut(layer_idx) {
+            if let Some(slot) = layer.get_mut(block_id) {
+                *slot = new_scale;
+            }
         }
     }
 

@@ -237,12 +237,57 @@ fn test_quantized_scale_tracking() -> Result<()> {
     let v1 = Tensor::from_slice(&[50.0f32; 8], (1, 2, 4), &device)?;
     cache.write_kv(1, 0, 0, &k1, &v1)?;
 
-    let scale0 = cache.get_scale(0);
-    let scale1 = cache.get_scale(1);
+    let scale0 = cache.get_scale(0, 0);
+    let scale1 = cache.get_scale(1, 0);
 
     assert!(scale0 > 0.0);
     assert!(scale1 > 0.0);
 
+    Ok(())
+}
+
+/// Regression (RIL ISS-020): a quantized KV cache must round-trip each block
+/// with ITS OWN scale. Pre-fix a single per-layer scale (the last-written
+/// block's) was used to dequantize every block, and `write_kv`'s
+/// read-modify-write re-quantized stored integers as if raw — so a multi-block
+/// sequence with differing per-block magnitudes came back scrambled (block 0's
+/// tokens stuck at the quantized extreme 127). Block 0 = 100.0, block 1 = 1.0;
+/// both must recover within INT8 precision.
+#[test]
+fn test_quantized_multi_block_roundtrip_per_block_scale() -> Result<()> {
+    let device = Device::Cpu;
+    // 1 layer, 1 head, head_dim 1, 4 blocks (block_size = 16).
+    let mut cache = PagedKvCache::new(1, 1, 1, 4, device.clone(), true)?;
+    let seq_len = 20usize; // spans block 0 (tokens 0-15) and block 1 (16-19)
+    let block_ids = vec![0usize, 1];
+    let positions: Vec<usize> = (0..seq_len).collect();
+    let vals: Vec<f32> = (0..seq_len)
+        .map(|i| if i < 16 { 100.0 } else { 1.0 })
+        .collect();
+    let k = Tensor::from_vec(vals.clone(), (1, 1, seq_len, 1), &device)?;
+    let v = Tensor::from_vec(vals.clone(), (1, 1, seq_len, 1), &device)?;
+
+    crate::components::attention::write_prefill_kv(
+        &mut cache, 0, &block_ids, &positions, seq_len, &k, &v,
+    )?;
+
+    let (rk, rv) = cache.read_kv(0, &block_ids, seq_len)?;
+    let got_k: Vec<f32> = rk.flatten_all()?.to_vec1()?;
+    let got_v: Vec<f32> = rv.flatten_all()?.to_vec1()?;
+    for (i, (gk, gv)) in got_k.iter().zip(got_v.iter()).enumerate() {
+        let expected = vals[i];
+        let tol = if expected > 50.0 { 5.0 } else { 0.5 }; // ~INT8 precision per magnitude
+        assert!(
+            (gk - expected).abs() < tol,
+            "block-{} token {i}: K expected ~{expected}, got {gk} (per-block scale => RIL ISS-020)",
+            i / 16
+        );
+        assert!(
+            (gv - expected).abs() < tol,
+            "block-{} token {i}: V expected ~{expected}, got {gv} (per-block scale => RIL ISS-020)",
+            i / 16
+        );
+    }
     Ok(())
 }
 

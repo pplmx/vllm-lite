@@ -35,7 +35,10 @@ pub struct PagedKvCache {
     block_size: usize,
     device: Device,
     pub quantized: bool,
-    pub scales: Vec<f32>,
+    /// Per-block quantization scale: `scales[layer][block]` (RIL ISS-020).
+    /// A single per-layer scale cannot represent per-block quantization —
+    /// each block is quantized with its own max-derived scale.
+    pub scales: Vec<Vec<f32>>,
     pub block_hashes: Vec<HashMap<u64, usize>>,
 }
 
@@ -63,7 +66,7 @@ impl PagedKvCache {
             value_cache.push(value);
         }
 
-        let scales = vec![1.0f32; num_layers];
+        let scales = vec![vec![1.0f32; num_blocks]; num_layers];
         let block_hashes = vec![HashMap::new(); num_layers];
 
         Ok(Self {

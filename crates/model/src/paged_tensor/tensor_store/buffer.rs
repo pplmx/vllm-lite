@@ -12,7 +12,6 @@
 // PagedKvCache write/read operations on the K/V buffer:
 // `write_kv`, `write_kv_batch`, `read_kv`.
 
-use super::super::quantization::dequantize;
 use super::PagedKvCache;
 use candle_core::{DType, Result, Tensor};
 
@@ -175,6 +174,27 @@ impl PagedKvCache {
         let mut k_block_3d: Vec<Vec<Vec<f32>>> = key_block.to_vec3()?;
         let mut v_block_3d: Vec<Vec<Vec<f32>>> = value_block.to_vec3()?;
 
+        // RIL ISS-020: the block is stored quantized (int8 values held in f32).
+        // To modify one slot and re-quantize the whole block correctly, first
+        // dequantize the existing contents with THIS block's scale so the
+        // read-modify-write operates on real values. Without this, the stored
+        // integers are mistaken for raw floats: the first-written token gets
+        // stuck at the quantized extreme (e.g. 127) and the recomputed scale
+        // is corrupted, scrambling the block.
+        if self.quantized {
+            let block_scale = self.get_scale(layer_idx, block_id);
+            for plane in k_block_3d.iter_mut().flatten() {
+                for x in plane {
+                    *x *= block_scale;
+                }
+            }
+            for plane in v_block_3d.iter_mut().flatten() {
+                for x in plane {
+                    *x *= block_scale;
+                }
+            }
+        }
+
         let k_squeezed = k.squeeze(0)?;
         let v_squeezed = v.squeeze(0)?;
 
@@ -204,7 +224,7 @@ impl PagedKvCache {
             let k_quant: Vec<f32> = k_flat.iter().map(|v| (*v / scale).round()).collect();
             let v_quant: Vec<f32> = v_flat.iter().map(|v| (*v / scale).round()).collect();
 
-            self.update_scale(layer_idx, scale);
+            self.update_scale(layer_idx, block_id, scale);
             (k_quant, v_quant, scale)
         } else {
             (k_flat, v_flat, 1.0)
@@ -290,30 +310,24 @@ impl PagedKvCache {
                 .narrow(2, 0, block_len)?
                 .squeeze(0)?;
 
-            k_parts.push(k_block);
-            v_parts.push(v_block);
+            // RIL ISS-020: dequantize each block with ITS OWN scale (the scale
+            // recorded when that block was quantized). A single per-layer scale
+            // cannot represent per-block quantization — dequantizing the whole
+            // concatenated tensor with one scale corrupted every block except
+            // the last-written one.
+            if self.quantized {
+                let block_scale = f64::from(self.get_scale(layer_idx, block_id));
+                k_parts.push(k_block.affine(block_scale, 0.0)?);
+                v_parts.push(v_block.affine(block_scale, 0.0)?);
+            } else {
+                k_parts.push(k_block);
+                v_parts.push(v_block);
+            }
         }
 
         let k = Tensor::cat(&k_parts, 1)?.transpose(0, 1)?;
         let v = Tensor::cat(&v_parts, 1)?.transpose(0, 1)?;
 
-        if self.quantized {
-            let scale = self.get_scale(layer_idx);
-            let k_data: Vec<f32> = k.flatten_all()?.to_vec1()?;
-            let v_data: Vec<f32> = v.flatten_all()?.to_vec1()?;
-
-            let k_dequant = dequantize(&k_data, scale);
-            let v_dequant = dequantize(&v_data, scale);
-
-            let k_shape = k.dims();
-            let v_shape = v.dims();
-
-            let k = Tensor::from_slice(&k_dequant, k_shape, &self.device)?;
-            let v = Tensor::from_slice(&v_dequant, v_shape, &self.device)?;
-
-            Ok((k, v))
-        } else {
-            Ok((k, v))
-        }
+        Ok((k, v))
     }
 }
