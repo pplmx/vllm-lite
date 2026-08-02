@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 7,
+  "round": 8,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T17:46:30+00:00",
+  "updated_at": "2026-08-02T18:06:18+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -33,7 +33,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 7,
+      "touched_round": 8,
       "title": "vllm-model",
       "role": "model architectures, kernels, paged tensor store"
     },
@@ -798,6 +798,132 @@
       "source": "cargo test -p vllm-model @ 8eb17f4a: 543 pass / 0 fail; test_repeat_kv_heads_blocked_grouping verified FAIL on pre-fix tiled code; clippy + fmt green",
       "title": "VERIFY TASK-011: repeat_kv_heads blocked [K0x2,K1x2] confirmed; gated_delta prefill/decode parity intact",
       "confidence": 0.98
+    },
+    "HYP-003": {
+      "id": "HYP-003",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:06:17+00:00",
+      "updated_at": "2026-08-02T18:06:18+00:00",
+      "touched_round": 8,
+      "title": "Positional-encoding rotation conventions diverge from the HuggingFace/RoPE-paper standard (latent, untested against reference values)",
+      "confidence": 0.95
+    },
+    "ISS-012": {
+      "id": "ISS-012",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:06:17+00:00",
+      "updated_at": "2026-08-02T18:06:18+00:00",
+      "touched_round": 8,
+      "title": "RoPE apply_rope_with_inv_freq signs inverted (R(-theta) instead of R(theta)) — reverses positional-encoding direction for every RoPE model",
+      "severity": 0.95,
+      "category": "correctness"
+    },
+    "ISS-013": {
+      "id": "ISS-013",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:06:17+00:00",
+      "updated_at": "2026-08-02T18:06:18+00:00",
+      "touched_round": 8,
+      "title": "MRoPE apply_rope_section emits second half un-rotated — only half the rotation applied per section (Qwen3.5-VL)",
+      "severity": 0.8,
+      "category": "correctness"
+    },
+    "TASK-012": {
+      "id": "TASK-012",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:06:17+00:00",
+      "updated_at": "2026-08-02T18:06:18+00:00",
+      "touched_round": 8,
+      "title": "fix RoPE rotation signs to standard convention + value-pinning regression test",
+      "category": "correctness",
+      "severity": 0.95,
+      "confidence": 0.95,
+      "effort": 2,
+      "unlock_factor": 1
+    },
+    "TASK-013": {
+      "id": "TASK-013",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:06:17+00:00",
+      "updated_at": "2026-08-02T18:06:18+00:00",
+      "touched_round": 8,
+      "title": "fix MRoPE to rotate both halves + regression test",
+      "category": "correctness",
+      "severity": 0.8,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "CHG-005": {
+      "id": "CHG-005",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:06:17+00:00",
+      "updated_at": "2026-08-02T18:06:17+00:00",
+      "touched_round": 8,
+      "commit": "39c317b6",
+      "title": "fix(model): RoPE rotation signs corrected to standard/HF convention (flip two sin terms)"
+    },
+    "CHG-006": {
+      "id": "CHG-006",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:06:17+00:00",
+      "updated_at": "2026-08-02T18:06:17+00:00",
+      "touched_round": 8,
+      "commit": "e7ec21f8",
+      "title": "fix(model): MRoPE rotates both halves (x2*cos + x1*sin) instead of leaving second half unchanged"
+    },
+    "DEC-007": {
+      "id": "DEC-007",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:06:17+00:00",
+      "updated_at": "2026-08-02T18:06:17+00:00",
+      "touched_round": 8,
+      "title": "Positional encoding: rotation must match the standard RoPE/HuggingFace convention (x1'=x1cos-x2sin, x2'=x2cos+x1sin); pin against reference values, not just shape",
+      "rationale": "Checkpoints (Llama/Qwen/Mistral/Gemma, HF + GGUF) are trained with the standard apply_rotary_pos_emb. Any other convention (inverse signs, half-rotation) corrupts the relative-position encoding. Tests must pin rotation VALUES against the reference formula because shape/determinism tests cannot catch sign or half-rotation bugs (ISS-010/012/013 all slipped through shape-only tests).",
+      "alternatives_rejected": [
+        "keep inverse signs (reverses position direction vs trained weights)",
+        "shape-only tests (cannot catch sign/half-rotation bugs)"
+      ]
+    },
+    "EV-020": {
+      "id": "EV-020",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:06:17+00:00",
+      "updated_at": "2026-08-02T18:06:17+00:00",
+      "touched_round": 8,
+      "source": "probe + test @ 39c317b6: apply_rope([1,2,3,4], pos=1) now == HF reference [-1.98411,1.95990,2.46238,4.01980] (was inverse [3.06,2.04,0.78,3.98]); regression test fails pre-fix; vllm-model 544/544",
+      "title": "VERIFY TASK-012: RoPE matches HF reference bit-for-bit after sign fix",
+      "confidence": 0.98
+    },
+    "EV-021": {
+      "id": "EV-021",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:06:17+00:00",
+      "updated_at": "2026-08-02T18:06:17+00:00",
+      "touched_round": 8,
+      "source": "test @ e7ec21f8: single size-4 MRoPE section == standard RoPE/HF reference; regression test fails pre-fix (second half was [3,4] unchanged); vllm-model 545/545",
+      "title": "VERIFY TASK-013: MRoPE rotates both halves per standard convention",
+      "confidence": 0.98
     }
   },
   "edges": [
@@ -1058,6 +1184,72 @@
       "to": "HYP-002",
       "type": "validates",
       "created_at": "2026-08-02T17:46:30+00:00"
+    },
+    {
+      "from": "ISS-012",
+      "to": "COMP-003",
+      "type": "located_in",
+      "created_at": "2026-08-02T18:06:17+00:00"
+    },
+    {
+      "from": "ISS-013",
+      "to": "COMP-003",
+      "type": "located_in",
+      "created_at": "2026-08-02T18:06:17+00:00"
+    },
+    {
+      "from": "TASK-012",
+      "to": "ISS-012",
+      "type": "addresses",
+      "created_at": "2026-08-02T18:06:17+00:00"
+    },
+    {
+      "from": "TASK-013",
+      "to": "ISS-013",
+      "type": "addresses",
+      "created_at": "2026-08-02T18:06:17+00:00"
+    },
+    {
+      "from": "CHG-005",
+      "to": "ISS-012",
+      "type": "resolves",
+      "created_at": "2026-08-02T18:06:17+00:00"
+    },
+    {
+      "from": "CHG-005",
+      "to": "TASK-012",
+      "type": "implements",
+      "created_at": "2026-08-02T18:06:17+00:00"
+    },
+    {
+      "from": "CHG-006",
+      "to": "ISS-013",
+      "type": "resolves",
+      "created_at": "2026-08-02T18:06:18+00:00"
+    },
+    {
+      "from": "CHG-006",
+      "to": "TASK-013",
+      "type": "implements",
+      "created_at": "2026-08-02T18:06:18+00:00"
+    },
+    {
+      "from": "EV-020",
+      "to": "HYP-003",
+      "type": "validates",
+      "created_at": "2026-08-02T18:06:18+00:00"
+    },
+    {
+      "from": "EV-021",
+      "to": "HYP-003",
+      "type": "validates",
+      "created_at": "2026-08-02T18:06:18+00:00"
+    },
+    {
+      "from": "DEC-007",
+      "to": "COMP-003",
+      "type": "governs",
+      "created_at": "2026-08-02T18:06:18+00:00"
     }
   ]
 }
