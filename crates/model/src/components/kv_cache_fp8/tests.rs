@@ -5,10 +5,10 @@
 //! 1. **Dtype / quantizer basics (3)**: `Fp8Quantizer::new(Fp8E4m3)`
 //!    reports 1 byte/element; `memory_reduction_ratio` is 1.0 for
 //!    `Fp16`, 2.0 for `Fp8E4m3`; `estimate_memory_savings` returns
-//! 2. **Round-trip + precision (2)**: quantizing a random N(-1, 1)
-//!    tensor and dequantizing preserves shape; small values
-//!    (~0.0001-0.001) are recovered within \`0.05\` absolute error
-//!    (the floor is the E4M3 subnormal range).
+//! 2. **Round-trip + precision (2)**: quantizing then dequantizing
+//!    normal-range values preserves them within ~15% relative error
+//!    (3-bit mantissa); sub-normal values (< 2^-6) flush to ~0 rather
+//!    than saturating.
 //! 3. **Special values + Fp16 pass-through (2)**: 0.0 → 0 in `E4M3`;
 //!    1.0 → non-zero; `Fp16` quantization is identity on the `F16`
 //!    tensor shape (no-op).
@@ -35,26 +35,49 @@ fn test_fp8_memory_reduction() {
 #[allow(clippy::similar_names)]
 fn test_fp8_roundtrip_quantization() {
     let device = candle_core::Device::Cpu;
-    let tensor = Tensor::randn(-1.0f32, 1.0, (2, 4, 8), &device).unwrap();
+    // Values across the representable normal range (clear of the subnormal
+    // flush floor and the overflow saturation).
+    let values: Vec<f32> = vec![
+        1.0, 2.0, 0.5, -3.0, 0.1, -0.1, 100.0, -100.0, 50.0, 0.02, -0.02, 7.5,
+    ];
+    let tensor = Tensor::from_vec(values.clone(), (values.len(),), &device).unwrap();
 
     let quantizer = Fp8Quantizer::new(KvCacheDtype::Fp8E4m3);
     let quantized = quantizer.quantize(&tensor).unwrap();
     let dequantized = quantizer.dequantize(&quantized).unwrap();
-
     assert_eq!(dequantized.dims(), tensor.dims());
+
+    // Regression (RIL ISS-015): the round-trip must preserve VALUES, not just
+    // shape. A 3-bit mantissa bounds the relative rounding error well under
+    // ~13%; allow 15% headroom. Pre-fix the dequant exponent was off by 3, so
+    // every value came back 8x too small — invisible to a shape-only assert.
+    let recovered: Vec<f32> = dequantized
+        .to_vec1::<half::f16>()
+        .unwrap()
+        .iter()
+        .map(|h| h.to_f32())
+        .collect();
+    for (orig, rec) in values.iter().zip(recovered.iter()) {
+        let rel_err = (orig - rec).abs() / orig.abs();
+        assert!(
+            rel_err < 0.15,
+            "FP8 round-trip must preserve value within ~15% relative error:              orig={orig}, recovered={rec}, rel_err={rel_err} (8x error => RIL ISS-015)"
+        );
+    }
 }
 
 #[test]
 #[allow(clippy::similar_names)]
 fn test_fp8_preserves_small_values() {
     let device = candle_core::Device::Cpu;
-    let tensor = Tensor::new(&[0.0001f32, 0.0005f32, 0.001f32], &device).unwrap();
+    // All below the smallest E4M3 normal (2^-6 ~= 0.0156), so they flush to
+    // zero (subnormals are not encoded).
+    let tensor = Tensor::new(&[0.0001f32, 0.0005f32, 0.001f32, -0.001f32], &device).unwrap();
 
     let quantizer = Fp8Quantizer::new(KvCacheDtype::Fp8E4m3);
     let quantized = quantizer.quantize(&tensor).unwrap();
     let dequantized = quantizer.dequantize(&quantized).unwrap();
 
-    let original: Vec<f32> = tensor.to_vec1().unwrap();
     let recovered: Vec<f32> = dequantized
         .to_vec1::<half::f16>()
         .unwrap()
@@ -62,11 +85,14 @@ fn test_fp8_preserves_small_values() {
         .map(|h| h.to_f32())
         .collect();
 
-    for (o, r) in original.iter().zip(recovered.iter()) {
-        let diff = (o - r).abs();
+    // Regression (RIL ISS-015): sub-normal inputs must flush to ~0, NOT
+    // saturate to a large value. Pre-fix, a negative biased_exp wrapped to a
+    // huge u8 and tripped overflow saturation, so 0.001 dequantized to ~44;
+    // the old assertion's `|| o.abs() <= 0.001` clause made it vacuous.
+    for (i, r) in recovered.iter().enumerate() {
         assert!(
-            diff < 0.05 || o.abs() <= 0.001,
-            "Values should be approximately preserved (o={o}, r={r}, diff={diff})"
+            r.abs() < 0.02,
+            "sub-normal input #{i} must flush to ~0, got {r} (saturation => RIL ISS-015)"
         );
     }
 }

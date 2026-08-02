@@ -145,24 +145,44 @@ impl Fp8Quantizer {
         if value.is_infinite() {
             return if value.is_sign_positive() { 0x7C } else { 0xFC };
         }
-        if value.abs() < 0.000_732 {
-            return 0u8;
-        }
 
         let sign = u8::from(value.is_sign_negative());
         let abs = value.abs();
-
+        // `frexp` returns `(0, 0.0)` for `abs == 0.0`; otherwise
+        // `abs = mantissa * 2^exp` with `mantissa in [1, 2)`.
         let (exp, mantissa) = frexp(abs);
+        let biased_exp = exp + 7;
 
-        let biased_exp = (exp + 7) as u8;
-        if biased_exp >= 0x1F {
+        // Zero / underflow: below the smallest representable normal (E4M3
+        // subnormals are not encoded here). Flush to positive zero. RIL
+        // ISS-015: the old code only flushed `|value| < 0.000732`, so values
+        // in `[0.000732, 2^-6)` reached the `as u8` cast where a negative
+        // `biased_exp` wrapped to a huge value and tripped the overflow
+        // saturation — mapping tiny values (e.g. 1e-3) to ~44.
+        if abs == 0.0 || biased_exp <= 0 {
+            return 0u8;
+        }
+        // Overflow: E4M3 normals top out at `biased_exp = 14` (exponent field
+        // 15 is reserved for the inf / max / NaN encodings in this
+        // convention). Saturate to the largest finite value.
+        if biased_exp > 14 {
             return if sign == 0 { 0x7B } else { 0xFB };
         }
 
-        let scaled_mantissa = mantissa * 8.0;
-        let int_mantissa = (scaled_mantissa + 0.5) as u8;
+        // Round the `[1, 2)` significand to 3 fractional bits. On a carry
+        // (`mantissa` rounds up to 2.0) increment the exponent and zero the
+        // mantissa; otherwise drop the implicit leading 1 (the `8`).
+        let int_mantissa = mantissa.mul_add(8.0, 0.5) as u8; // [8, 16]
+        let (biased_exp, frac) = if int_mantissa >= 16 {
+            (biased_exp + 1, 0u8)
+        } else {
+            (biased_exp, int_mantissa - 8)
+        };
+        if biased_exp > 14 {
+            return if sign == 0 { 0x7B } else { 0xFB };
+        }
 
-        ((sign & 0x01) << 7) | (biased_exp & 0x0F) << 3 | (int_mantissa & 0x07)
+        ((sign & 0x01) << 7) | ((biased_exp as u8 & 0x0F) << 3) | (frac & 0x07)
     }
 
     fn fp8_e4m3_to_float16(value: u8) -> half::f16 {
@@ -184,7 +204,10 @@ impl Fp8Quantizer {
             return half::f16::from_bits(sign << 15);
         }
 
-        let exp = biased_exp - 7 - 3;
+        // RIL ISS-015: the exponent is `biased_exp - 7` (E4M3 bias 7). The
+        // old `- 3` made every dequantized value 8x too small (the f16
+        // exponent field came out 3 too low), corrupting any FP8 KV cache.
+        let exp = biased_exp - 7;
 
         let bits = (sign << 15) | ((exp + 15) as u16 & 0x7FFF) << 10 | (mantissa << 7);
 
