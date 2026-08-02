@@ -907,3 +907,50 @@ fn test_compute_inv_freq_su_applies_boundary_and_factors() {
         );
     }
 }
+
+/// Regression (RIL ISS-012): the rotation must match the standard `RoPE` /
+/// `HuggingFace` `apply_rotary_pos_emb` convention (Su et al. 2021), applied
+/// to pairs `(x1[i], x2[i])` where `x1` = first half, `x2` = second half:
+///
+/// ```text
+///   x1' = x1·cos − x2·sin
+///   x2' = x2·cos + x1·sin
+/// ```
+///
+/// Pre-fix the signs were inverted (`x1·cos + x2·sin`, `x2·cos − x1·sin`) —
+/// the inverse rotation `R(−θ)`. Because both q and k pass through the same
+/// function, the relative-position term came out as `R(m−n)` instead of
+/// `R(n−m)`, reversing the positional-encoding direction for every `RoPE` model.
+#[test]
+fn test_apply_rope_matches_standard_rotation_convention() -> Result<()> {
+    let device = Device::Cpu;
+    // [batch=1, seq=1, heads=1, dim=4]: first half x1=[1,2], second half x2=[3,4].
+    let q = Tensor::from_vec(vec![1.0f32, 2.0, 3.0, 4.0], (1, 1, 1, 4), &device)?;
+    let theta = 10000.0f32;
+    let out = apply_rope(&q, &[1i64], theta)?;
+    let v: Vec<f32> = out.flatten_all()?.to_vec1()?;
+
+    // inv_freq[i] = theta^(-2i/4) = [1.0, 0.01]; angle = pos(1) * inv_freq.
+    let inv = [1.0, theta.powf(-0.5)];
+    let (c0, s0) = (inv[0].cos(), inv[0].sin());
+    let (c1, s1) = (inv[1].cos(), inv[1].sin());
+    let (x10, x11, x20, x21) = (1.0f32, 2.0f32, 3.0f32, 4.0f32);
+    // Standard RoPE: first = x1·cos − x2·sin ; second = x2·cos + x1·sin.
+    // Written with `mul_add` to satisfy clippy; the human-readable formula
+    // (x1' = x1·cos − x2·sin, x2' = x2·cos + x1·sin) is in the doc comment.
+    let expected = vec![
+        x10.mul_add(c0, -(x20 * s0)),
+        x11.mul_add(c1, -(x21 * s1)),
+        x20.mul_add(c0, x10 * s0),
+        x21.mul_add(c1, x11 * s1),
+    ];
+    assert_eq!(v.len(), 4);
+    for (got, want) in v.iter().zip(&expected) {
+        assert!(
+            (got - want).abs() < 1e-5,
+            "RoPE must match the standard rotation convention: got {got}, want {want} \
+             (full {v:?} vs {expected:?} — inverted signs => RIL ISS-012)"
+        );
+    }
+    Ok(())
+}

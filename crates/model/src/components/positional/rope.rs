@@ -534,12 +534,23 @@ fn apply_rope_with_inv_freq(query: &Tensor, positions: &[i64], inv_freq: &[f32])
     let first_half = query.narrow(3, 0, half_dim)?;
     let second_half = query.narrow(3, half_dim, half_dim)?;
 
+    // Standard RoPE rotation (Su et al. 2021; HuggingFace `apply_rotary_pos_emb`
+    // with `rotate_half = cat(-x2, x1)`), applied to pairs (x1[i], x2[i]) where
+    // x1 = first half, x2 = second half:
+    //   x1' = x1·cos − x2·sin
+    //   x2' = x2·cos + x1·sin
+    // RIL ISS-012: the signs were previously inverted (x1·cos + x2·sin,
+    // x2·cos − x1·sin), which is the INVERSE rotation R(−θ). Because both q
+    // and k pass through this same function, the relative-position term came
+    // out as R(m−n) instead of R(n−m) — the positional encoding's direction
+    // was reversed for every RoPE model (Llama/Qwen/Mistral). Verified
+    // against the HuggingFace reference formula.
     let rotated_first = first_half
         .broadcast_mul(&cos)?
-        .broadcast_add(&second_half.broadcast_mul(&sin)?)?;
+        .broadcast_sub(&second_half.broadcast_mul(&sin)?)?;
     let rotated_second = second_half
         .broadcast_mul(&cos)?
-        .broadcast_sub(&first_half.broadcast_mul(&sin)?)?;
+        .broadcast_add(&first_half.broadcast_mul(&sin)?)?;
 
     let result = Tensor::cat(&[&rotated_first, &rotated_second], 3)?;
 
