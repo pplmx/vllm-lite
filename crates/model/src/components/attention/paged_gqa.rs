@@ -38,11 +38,17 @@ pub fn write_prefill_kv(
     let block_size = kv_cache.block_size();
     for token_idx in 0..seq_len {
         let global_pos = positions.get(token_idx).copied().unwrap_or(token_idx);
-        let block_id = block_ids
-            .get(token_idx)
-            .or_else(|| block_ids.first())
-            .copied()
-            .unwrap_or(0);
+        // The block holding `global_pos` is the sequence's
+        // `(global_pos / block_size)`-th block, and `block_ids` is indexed by
+        // that block index — matching `read_kv`, which iterates `block_ids` in
+        // block order (block_ids[b] holds tokens [b*block_size, …)). RIL
+        // ISS-019: the old code indexed `block_ids[token_idx]` (treating it as
+        // one-per-token), sending every token past the first block to the wrong
+        // block and wrapping later tokens back onto block 0 — silently
+        // corrupting the KV cache for any multi-block prefill (prompt longer
+        // than one block).
+        let block_idx = global_pos / block_size;
+        let block_id = block_ids.get(block_idx).copied().unwrap_or(0);
         let token_offset = global_pos % block_size;
 
         let k_token = k.narrow(2, token_idx, 1)?.contiguous()?;
@@ -80,7 +86,15 @@ pub fn read_decode_kv(
     if !block_ids.is_empty() {
         let block_size = kv_cache.block_size();
         let token_offset = num_computed_tokens % block_size;
-        let block_id = num_computed_tokens / block_size;
+        // The new token at `num_computed_tokens` lives in the sequence's
+        // `(num_computed_tokens / block_size)`-th block; look up its actual
+        // block id in `block_ids` (indexed by block index, matching `read_kv`).
+        // RIL ISS-019: the old code used the raw block INDEX as the block id
+        // (`num_computed_tokens / block_size`), which is only correct when block
+        // ids happen to be contiguous from 0 — a real allocator returns
+        // arbitrary ids, so the decode KV was written to the wrong block.
+        let block_idx = num_computed_tokens / block_size;
+        let block_id = block_ids.get(block_idx).copied().unwrap_or(0);
         let k_for_write = k_for_cache.permute((1, 0, 2))?.contiguous()?;
         let v_for_write = v_for_cache.permute((1, 0, 2))?.contiguous()?;
         kv_cache.write_kv(
@@ -239,6 +253,62 @@ mod tests {
 
         assert_eq!(full_k.dims(), &[1, num_heads, seq_len + 1, head_dim]);
         assert_eq!(full_v.dims(), &[1, num_heads, seq_len + 1, head_dim]);
+        Ok(())
+    }
+
+    /// Regression (RIL ISS-019): multi-block prefill + decode KV writes must
+    /// map each token to `block_ids[global_pos / block_size]` at slot
+    /// `global_pos % block_size` — matching `read_kv`, which iterates
+    /// `block_ids` in block order. Pre-fix, `write_prefill_kv` indexed
+    /// `block_ids[token_idx]` (one-per-token) and `read_decode_kv` used the
+    /// raw block index as the block id; with non-contiguous block ids (as a
+    /// real allocator returns) both wrote tokens to the wrong blocks,
+    /// scrambling the KV cache for any prompt longer than one block. This test
+    /// uses non-contiguous block ids and checks VALUES, not just shape.
+    #[test]
+    fn test_multi_block_kv_roundtrip_non_contiguous_blocks() -> Result<()> {
+        let device = Device::Cpu;
+        let num_heads = 1;
+        let head_dim = 1;
+        let block_size = 16usize;
+        let mut kv_cache = PagedKvCache::new(1, num_heads, head_dim, 20, device.clone(), false)?;
+
+        // 20-token prefill spanning two NON-contiguous blocks: 5 (tokens 0-15)
+        // and 9 (tokens 16-19). Distinct per-token value: K/V[token i] = i.
+        let seq_len = 20usize;
+        let block_ids = vec![5usize, 9];
+        let positions: Vec<usize> = (0..seq_len).collect();
+        let vals: Vec<f32> = (0..seq_len).map(|i| i as f32).collect();
+        let k = Tensor::from_vec(vals.clone(), (1, num_heads, seq_len, head_dim), &device)?;
+        let v = Tensor::from_vec(vals.clone(), (1, num_heads, seq_len, head_dim), &device)?;
+        write_prefill_kv(&mut kv_cache, 0, &block_ids, &positions, seq_len, &k, &v)?;
+
+        // Read back all 20 tokens via the production read path; values must be
+        // in token order (a scrambled layout fails this).
+        let (read_k, read_v) = kv_cache.read_kv(0, &block_ids, seq_len)?;
+        let got_k: Vec<f32> = read_k.flatten_all()?.to_vec1()?;
+        let got_v: Vec<f32> = read_v.flatten_all()?.to_vec1()?;
+        assert_eq!(
+            got_k, vals,
+            "multi-block prefill K must round-trip in token order (RIL ISS-019)"
+        );
+        assert_eq!(
+            got_v, vals,
+            "multi-block prefill V must round-trip in token order (RIL ISS-019)"
+        );
+
+        // Decode the next token (position 20 -> block_ids[20/16 = 1] = block 9,
+        // slot 20 % 16 = 4), value 20. It must land in block 9 slot 4, not block 1.
+        let k_new = Tensor::from_vec(vec![20.0f32], (num_heads, 1, head_dim), &device)?;
+        let v_new = Tensor::from_vec(vec![20.0f32], (num_heads, 1, head_dim), &device)?;
+        let _ = read_decode_kv(&mut kv_cache, 0, &block_ids, seq_len, &k_new, &v_new)?;
+        let (b9, _) = kv_cache.read_kv(0, &[9usize], block_size)?;
+        let b9: Vec<f32> = b9.flatten_all()?.to_vec1()?;
+        assert!(
+            (b9[4] - 20.0).abs() < 1e-4,
+            "decode token must be written to block_ids[20/16]=block 9 slot 4, got {} (RIL ISS-019)",
+            b9[4]
+        );
         Ok(())
     }
 
