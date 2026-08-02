@@ -165,7 +165,16 @@ impl BatchComposer {
             tokens,
             token_count,
             kv_blocks: seq.kv_blocks.as_ref().clone(),
-            is_prefill: start == 0,
+            // RIL ISS-021: a resumed prefill (start > 0 after a partial
+            // prefix-cache hit) is still a prefill. It must keep
+            // `is_prefill = true` so the model dispatches to `forward_prefill`,
+            // which routes to `forward_prefill_continue` when
+            // `num_computed_tokens > 0` (reading the cached KV and processing
+            // the multi-token suffix with a rectangular causal mask). The old
+            // `start == 0` sent the multi-token suffix to the single-token
+            // `forward_decode` path, which reshapes to seq_len=1 and fails /
+            // mis-processes any suffix longer than one token.
+            is_prefill: true,
             sampling_params: seq.sampling_params,
         }
     }

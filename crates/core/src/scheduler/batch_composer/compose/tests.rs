@@ -241,6 +241,29 @@ fn test_chunked_prefill_populates_num_computed_tokens() {
 }
 
 #[test]
+fn test_partial_prefill_resume_keeps_is_prefill_true() {
+    // Regression (RIL ISS-021): a sequence resuming prefill after a partial
+    // prefix-cache hit (num_computed_tokens > 0 with a multi-token suffix)
+    // must keep is_prefill = true so the model dispatches to forward_prefill
+    // -> forward_prefill_continue (reads cached KV, processes the chunk).
+    // Pre-fix classify_prefill_seq set is_prefill = (start == 0), routing the
+    // multi-token suffix to the single-token forward_decode path.
+    let composer = BatchComposer::default();
+    let mut seq = make_sequence(1, (0..10u32).collect(), Status::Prefilling);
+    seq.prompt_len = 10;
+    seq.num_computed_tokens = 4; // partial hit: 4 cached, 6-token suffix
+    let batch = composer.compose(vec![seq], Phase::Prefill);
+    assert_eq!(batch.seq_ids.len(), 1);
+    assert!(
+        batch.is_prefill[0],
+        "a resumed prefill (num_computed > 0) must keep is_prefill=true so it          routes to forward_prefill_continue, not single-token forward_decode          (RIL ISS-021)"
+    );
+    // The full 6-token suffix is processed in this prefill batch.
+    assert_eq!(batch.input_tokens[0].len(), 6);
+    assert_eq!(batch.num_computed_tokens[0], 4);
+}
+
+#[test]
 fn test_decode_handles_empty_tokens_without_panic() {
     // Regression test: `compose_decode_batch` previously computed
     // `position = tokens_len - 1` which underflowed when the

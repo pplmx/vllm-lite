@@ -332,9 +332,13 @@ fn test_prefill_batch_with_partial_computed() {
         vec![5, 6, 7, 8, 9],
         "Positions should start from num_computed"
     );
+    // RIL ISS-021: a resumed/partial prefill must keep is_prefill = true so
+    // the multi-token suffix routes to forward_prefill -> forward_prefill_continue
+    // (reads cached KV + rectangular mask). is_prefill = false would send the
+    // 5-token suffix to the single-token forward_decode path and fail.
     assert!(
-        !batch.is_prefill[0],
-        "is_prefill should be false for partial prefill"
+        batch.is_prefill[0],
+        "is_prefill should be true for partial prefill (forward_prefill_continue path)"
     );
 }
 
