@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 4,
+  "round": 6,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T17:21:05+00:00",
+  "updated_at": "2026-08-02T17:40:25+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -33,7 +33,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 0,
+      "touched_round": 6,
       "title": "vllm-model",
       "role": "model architectures, kernels, paged tensor store"
     },
@@ -659,6 +659,95 @@
       "source": "cargo doc --workspace clean; clippy --all-targets -D warnings green; 89 sampling + 148 validation tests pass @ 86045217",
       "title": "VERIFY TASK-008: 4 false frequency-style/per-occurrence claims corrected to per-distinct; docs-only, no behavior change; intra-doc links intact",
       "confidence": 0.95
+    },
+    "ISS-010": {
+      "id": "ISS-010",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T17:29:12+00:00",
+      "updated_at": "2026-08-02T17:40:16+00:00",
+      "touched_round": 6,
+      "title": "GQA expand_kv produces INTERLEAVED (tile) head expansion instead of BLOCKED grouping — most Q heads attend to the wrong KV head",
+      "severity": 0.9,
+      "category": "correctness"
+    },
+    "HYP-002": {
+      "id": "HYP-002",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T17:29:12+00:00",
+      "updated_at": "2026-08-02T17:40:16+00:00",
+      "touched_round": 6,
+      "title": "util::expand_kv and flash_attention_v3::expand_kv use kv.repeat (tile) => Q head h maps to KV head (h mod n_kv) instead of floor(h/group); gemma4::expand_kv already uses the correct blocked broadcast pattern",
+      "confidence": 0.99
+    },
+    "EV-017": {
+      "id": "EV-017",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:29:12+00:00",
+      "updated_at": "2026-08-02T17:29:12+00:00",
+      "touched_round": 5,
+      "source": "empirical probe @ HEAD: expand_kv(kv=[head0=0.0,head1=1.0], num_q=8, num_kv=2) => [0,1,0,1,0,1,0,1] (interleaved); correct GQA grouping requires [0,0,0,0,1,1,1,1] (blocked). gemma4/kernels.rs:36 uses reshape->broadcast_as->reshape => blocked (correct). q_proj loaded as plain linear (natural head order, no permutation), so grouping must be floor(h/group).",
+      "title": "PROBE confirms interleaved expansion in shared util + flash; gemma4 is correct; no test pins ordering (v27 doc notes GQA tests check 'only shape')",
+      "confidence": 0.98
+    },
+    "TASK-010": {
+      "id": "TASK-010",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-02T17:29:12+00:00",
+      "updated_at": "2026-08-02T17:40:25+00:00",
+      "touched_round": 6,
+      "title": "fix GQA expand_kv to blocked grouping in util.rs + flash_attention_v3.rs (x2); add ordering regression tests + GQA-vs-reference correctness test",
+      "category": "correctness",
+      "severity": 0.9,
+      "confidence": 0.95,
+      "effort": 3,
+      "unlock_factor": 1
+    },
+    "CHG-003": {
+      "id": "CHG-003",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:40:16+00:00",
+      "updated_at": "2026-08-02T17:40:16+00:00",
+      "touched_round": 6,
+      "commit": "6e05276e",
+      "title": "fix(model): GQA expand_kv blocked grouping (reshape->broadcast->reshape) in util.rs + flash_attention_v3.rs x2; replaces tiled Tensor::repeat"
+    },
+    "DEC-006": {
+      "id": "DEC-006",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:40:16+00:00",
+      "updated_at": "2026-08-02T17:40:16+00:00",
+      "touched_round": 6,
+      "title": "GQA KV expansion: blocked repeat-interleave (reshape->broadcast_as->contiguous->reshape->narrow), matching gemma4; never Tensor::repeat (tiles)",
+      "rationale": "GQA query head h attends to KV head floor(h/group); expansion must be blocked [K0xg,K1xg,...]. Tensor::repeat tiles [K0,K1,...] => wrong KV head for h>=group. The broadcast idiom is the correct repeat-interleave and already proven in gemma4. div_ceil+narrow keeps it total for non-divisible (defensive; real archs divide evenly).",
+      "alternatives_rejected": [
+        "Tensor::repeat (tiles => wrong grouping, the bug)",
+        "repeat_interleave op (not exposed by candle)",
+        "error on non-divisible group size (changes API contract; defensive narrow is safer)"
+      ]
+    },
+    "EV-018": {
+      "id": "EV-018",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:40:16+00:00",
+      "updated_at": "2026-08-02T17:40:16+00:00",
+      "touched_round": 6,
+      "source": "cargo test excl dist @ 6e05276e: 1934 pass / 0 fail (vllm-model 542/542); 4 new regression tests verified to FAIL on pre-fix tile code; clippy + fmt green",
+      "title": "VERIFY TASK-010: blocked grouping confirmed end-to-end (single-token paged_attention selects V by floor(h/group)); flash GQA+MQA paths pinned; no existing test regressed",
+      "confidence": 0.98
     }
   },
   "edges": [
@@ -853,6 +942,42 @@
       "to": "TASK-008",
       "type": "implements",
       "created_at": "2026-08-02T17:21:05+00:00"
+    },
+    {
+      "from": "ISS-010",
+      "to": "COMP-003",
+      "type": "located_in",
+      "created_at": "2026-08-02T17:29:12+00:00"
+    },
+    {
+      "from": "TASK-010",
+      "to": "ISS-010",
+      "type": "addresses",
+      "created_at": "2026-08-02T17:29:12+00:00"
+    },
+    {
+      "from": "EV-017",
+      "to": "HYP-002",
+      "type": "validates",
+      "created_at": "2026-08-02T17:29:12+00:00"
+    },
+    {
+      "from": "CHG-003",
+      "to": "ISS-010",
+      "type": "resolves",
+      "created_at": "2026-08-02T17:40:16+00:00"
+    },
+    {
+      "from": "CHG-003",
+      "to": "TASK-010",
+      "type": "implements",
+      "created_at": "2026-08-02T17:40:16+00:00"
+    },
+    {
+      "from": "DEC-006",
+      "to": "COMP-003",
+      "type": "governs",
+      "created_at": "2026-08-02T17:40:16+00:00"
     }
   ]
 }
