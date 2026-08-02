@@ -75,16 +75,16 @@ vllm-lite exports metrics in Prometheus format on `/metrics`:
 Grafana dashboards in `docs/grafana/`. Import into your Grafana
 instance.
 
-> **OpenTelemetry is not currently wired.** The `opentelemetry`,
-> `opentelemetry-otlp`, `opentelemetry_sdk`, and
-> `tracing-opentelemetry` crates are listed in the root
-> `Cargo.toml` workspace dependency table but no crate uses them
-> (the v30.0 dependency-cleanup pass removed the corresponding
-> `#[cfg(feature = "opentelemetry")]` gates). Adding a real OTel
-> exporter is tracked as a v32+ item; see
-> [ROADMAP §3](../technical-due-diligence/roadmap.md).
-> In the meantime, the structured `tracing` JSON log stream covers
-> the same observability needs without the OTel infrastructure.
+> **OpenTelemetry (OTLP) is an opt-in exporter** (P43, see
+> [`docs/adr/ADR-021-otlp-exporter.md`](../adr/ADR-021-otlp-exporter.md)).
+> It is **off by default** — build with `--features opentelemetry`
+> on `vllm-server` and either set `--otlp-endpoint
+> http://collector:4317` (or `VLLM_OTLP_ENDPOINT`) or enable the
+> `observability.otlp.enabled: true` YAML section. When on, a
+> background task ships Prometheus-compatible engine metrics to the
+> collector every `metrics_export_interval_secs` (default 30s) and
+> a `tracing-opentelemetry` bridge exports spans. The structured
+> `tracing` JSON log stream is always available regardless of OTLP.
 
 ## Security Checklist
 

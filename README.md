@@ -311,6 +311,9 @@ export VLLM_HOST=0.0.0.0
 export VLLM_PORT=8000
 export VLLM_LOG_LEVEL=info
 
+# 模型（启动必需）
+export VLLM_MODEL=./models/qwen2.5-0.5b
+
 # 性能调优
 export VLLM_KV_BLOCKS=1024
 export VLLM_MAX_DRAFT_TOKENS=8
@@ -322,17 +325,30 @@ export VLLM_API_KEY=your-secret-key
 
 <div align="center">
 
-| 变量                        | 描述           | 默认值    | 说明                  |
-| --------------------------- | -------------- | --------- | --------------------- |
-| `VLLM_HOST`                 | 服务 host      | `0.0.0.0` | 监听地址              |
-| `VLLM_PORT`                 | 服务端口       | `8000`    | API 端口              |
-| `VLLM_LOG_LEVEL`            | 日志级别       | `info`    | debug/info/warn/error |
-| `VLLM_KV_BLOCKS`            | KV Block 数量  | `1024`    | 显存相关              |
-| `VLLM_MAX_DRAFT_TOKENS`     | 最大投机 Token | `8`       | 投机解码              |
-| `VLLM_TENSOR_PARALLEL_SIZE` | 张量并行度     | `1`       | GPU 数量              |
-| `VLLM_API_KEY`              | API 密钥       | -         | 认证必填              |
+| 变量                                 | 描述               | 默认值    | 说明                                                     |
+| ------------------------------------ | ------------------ | --------- | -------------------------------------------------------- |
+| `VLLM_MODEL`                         | 模型目录路径       | -（必需） | 含 tokenizer.json 与权重；等价 `--model`                 |
+| `VLLM_HOST`                          | 服务 host          | `0.0.0.0` | 监听地址                                                 |
+| `VLLM_PORT`                          | 服务端口           | `8000`    | API 端口                                                 |
+| `VLLM_LOG_LEVEL`                     | 日志级别           | `info`    | trace/debug/info/warn/error                              |
+| `VLLM_LOG_DIR`                       | 日志输出目录       | -         | 设置后启用 JSON 文件日志                                 |
+| `VLLM_KV_BLOCKS`                     | KV Block 数量      | `1024`    | 1-65536，显存相关                                        |
+| `VLLM_KV_QUANTIZATION`               | KV Cache 量化开关  | `false`   | 启用 KV Cache 量化                                       |
+| `VLLM_MAX_DRAFT_TOKENS`              | 最大投机 Token     | `8`       | 0-64，投机解码                                           |
+| `VLLM_ADAPTIVE_SPECULATIVE`          | 自适应投机解码     | `false`   | 动态调整 draft 长度                                      |
+| `VLLM_TENSOR_PARALLEL_SIZE`          | 张量并行度         | `1`       | 1-64，GPU 数量                                           |
+| `VLLM_MAX_BATCH_SIZE`                | 最大批大小         | `256`     | 1-8192                                                   |
+| `VLLM_MAX_WAITING_BATCHES`           | 最大等待批次       | `10`      | 1-100                                                    |
+| `VLLM_ALLOW_STUB`                    | 允许加载 Stub 架构 | `false`   | 仅供开发/测试（StubArchitecture 不推理）                 |
+| `VLLM_API_KEY`                       | API 密钥           | -         | 可重复指定；认证必填                                     |
+| `VLLM_API_KEYS_FILE`                 | API 密钥文件       | -         | 从文件加载密钥（与 `VLLM_API_KEY` 并用）                 |
+| `VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH` | 允许无认证公开访问 | `false`   | 仅限可信内网；否则启动时给出安全警告                     |
+| `VLLM_CONFIG_PATH`                   | YAML 配置路径      | -         | 覆盖 `--config`；加载优先级最高                          |
+| `VLLM_OTLP_ENDPOINT`                 | OTLP 收集器端点    | -         | 需 `opentelemetry` feature（如 `http://localhost:4317`） |
 
 </div>
+
+> 完整 CLI 选项见 `cargo run -p vllm-server -- --help`。
 
 ### YAML 配置文件
 
@@ -362,26 +378,28 @@ auth:
       rate_limit_window_secs: 30
 ```
 
-### Scheduler 配置
+### Scheduler 默认值（代码级，非 YAML 可配置）
 
-```yaml
-# config.yaml
-scheduler:
-  max_num_seqs: 256
-  max_num_batched_tokens: 4096
-  max_consecutive_decode: 10
-  enable_pd_separation: true  # 启用 Prefill/Decode 严格分离
-  prefill_chunk_size: 512
-  decode_preference_ratio: 0.7
-  enable_priority_scheduling: false
-  min_batch_size: 1
-  max_batch_size: 256
-  # 调度策略: "FCFS" | "SJF" | "Priority"
-  scheduling_policy: "FCFS"
-  policy_config:
-    sjf_priority_weight: 0.3
-    sjf_remaining_work_weight: 0.7
-```
+> ⚠️ **诚实声明**：调度参数在 `vllm-core` 中通过
+> `SchedulerConfig::default()` 设定（`crates/core/src/types/scheduler_config.rs`），
+> **不**通过服务器 YAML 配置 —— `config.yaml` 中不存在 `scheduler:` 段，
+> 粘贴此类片段会被静默忽略。需要调整时请使用 Rust API
+> （`SchedulerConfig::builder().with_*()`，见下文代码示例）。
+
+| 参数                                | 默认值      | 说明                                |
+| ----------------------------------- | ----------- | ----------------------------------- |
+| `max_num_seqs`                      | `256`       | 单批最大序列数                      |
+| `max_num_batched_tokens`            | `4096`      | 单批最大 Token 数（prompt+生成）    |
+| `max_consecutive_decode`            | `10`        | 强制插入 prefill 前的连续 decode 轮 |
+| `enable_pd_separation`              | `true`      | Prefill/Decode 分相调度             |
+| `prefill_chunk_size`                | `512`       | 单次 prefill 的最大 prompt token    |
+| `decode_preference_ratio`           | `0.7`       | 混合批次中 decode 权重 (0.0-1.0)    |
+| `enable_priority_scheduling`        | `false`     | 优先级调度                          |
+| `enable_dynamic_batching`           | `true`      | 动态批处理                          |
+| `min_batch_size` / `max_batch_size` | `1` / `256` | 动态批处理的批大小边界              |
+
+调度策略（FCFS / SJF / Priority）通过 Rust API 选择：
+`engine.set_policy(Box::new(SjfPolicy::new(0.3, 0.7)))`，见下方代码示例。
 
 ### CLI 选项
 
@@ -417,6 +435,7 @@ cargo run -p vllm-server -- --help
 | `/debug/metrics`           | GET      | 调试指标快照    |   -   |
 | `/debug/kv-cache`          | GET      | KV cache 状态   |   -   |
 | `/debug/trace`             | GET      | 追踪状态        |   -   |
+| `/debug/audit`             | GET      | 审计日志转储    |   -   |
 | `/shutdown`                | GET      | 优雅关闭        |   -   |
 
 </div>
@@ -565,15 +584,16 @@ vllm-lite/
 
 ### Feature Flags
 
-| Feature      | Crate                | 描述                                                 |
-| ------------ | -------------------- | ---------------------------------------------------- |
-| `cuda-graph` | core, server         | CUDA Graph 捕获/回放（经 `CudaGraphExecutor` trait） |
-| `cuda`       | model                | Candle CUDA 支持                                     |
-| `gguf`       | model                | GGUF 模型加载                                        |
-| `multi-node` | core, model, testing | 启用 `vllm-dist`（分布式 KV + gRPC）                 |
-| `full`       | model                | `cuda` + `gguf`                                      |
-| `candle`     | traits               | 启用 Candle 核心类型                                 |
-| `kernels`    | traits               | 启用 kernel trait 定义                               |
+| Feature         | Crate                        | 描述                                                                         |
+| --------------- | ---------------------------- | ---------------------------------------------------------------------------- |
+| `cuda-graph`    | core, server                 | CUDA Graph 捕获/回放（经 `CudaGraphExecutor` trait）                         |
+| `cuda`          | model, testing               | Candle CUDA 支持                                                             |
+| `gguf`          | model                        | GGUF 模型加载                                                                |
+| `multi-node`    | core, model, server, testing | 启用 `vllm-dist`（分布式 KV + gRPC）                                         |
+| `full`          | model                        | `cuda` + `gguf`                                                              |
+| `candle`        | traits                       | 启用 Candle 核心类型                                                         |
+| `kernels`       | traits                       | 启用 kernel trait 定义                                                       |
+| `opentelemetry` | core, server                 | OTLP 指标 + 追踪导出（`--otlp-endpoint` / `observability` YAML，见 ADR-021） |
 
 Note: Tokenizer (`tiktoken`, `tokenizers`) 始终启用。`vllm-dist` 非 default-member，需 `--features multi-node` 构建。
 
@@ -597,7 +617,7 @@ Note: Tokenizer (`tiktoken`, `tokenizers`) 始终启用。`vllm-dist` 非 defaul
 - [.planning/v31.0-MASTER-PLAN.md](./.planning/v31.0-MASTER-PLAN.md) - 当前开发路线图
 - [CHANGELOG.md](./CHANGELOG.md) - 版本历史
 - [CONTRIBUTING.md](./CONTRIBUTING.md) - 贡献指南
-- [docs/adr/](./docs/adr/) - 架构决策记录 (20 篇 ADR)
+- [docs/adr/](./docs/adr/) - 架构决策记录 (21 篇 ADR)
 - [Tutorials](./docs/tutorial/01-setup.md) - 新贡献者教程（从 clone 到 serving）
 
 ---
