@@ -428,6 +428,16 @@ pub(crate) fn user_id_from_key(api_key: &str) -> String {
 }
 
 /// Run the operation (see signature for params and return type).
+/// Paths exempt from API-key auth so unauthenticated K8s liveness/readiness
+/// probes succeed. Deliberately narrow: only the health/readiness endpoints
+/// — `/metrics`, `/debug/*`, and `/shutdown` stay authenticated.
+fn is_health_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/health" | "/health/live" | "/health/ready" | "/ready"
+    )
+}
+
 /// # Panics
 ///
 /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
@@ -436,6 +446,18 @@ pub async fn auth_middleware(
     request: Request,
     next: Next,
 ) -> Response {
+    // K8s liveness/readiness probes are unauthenticated GETs (the Helm
+    // chart's probes carry no `Authorization` header). Exempt the
+    // health/readiness paths from API-key auth so probes succeed without
+    // credentials (RIL ISS-018) — otherwise every probe gets 401 and the
+    // pod never becomes ready. The guard against an unauthenticated public
+    // deployment is the startup refusal to bind non-loopback without keys
+    // (`main.rs`), not per-request auth on health. Sensitive ops endpoints
+    // (`/debug/*`, `/shutdown`, `/metrics`) are deliberately NOT exempt.
+    if is_health_path(request.uri().path()) {
+        return next.run(request).await;
+    }
+
     // Read the body to estimate token cost before rate limiting.
     // The body is reconstructed so downstream handlers still see it.
     let (parts, body) = request.into_parts();

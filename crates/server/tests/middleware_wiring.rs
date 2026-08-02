@@ -166,3 +166,51 @@ async fn request_id_still_propagates_on_success_path() {
     let (_, body) = resp.into_parts();
     let _ = BodyExt::collect(body).await.unwrap().to_bytes();
 }
+
+/// Regression (RIL ISS-018): K8s liveness/readiness probes are
+/// unauthenticated GETs (the Helm chart's probes carry no Authorization
+/// header). When API-key auth is configured, the health/readiness paths
+/// must be EXEMPT from auth so probes return 200 — otherwise every probe
+/// gets 401 and the pod never becomes ready (restart loop). The security
+/// boundary for unauthenticated deployment is the startup refusal to bind
+/// a non-loopback address without keys (main.rs), not per-request auth on
+/// health. Sensitive ops endpoints (/debug/*, /shutdown, /metrics) stay
+/// authenticated.
+#[tokio::test]
+async fn health_probes_are_exempt_from_api_key_auth() {
+    let app = production_app(); // auth configured with TEST_KEY
+    for path in ["/health/live", "/health/ready", "/health", "/ready"] {
+        let req = Request::builder()
+            .method("GET")
+            .uri(path)
+            .body(Body::empty())
+            .unwrap();
+        let resp = send(&app, req).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "{path} must be reachable WITHOUT auth so unauthenticated K8s \
+             probes work (got {} => RIL ISS-018)",
+            resp.status()
+        );
+    }
+}
+
+/// Companion to the exemption test: a NON-health endpoint must still
+/// require auth (the exemption is narrow, not a wholesale auth bypass).
+#[tokio::test]
+async fn non_health_endpoints_still_require_auth() {
+    let app = production_app();
+    let req = Request::builder()
+        .method("GET")
+        .uri("/v1/models")
+        .body(Body::empty())
+        .unwrap();
+    let resp = send(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::UNAUTHORIZED,
+        "non-health endpoints must still require API-key auth (got {})",
+        resp.status()
+    );
+}
