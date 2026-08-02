@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 6,
+  "round": 7,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T17:40:25+00:00",
+  "updated_at": "2026-08-02T17:46:30+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -33,7 +33,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 6,
+      "touched_round": 7,
       "title": "vllm-model",
       "role": "model architectures, kernels, paged tensor store"
     },
@@ -679,7 +679,7 @@
       "version": 2,
       "created_at": "2026-08-02T17:29:12+00:00",
       "updated_at": "2026-08-02T17:40:16+00:00",
-      "touched_round": 6,
+      "touched_round": 7,
       "title": "util::expand_kv and flash_attention_v3::expand_kv use kv.repeat (tile) => Q head h maps to KV head (h mod n_kv) instead of floor(h/group); gemma4::expand_kv already uses the correct blocked broadcast pattern",
       "confidence": 0.99
     },
@@ -747,6 +747,56 @@
       "touched_round": 6,
       "source": "cargo test excl dist @ 6e05276e: 1934 pass / 0 fail (vllm-model 542/542); 4 new regression tests verified to FAIL on pre-fix tile code; clippy + fmt green",
       "title": "VERIFY TASK-010: blocked grouping confirmed end-to-end (single-token paged_attention selects V by floor(h/group)); flash GQA+MQA paths pinned; no existing test regressed",
+      "confidence": 0.98
+    },
+    "ISS-011": {
+      "id": "ISS-011",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T17:46:30+00:00",
+      "updated_at": "2026-08-02T17:46:30+00:00",
+      "touched_round": 7,
+      "title": "gated_delta repeat_kv_heads tiles K/Q heads instead of blocked grouping (same class as ISS-010) — V head v paired with wrong K/Q head v % num_k_heads",
+      "severity": 0.85,
+      "category": "correctness"
+    },
+    "TASK-011": {
+      "id": "TASK-011",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T17:46:30+00:00",
+      "updated_at": "2026-08-02T17:46:30+00:00",
+      "touched_round": 7,
+      "title": "fix gated_delta repeat_kv_heads to blocked repeat-interleave + ordering regression test",
+      "category": "correctness",
+      "severity": 0.85,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "CHG-004": {
+      "id": "CHG-004",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:46:30+00:00",
+      "updated_at": "2026-08-02T17:46:30+00:00",
+      "touched_round": 7,
+      "commit": "8eb17f4a",
+      "title": "fix(model): gated_delta repeat_kv_heads blocked grouping (reshape->broadcast->reshape), 4th tile-repeat site"
+    },
+    "EV-019": {
+      "id": "EV-019",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:46:30+00:00",
+      "updated_at": "2026-08-02T17:46:30+00:00",
+      "touched_round": 7,
+      "source": "cargo test -p vllm-model @ 8eb17f4a: 543 pass / 0 fail; test_repeat_kv_heads_blocked_grouping verified FAIL on pre-fix tiled code; clippy + fmt green",
+      "title": "VERIFY TASK-011: repeat_kv_heads blocked [K0x2,K1x2] confirmed; gated_delta prefill/decode parity intact",
       "confidence": 0.98
     }
   },
@@ -978,6 +1028,36 @@
       "to": "COMP-003",
       "type": "governs",
       "created_at": "2026-08-02T17:40:16+00:00"
+    },
+    {
+      "from": "ISS-011",
+      "to": "COMP-003",
+      "type": "located_in",
+      "created_at": "2026-08-02T17:46:30+00:00"
+    },
+    {
+      "from": "TASK-011",
+      "to": "ISS-011",
+      "type": "addresses",
+      "created_at": "2026-08-02T17:46:30+00:00"
+    },
+    {
+      "from": "CHG-004",
+      "to": "ISS-011",
+      "type": "resolves",
+      "created_at": "2026-08-02T17:46:30+00:00"
+    },
+    {
+      "from": "CHG-004",
+      "to": "TASK-011",
+      "type": "implements",
+      "created_at": "2026-08-02T17:46:30+00:00"
+    },
+    {
+      "from": "EV-019",
+      "to": "HYP-002",
+      "type": "validates",
+      "created_at": "2026-08-02T17:46:30+00:00"
     }
   ]
 }
