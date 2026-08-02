@@ -1,11 +1,13 @@
-//! GGUF format integration: file detection (`is_gguf_file`), stub loader, and the `Q4_K_M` dequantization entry point.
+//! GGUF format integration: file detection (`is_gguf_file`) and a stub
+//! loader.
 //!
-//! The full `Q4_K_M` dequant path lives in `quantize::dequantize_q4_k`;
-//! this module is the on-disk-format adapter the model loader calls
-//! when a `.gguf` file is detected.
-//! Reserved public-API surface for the GGUF integration; the stub
-// loader returns an empty tensor map today. `is_gguf_file` is the entry
-// point the model loader uses to detect GGUF checkpoints.
+//! This module is the on-disk-format adapter the model loader calls when a
+//! `.gguf` file is detected. **The GGUF parser and `Q4_K_M` dequantization
+//! are not yet implemented**: `load_gguf_tensors` returns an empty tensor
+//! map and `QuantizedTensor::dequantize_to_f32` is a zero-filling
+//! placeholder (see ADR-009 and the v22.0 GGUF-01 deferred-items entry).
+//! `is_gguf_file` is the entry point the model loader uses to detect GGUF
+//! checkpoints.
 #![allow(dead_code)]
 
 use crate::quantize::StorageTensor;

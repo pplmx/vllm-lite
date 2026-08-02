@@ -57,8 +57,11 @@ pub struct QuantizationConfig {
 impl QuantizedTensor {
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
-    /// `dequantize_to_f16`: dequantize to f16.
+    /// Returns `Err` if the dtype conversion fails.
+    ///
+    /// **Stub:** delegates to [`Self::dequantize_to_f32`] (a zero-filling
+    /// placeholder) and casts to `F16`. Real GGUF dequantization is future
+    /// work (ADR-009); today this returns zeros, not the decoded weights.
     pub fn dequantize_to_f16(&self) -> Result<Tensor> {
         let dequantized = self.dequantize_to_f32()?;
         dequantized.to_dtype(DType::F16)
@@ -66,8 +69,14 @@ impl QuantizedTensor {
 
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
-    /// `dequantize_to_f32`: dequantize to f32.
+    /// Returns `Err` if the tensor allocation fails.
+    ///
+    /// **Stub (ADR-009 / v22.0 GGUF-01):** returns an all-zeros tensor of
+    /// `self.shape` — it does **not** yet decode `self.data` / `self.scales`
+    /// / `self.zeros`. A real `Q4_K_M` (and `Q5_K_M` / `Q8_0`) dequantizer is
+    /// future work; the GGUF loader (`load_gguf_tensors`) returns an empty
+    /// map today, so no `QuantizedTensor` is constructed from a real
+    /// checkpoint in the current build.
     pub fn dequantize_to_f32(&self) -> Result<Tensor> {
         let total_elements: usize = self.shape.iter().product();
         let zeros: Vec<f32> = vec![0.0; total_elements];
