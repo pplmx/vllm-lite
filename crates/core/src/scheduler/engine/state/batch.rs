@@ -1,6 +1,7 @@
 //! `SchedulerEngine::build_batch` + `schedule` — phase selection, batch
 //! composition, preemption trigger, and CUDA Graph / observer hooks.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use vllm_traits::Batch;
@@ -51,7 +52,7 @@ impl SchedulerEngine {
         };
 
         // Get sequences for this phase from the queue
-        let new_sequences = self.request_queue.drain_by_phase(phase);
+        let mut new_sequences = self.request_queue.drain_by_phase(phase);
 
         // Update metrics: queue depth after draining
         self.metrics
@@ -62,7 +63,55 @@ impl SchedulerEngine {
             return Batch::empty();
         }
 
-        // Add new sequences to the batch
+        // Check memory and preempt if needed (before allocating the new
+        // sequences' KV blocks below). Considers both the running decode
+        // sequences and the newly-admitted ones.
+        for seq in sequences.iter().chain(new_sequences.iter()) {
+            let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
+            if blocks_needed > self.memory.available_blocks() {
+                self.execute_preemption(blocks_needed);
+            }
+        }
+
+        // RIL ISS-022: allocate the KV blocks for newly-admitted sequences
+        // BEFORE the forward pass writes their KV. The model's prefill writes
+        // KV to `seq.kv_blocks`; if blocks are not allocated yet, the write
+        // falls back to block 0 and corrupts the cache. (Previously blocks
+        // were allocated only in `update()`, AFTER the forward, so the first
+        // prefill wrote its KV to the wrong blocks.) Decode sequences still
+        // grow incrementally in `update()` as they cross block boundaries.
+        for seq in &mut new_sequences {
+            let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
+            while seq.kv_blocks.len() < blocks_needed {
+                if let Some(new_blocks) = self.memory.allocate(1) {
+                    // ARCH-01: record the freshly allocated blocks so the
+                    // refcount matches the live owners (this sequence = 1).
+                    self.memory.record_blocks(&new_blocks);
+                    #[cfg(feature = "multi-node")]
+                    {
+                        let block_idx = seq.kv_blocks.len();
+                        let start = block_idx * vllm_traits::BLOCK_SIZE;
+                        let end = (start + vllm_traits::BLOCK_SIZE).min(seq.tokens.len());
+                        let parent_hash = self.chain_cursors.get(&seq.id).copied().unwrap_or(0);
+                        for &block_id in &new_blocks {
+                            let hash = self.memory.record_block_tokens(
+                                block_id,
+                                parent_hash,
+                                &seq.tokens[start..end],
+                            );
+                            self.chain_cursors.insert(seq.id, hash);
+                        }
+                    }
+                    let mut blocks = (*seq.kv_blocks).clone();
+                    blocks.extend(new_blocks);
+                    seq.kv_blocks = Arc::new(blocks);
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // Add new sequences to the batch (now with allocated KV blocks)
         sequences.extend(new_sequences.iter().cloned());
 
         // Sort by policy priority
@@ -78,14 +127,6 @@ impl SchedulerEngine {
             let priority_b = self.policy.compute_priority(b, &ctx);
             priority_a.cmp(&priority_b)
         });
-
-        // Check memory and preempt if needed
-        for seq in &sequences {
-            let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
-            if blocks_needed > self.memory.available_blocks() {
-                self.execute_preemption(blocks_needed);
-            }
-        }
 
         // Move new sequences to running
         self.running.extend(new_sequences);

@@ -406,3 +406,36 @@ fn test_full_prefix_hit_request_completes() {
         "second identical prompt must register as a prefix hit"
     );
 }
+
+/// Regression (RIL ISS-022): a freshly-admitted prefill sequence must have
+/// its prompt KV blocks allocated by `build_batch` BEFORE the forward pass
+/// writes its KV. Pre-fix, blocks were allocated only in `update()` (after the
+/// forward), so `batch.kv_block_ids` was empty for a fresh prefill and the
+/// model's `write_prefill_kv` fell back to block 0, corrupting the cache.
+#[test]
+fn test_build_batch_preallocates_prefill_kv_blocks() {
+    let config = SchedulerConfig::default();
+    let mut engine = create_test_engine(config, 1024);
+    // 40-token prompt => ceil(40 / BLOCK_SIZE=16) = 3 blocks.
+    let prompt: Vec<u32> = (0..40).collect();
+    let expected_blocks = prompt.len().div_ceil(vllm_traits::BLOCK_SIZE);
+    assert_eq!(expected_blocks, 3);
+    engine.add_request(Request::new(0, prompt, 5));
+
+    let batch = engine.build_batch();
+    assert_eq!(batch.len(), 1);
+    assert_eq!(
+        batch.kv_block_ids[0].len(),
+        expected_blocks,
+        "build_batch must allocate the prompt's KV blocks before the forward \
+         (got {} blocks, expected {expected_blocks}) (RIL ISS-022)",
+        batch.kv_block_ids[0].len()
+    );
+    // The allocated blocks must be distinct (not all the block-0 fallback).
+    let unique: std::collections::HashSet<usize> = batch.kv_block_ids[0].iter().copied().collect();
+    assert_eq!(
+        unique.len(),
+        expected_blocks,
+        "prefill KV blocks must be distinct allocations, not the block-0 fallback"
+    );
+}
