@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 9,
+  "round": 10,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T18:14:19+00:00",
+  "updated_at": "2026-08-02T18:27:51+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -33,7 +33,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 9,
+      "touched_round": 10,
       "title": "vllm-model",
       "role": "model architectures, kernels, paged tensor store"
     },
@@ -974,6 +974,56 @@
       "source": "code read @ a042acec: load_gguf_tensors returns empty HashMap (honest stub citing ADR-009); dequantize_to_f32 returns vec![0.0; total] ignoring data/scales; dequantize_q4_k absent repo-wide (grep). clippy + fmt + doc green.",
       "title": "VERIFY TASK-014: GGUF is detection+scaffold only; docs now match the honestly-stubbed loader",
       "confidence": 0.95
+    },
+    "ISS-015": {
+      "id": "ISS-015",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:27:50+00:00",
+      "updated_at": "2026-08-02T18:27:51+00:00",
+      "touched_round": 10,
+      "title": "FP8 E4M3 dequant 8x too small (decode exp off by 3) + encode underflow saturates to max (negative biased_exp wraps) — hidden by shape-only/vacuous tests",
+      "severity": 0.8,
+      "category": "correctness"
+    },
+    "TASK-015": {
+      "id": "TASK-015",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:27:50+00:00",
+      "updated_at": "2026-08-02T18:27:51+00:00",
+      "touched_round": 10,
+      "title": "fix FP8 decode exponent + encode underflow/overflow/carry; harden round-trip tests to check values",
+      "category": "correctness",
+      "severity": 0.8,
+      "confidence": 0.95,
+      "effort": 2,
+      "unlock_factor": 1
+    },
+    "CHG-008": {
+      "id": "CHG-008",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:27:50+00:00",
+      "updated_at": "2026-08-02T18:27:50+00:00",
+      "touched_round": 10,
+      "commit": "e2e384d8",
+      "title": "fix(model): FP8 E4M3 decode exp=bias-7 (was -3 => 8x small) + encode flush underflow to zero (was saturate-to-max)"
+    },
+    "EV-023": {
+      "id": "EV-023",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:27:51+00:00",
+      "updated_at": "2026-08-02T18:27:51+00:00",
+      "touched_round": 10,
+      "source": "probe + tests @ e2e384d8: round-trip 1.0->1.0, 2.0->2.0, worst normal-range rel err 4% (was 8x); 0.001->0.0 (was 44.0); round-trip test verified FAIL on pre-fix decode; vllm-model 545/545",
+      "title": "VERIFY TASK-015: FP8 round-trip value-preserving within FP8 precision; subnormals flush to 0",
+      "confidence": 0.98
     }
   },
   "edges": [
@@ -1324,6 +1374,30 @@
       "to": "TASK-014",
       "type": "implements",
       "created_at": "2026-08-02T18:14:18+00:00"
+    },
+    {
+      "from": "ISS-015",
+      "to": "COMP-003",
+      "type": "located_in",
+      "created_at": "2026-08-02T18:27:51+00:00"
+    },
+    {
+      "from": "TASK-015",
+      "to": "ISS-015",
+      "type": "addresses",
+      "created_at": "2026-08-02T18:27:51+00:00"
+    },
+    {
+      "from": "CHG-008",
+      "to": "ISS-015",
+      "type": "resolves",
+      "created_at": "2026-08-02T18:27:51+00:00"
+    },
+    {
+      "from": "CHG-008",
+      "to": "TASK-015",
+      "type": "implements",
+      "created_at": "2026-08-02T18:27:51+00:00"
     }
   ]
 }
