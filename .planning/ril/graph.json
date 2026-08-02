@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 20,
+  "round": 21,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T20:50:26+00:00",
+  "updated_at": "2026-08-02T21:01:05+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 20,
+      "touched_round": 21,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -1541,6 +1541,47 @@
         "put real-model tests in vllm-model tests (cannot access vllm-core Engine)",
         "re-export LlamaModel via vllm-testing (adds coupling)"
       ]
+    },
+    "TASK-026": {
+      "id": "TASK-026",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T21:01:05+00:00",
+      "updated_at": "2026-08-02T21:01:05+00:00",
+      "touched_round": 21,
+      "title": "GQA real-model forward smoke test (num_kv_heads<num_heads exercises expand_kv grouping end-to-end); equivalence variant removed as degenerate",
+      "category": "test-quality",
+      "severity": 0.4,
+      "confidence": 0.9,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "CHG-019": {
+      "id": "CHG-019",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T21:01:05+00:00",
+      "updated_at": "2026-08-02T21:01:05+00:00",
+      "touched_round": 21,
+      "commit": "413eb797",
+      "title": "test(core): GQA real-model forward smoke test (finite non-zero logits); replaces degenerate equivalence variant"
+    },
+    "DEC-010": {
+      "id": "DEC-010",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T21:01:05+00:00",
+      "updated_at": "2026-08-02T21:01:05+00:00",
+      "touched_round": 21,
+      "title": "Tiny-model logits-equivalence tests are DEGENERATE for attention-grouping: the residual stream washes out the attention's grouping-dependent contribution, so logits match regardless of grouping. Pin grouping correctness at the UNIT level (expand_kv vs naive reference), and use real-model tests only for integration smoke (runs + finite/non-zero), not equivalence.",
+      "rationale": "Empirically verified: GQA(num_kv_heads=2) vs replicated-MHA logits matched (max_diff<1e-3) under BOTH blocked and interleaved grouping, because tiny attention weights (0.02 scale) make the attention contribution negligible vs the residual. Equivalence tests give false confidence here.",
+      "alternatives_rejected": [
+        "logits-equivalence GQA-vs-MHA test (degenerate, passes for wrong grouping)",
+        "larger attention weights to make attention dominate (hacky, brittle)"
+      ]
     }
   },
   "edges": [
@@ -2149,6 +2190,18 @@
       "to": "COMP-002",
       "type": "governs",
       "created_at": "2026-08-02T20:50:26+00:00"
+    },
+    {
+      "from": "CHG-019",
+      "to": "TASK-026",
+      "type": "implements",
+      "created_at": "2026-08-02T21:01:05+00:00"
+    },
+    {
+      "from": "DEC-010",
+      "to": "COMP-002",
+      "type": "governs",
+      "created_at": "2026-08-02T21:01:05+00:00"
     }
   ]
 }
