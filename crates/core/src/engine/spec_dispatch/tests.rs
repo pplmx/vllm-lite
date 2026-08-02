@@ -183,6 +183,132 @@ impl ModelBackend for CounterModel {
     }
 }
 
+/// `FakeModel` wrapper that records the `positions` passed to
+/// `forward_logits`. Used to verify the speculative verification path feeds
+/// the target model the TRUE sequence positions (RIL ISS-016), not a
+/// 0-based range.
+#[derive(Clone)]
+struct PositionRecordingModel {
+    inner: FakeModel,
+    recorded: std::sync::Arc<std::sync::Mutex<Vec<Vec<usize>>>>,
+}
+
+impl PositionRecordingModel {
+    fn new(token: TokenId) -> Self {
+        Self {
+            inner: FakeModel::new(token),
+            recorded: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+        }
+    }
+    fn recorded(&self) -> Vec<Vec<usize>> {
+        self.recorded.lock().unwrap().clone()
+    }
+    fn clear(&self) {
+        self.recorded.lock().unwrap().clear();
+    }
+}
+
+impl ModelBackend for PositionRecordingModel {
+    fn forward(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+    ) -> ModelResult<BatchOutput> {
+        self.inner.forward(
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+        )
+    }
+
+    fn forward_logits(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+    ) -> ModelResult<Vec<Vec<f32>>> {
+        if let Some(first) = positions.first() {
+            self.recorded.lock().unwrap().push(first.clone());
+        }
+        self.inner.forward_logits(
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+        )
+    }
+
+    fn embed(
+        &mut self,
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+    ) -> ModelResult<Vec<Vec<f32>>> {
+        self.inner.embed(input_tokens, positions)
+    }
+    fn vocab_size(&self) -> usize {
+        self.inner.vocab_size()
+    }
+    fn num_layers(&self) -> usize {
+        self.inner.num_layers()
+    }
+    fn num_heads(&self) -> usize {
+        self.inner.num_heads()
+    }
+}
+
+/// Regression (RIL ISS-016): the speculative verification forward pass must
+/// feed the target model the TRUE sequence positions, not a 0-based range.
+/// `RoPE` uses absolute positions, so verifying drafts at positions [0,1,...]
+/// for a sequence already at decode position P>0 corrupts the target logits
+/// (and thus the accept/reject decisions). After prefill of a 2-token prompt
+/// the sequence decodes at position 2, so every position the target sees
+/// during the decode-step verification must be >= 2.
+#[test]
+fn test_verification_uses_true_sequence_positions() {
+    let target = PositionRecordingModel::new(42);
+    let recorder = target.clone();
+    let draft = FakeModel::new(42); // drafts match target argmax => accepted
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 3;
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio_mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10, 20], 10), tx);
+
+    // Step 1: prefill the 2-token prompt; sequence advances to decode pos 2.
+    let _ = engine.step().unwrap();
+    recorder.clear();
+
+    // Step 2: decode + speculative verification at position >= 2.
+    let _ = engine.step().unwrap();
+
+    let recorded = recorder.recorded();
+    assert!(
+        !recorded.is_empty(),
+        "target forward_logits must be invoked during speculative verification"
+    );
+    for positions in &recorded {
+        for &pos in positions {
+            assert!(
+                pos >= 2,
+                "verification must use true sequence positions (>= 2 after a                  2-token prefill); got {pos} in {positions:?} — 0-based positions                  corrupt RoPE (RIL ISS-016)"
+            );
+        }
+    }
+}
+
 /// Test Plan 17.4-A: `warmup_draft_kv` invokes draft model once per sequence.
 /// Fast unit test (no #[ignore]): directly constructs a Prefill batch and
 /// calls `warmup_draft_kv` to verify the contract independently of `step()`.

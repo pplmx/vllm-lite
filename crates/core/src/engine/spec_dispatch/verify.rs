@@ -98,7 +98,18 @@ impl crate::engine::Engine {
                 .chain(drafts.iter())
                 .copied()
                 .collect();
-            let verify_positions: Vec<usize> = (0..verify_tokens.len()).collect();
+            // RoPE consumes ABSOLUTE positions: the verification tokens must
+            // be placed at their true sequence positions, starting from the
+            // first input token's position — not 0. For a decode batch the
+            // input token sits at the current decode position P; for a
+            // prefill / chunked batch it sits at the chunk start. The
+            // 0-based positions previously used here applied RoPE at the
+            // wrong positions for any sequence past position 0 (i.e. every
+            // speculative step after prefill), corrupting the target logits
+            // used for accept/reject (RIL ISS-016). The empty-drafts path
+            // above already passes `batch.positions[i]` correctly.
+            let base = batch.positions[i].first().copied().unwrap_or(0);
+            let verify_positions: Vec<usize> = (base..base + verify_tokens.len()).collect();
 
             // Get logits from target model for all positions
             let logits = lock_mutex(&self.target_model)?.forward_logits(
