@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 22,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T21:30:02+00:00",
+  "updated_at": "2026-08-02T21:35:31+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1637,11 +1637,11 @@
       "id": "TASK-027",
       "type": "task",
       "status": "active",
-      "version": 1,
+      "version": 2,
       "created_at": "2026-08-02T21:30:02+00:00",
-      "updated_at": "2026-08-02T21:30:02+00:00",
+      "updated_at": "2026-08-02T21:35:31+00:00",
       "touched_round": 22,
-      "title": "ISS-023 fix (Option A, verified safe for all callers): change CausalLm.forward_logits to return all-positions logits (flatten full logits Tensor instead of logits_to_vector last-position); update logits_to_vector + its tests; verify forward then gets all positions so multi-draft verification works with real models. All forward_logits callers (step_regular, graph_step via extract_per_seq_logits last-vocab; verify forward wants all) confirmed compatible.",
+      "title": "ISS-023 fix requires TWO coupled changes: (1) logits_to_vector returns all positions (flatten full Tensor, drop last-position narrow; update its prefill test to expect seq*vocab elements); (2) verify forward passes is_prefill=true (not batch.is_prefill[i]) so embed_sequence embeds ALL verify_tokens not just the last. logits_to_vector alone is INCOMPLETE (embed_sequence(is_prefill=false) embeds only tokens.last()). Both verified safe: forward_logits callers (step_regular/graph_step via extract_per_seq_logits last-vocab; verify wants all). Verify forward writes KV for all verify_tokens (input token re-write idempotent; drafts rolled back on reject).",
       "category": "correctness",
       "severity": 0.85,
       "confidence": 0.9,
