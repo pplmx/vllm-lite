@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 22,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T21:35:31+00:00",
+  "updated_at": "2026-08-02T21:59:57+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1586,10 +1586,10 @@
     "ISS-023": {
       "id": "ISS-023",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-02T21:11:13+00:00",
-      "updated_at": "2026-08-02T21:11:13+00:00",
+      "updated_at": "2026-08-02T21:59:57+00:00",
       "touched_round": 22,
       "title": "Speculative-decoding verification is broken for real models: verify forward passes is_prefill=batch.is_prefill (false for decode) so embed_sequence embeds ONLY the last verify_token, and forward_logits returns ONLY the last position's logits. The acceptance loop then compares draft d_0 against the bonus-position logits and breaks for j>=1 — drafts are not actually verified. Latent: StubModel embeds arbitrarily and the tests use it.",
       "severity": 0.85,
@@ -1636,10 +1636,10 @@
     "TASK-027": {
       "id": "TASK-027",
       "type": "task",
-      "status": "active",
-      "version": 2,
+      "status": "resolved",
+      "version": 3,
       "created_at": "2026-08-02T21:30:02+00:00",
-      "updated_at": "2026-08-02T21:35:31+00:00",
+      "updated_at": "2026-08-02T21:59:57+00:00",
       "touched_round": 22,
       "title": "ISS-023 fix requires TWO coupled changes: (1) logits_to_vector returns all positions (flatten full Tensor, drop last-position narrow; update its prefill test to expect seq*vocab elements); (2) verify forward passes is_prefill=true (not batch.is_prefill[i]) so embed_sequence embeds ALL verify_tokens not just the last. logits_to_vector alone is INCOMPLETE (embed_sequence(is_prefill=false) embeds only tokens.last()). Both verified safe: forward_logits callers (step_regular/graph_step via extract_per_seq_logits last-vocab; verify wants all). Verify forward writes KV for all verify_tokens (input token re-write idempotent; drafts rolled back on reject).",
       "category": "correctness",
@@ -1647,6 +1647,29 @@
       "confidence": 0.9,
       "effort": 3,
       "unlock_factor": 1
+    },
+    "CHG-020": {
+      "id": "CHG-020",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T21:59:57+00:00",
+      "updated_at": "2026-08-02T21:59:57+00:00",
+      "touched_round": 22,
+      "commit": "ce723e93",
+      "title": "fix(core,model): logits_to_vector returns all positions + verify forward is_prefill=true => speculative verifier gets all-positions logits with real models"
+    },
+    "EV-036": {
+      "id": "EV-036",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T21:59:57+00:00",
+      "updated_at": "2026-08-02T21:59:57+00:00",
+      "touched_round": 22,
+      "source": "full workspace 1951/1951 (excl dist), clippy --workspace --all-targets -D warnings green. logits_to_vector flattens all positions; verify forward is_prefill=true embeds all verify_tokens. FakeModel already returned all positions so spec tests passed pre-fix; fix makes CausalLm behave the same.",
+      "title": "VERIFY TASK-027: speculative verification gets all-positions logits with real models",
+      "confidence": 0.95
     }
   },
   "edges": [
@@ -2291,6 +2314,18 @@
       "to": "ISS-023",
       "type": "addresses",
       "created_at": "2026-08-02T21:30:02+00:00"
+    },
+    {
+      "from": "CHG-020",
+      "to": "ISS-023",
+      "type": "resolves",
+      "created_at": "2026-08-02T21:59:57+00:00"
+    },
+    {
+      "from": "CHG-020",
+      "to": "TASK-027",
+      "type": "implements",
+      "created_at": "2026-08-02T21:59:57+00:00"
     }
   ]
 }
