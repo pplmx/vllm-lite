@@ -341,11 +341,16 @@ pub struct ChatRequest {
     ///   - logit >= 0: divide by `repeat_penalty`
     ///   - logit < 0: multiply by `repeat_penalty`
     ///
-    /// This gives the OpenAI-spec behaviour for both
+    /// This gives the correct penalty DIRECTION for both
     /// `frequency_penalty >= 0` (penalize: positive logits shrink,
     /// negative logits grow more negative) and `frequency_penalty < 0`
     /// (boost: positive logits grow, negative logits grow less
-    /// negative). The 1e-3 floor prevents divide-by-zero for
+    /// negative). It is a per-*distinct* approximation: the engine
+    /// applies the penalty once per distinct seen token (duplicates
+    /// deduped), whereas `OpenAI`'s `frequency_penalty` scales with
+    /// occurrence count — so heavy repetition is penalized less
+    /// aggressively than `OpenAI` would. The 1e-3 floor prevents
+    /// divide-by-zero for
     /// extreme negative `frequency_penalty` values (e.g. -1.0 →
     /// `repeat_penalty = 0.0`); values floored to 1e-3 produce
     /// maximum boost, which is the practical limit for the divisor

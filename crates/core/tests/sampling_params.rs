@@ -352,7 +352,7 @@ fn arch_02_presence_penalty_combined_with_repeat_penalty() {
     logits[10] = 3.0;
     logits[3] = 1.5;
 
-    // With repeat_penalty = 2.0 (frequency-style) on seen = [10],
+    // With repeat_penalty = 2.0 (llama.cpp-style multiplicative, per-distinct) on seen = [10],
     // the logit at 10 is halved from 3.0 to 1.5. Tied with token 3
     // → lowest index → token 3. Argmax flips.
     //

@@ -98,17 +98,26 @@ pub struct SamplingParams {
     /// appeared. Positive values discourage repetition (encourage new
     /// topics); negative values *encourage* repetition. `0.0` disables.
     ///
-    /// **Difference from `repeat_penalty`:** `repeat_penalty` is
-    /// *frequency-style* — it divides the logit by `repeat_penalty`
-    /// *once per occurrence*, so a token seen 3 times gets divided 3
-    /// times. `presence_penalty` is *presence-style* — it subtracts
-    /// `presence_penalty` from the logit once per *distinct* token, so
-    /// a token seen 3 times still only gets the penalty subtracted once.
-    /// This matches `OpenAI`'s spec for `presence_penalty`: "Positive
-    /// values penalize new tokens based on whether they appear in the
-    /// prompt so far, increasing the model's likelihood to talk about
-    /// new topics." See `vllm_core::sampling::apply_presence_penalty`
-    /// for the implementation.
+    /// **Difference from `repeat_penalty`:** both penalties are applied
+    /// once per *distinct* seen token (duplicates are deduped via an
+    /// internal `HashSet`); neither scales with occurrence count, so a
+    /// token seen 3 times is penalized exactly once by each. They differ
+    /// in how they combine with the logit: `repeat_penalty` is
+    /// *multiplicative* and sign-aware — it divides a non-negative logit
+    /// by `repeat_penalty` and multiplies a negative logit by it
+    /// (llama.cpp / `HuggingFace` repetition-penalty style);
+    /// `presence_penalty` is *additive* — it subtracts `presence_penalty`
+    /// from the logit. Note `OpenAI`'s `frequency_penalty` is genuinely
+    /// per-*occurrence* (proportional to count); the engine approximates
+    /// it with the per-distinct `repeat_penalty`, so heavily repeated
+    /// tokens are penalized less aggressively than `OpenAI` would (see the
+    /// `frequency_penalty` honoring note in
+    /// `vllm_server::openai::sampling_validation`). The presence semantic
+    /// matches `OpenAI`'s spec for `presence_penalty`: "Positive values
+    /// penalize new tokens based on whether they appear in the prompt so
+    /// far, increasing the model's likelihood to talk about new topics."
+    /// See `vllm_core::sampling::apply_presence_penalty` for the
+    /// implementation.
     pub presence_penalty: f32,
     /// Per-token logit bias (`OpenAI` `logit_bias` semantic): an additive
     /// bias added to the logit of specific token IDs keyed by their ID.

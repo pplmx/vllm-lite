@@ -172,10 +172,16 @@ pub fn validate_chat_response_format(
 /// `presence_penalty` this is the no-op default).
 ///
 /// **Honoring note (v0.3 declaration + P29 sign-aware engine):**
-/// the engine's `apply_repeat_penalty` implements frequency-style
-/// semantics (penalty proportional to occurrence count). The chat
-/// / completions handlers map `frequency_penalty` to
-/// `repeat_penalty = (1.0 + value).max(1e-3)`. For positive
+/// the engine's `apply_repeat_penalty` implements llama.cpp /
+/// `HuggingFace`-style repetition penalty: a multiplicative, sign-aware
+/// adjustment applied once per *distinct* seen token (duplicates are
+/// deduped). It is a per-distinct APPROXIMATION of `OpenAI`'s
+/// per-occurrence `frequency_penalty` — a token seen N times is
+/// penalized once, not N times, so heavy repetition is penalized less
+/// aggressively than true `OpenAI` `frequency_penalty` (the direction is
+/// correct; the count-scaling is not). The chat / completions handlers
+/// map `frequency_penalty` to `repeat_penalty = (1.0 + value).max(1e-3)`.
+/// For positive
 /// `frequency_penalty` the engine divides positive logits and
 /// multiplies negative logits by `repeat_penalty` (P29 sign-aware
 /// refactor), giving the correct "penalize repetition" semantic.
