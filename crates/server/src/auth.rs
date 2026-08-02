@@ -82,6 +82,16 @@ impl TokenBucket {
         if refill_rate.is_infinite() || self.tokens >= cost {
             return Duration::ZERO;
         }
+        // A zero, negative, or NaN refill rate (e.g. a deny-all
+        // `max_requests = 0` quota, globally or per-key) can never
+        // replenish the bucket. Report "retry never" instead of
+        // dividing by zero — `needed / 0.0` is `+inf`, and
+        // `Duration::from_secs_f64` panics on non-finite values,
+        // which would abort every request to a zero-quota key
+        // (RIL ISS-009).
+        if !refill_rate.is_finite() || refill_rate <= 0.0 {
+            return Duration::MAX;
+        }
         let needed = cost - self.tokens;
         let secs = needed / refill_rate;
         // Clamp to avoid absurdly tiny durations that round to 0s.
@@ -1262,5 +1272,49 @@ mod tests {
             auth.verify(&headers).unwrap_err(),
             StatusCode::TOO_MANY_REQUESTS
         );
+    }
+    /// Regression (RIL TASK-009 / ISS-009): a zero global quota
+    /// (`max_requests = 0`) must deny with "retry never" instead of
+    /// panicking — the old `wait_for` divided by the zero refill rate
+    /// and `Duration::from_secs_f64(inf)` panics.
+    #[test]
+    fn test_zero_quota_denies_without_panic() {
+        let limiter = RateLimiter::new(0, 60);
+        let result = limiter.check_and_consume("k", 1.0);
+        assert!(!result.allowed);
+        assert_eq!(result.limit, 0.0);
+        assert_eq!(
+            result.retry_after,
+            Some(Duration::MAX),
+            "zero refill rate means the bucket can never replenish"
+        );
+    }
+
+    /// Regression (RIL TASK-009 / ISS-009): a per-key override with
+    /// `max_requests = 0` (a natural "revoke this key" config) must
+    /// deny that key without panicking while other keys keep the
+    /// global quota.
+    #[test]
+    fn test_zero_quota_override_denies_without_panic() {
+        let overrides = HashMap::from([("revoked".to_string(), (0usize, 60u64))]);
+        let limiter = RateLimiter::new_with_overrides(100, 60, overrides);
+
+        let revoked = limiter.check_and_consume("revoked", 1.0);
+        assert!(!revoked.allowed);
+        assert_eq!(revoked.retry_after, Some(Duration::MAX));
+        assert_eq!(revoked.limit, 0.0);
+
+        assert!(limiter.check_and_consume("normal", 1.0).allowed);
+    }
+
+    /// Regression (RIL TASK-009 / ISS-009): `window_secs = 0` with a
+    /// zero quota must deny (zero capacity) without panicking; the
+    /// infinite refill rate makes the wait zero.
+    #[test]
+    fn test_zero_window_zero_quota_denies_without_panic() {
+        let limiter = RateLimiter::new(0, 0);
+        let result = limiter.check_and_consume("k", 1.0);
+        assert!(!result.allowed);
+        assert_eq!(result.retry_after, Some(Duration::ZERO));
     }
 }

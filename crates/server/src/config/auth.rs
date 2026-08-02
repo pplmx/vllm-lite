@@ -8,7 +8,7 @@ use std::collections::HashMap;
 /// API keys are resolved from up to three sources at startup, in order:
 /// inline `api_keys`, the env var named by `api_keys_env`, and the file
 /// at `api_keys_file`. See [`AuthConfig::resolve_api_keys`] for the
-/// exact precedence. The rate limiter is a sliding-window counter
+/// exact precedence. The rate limiter is a sharded token bucket
 /// applied per resolved key (best-effort; single-process).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
@@ -24,7 +24,7 @@ pub struct AuthConfig {
     /// Per-key request quota within `rate_limit_window_secs`.
     #[serde(default = "default_rate_limit_requests")]
     pub rate_limit_requests: usize,
-    /// Sliding window length (seconds) for the rate limiter.
+    /// Token-bucket refill window (seconds) for the rate limiter.
     #[serde(default = "default_rate_limit_window")]
     pub rate_limit_window_secs: u64,
     /// Per-key rate-limit overrides.
