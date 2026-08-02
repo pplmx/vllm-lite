@@ -335,3 +335,124 @@ fn test_gqa_grouping_end_to_end_single_token() {
          got {vals:?} (wrong grouping => RIL ISS-010)"
     );
 }
+
+/// Independent, obviously-correct GQA attention reference: explicit
+/// per-head grouping (query head `h` attends to KV head `h / group`),
+/// scaled dot-product, causal mask, stable softmax. Used to validate the
+/// production `expand_kv` + `paged_attention` path against the mathematical
+/// definition (RIL ISS-010 / DEC-007: pin VALUES against a reference, not
+/// just shape or path-parity — parity tests missed the grouping bug because
+/// both paths shared the same buggy `expand_kv`).
+#[allow(clippy::too_many_arguments)]
+fn naive_gqa_attention(
+    q: &[f32],
+    k: &[f32],
+    v: &[f32],
+    num_q_heads: usize,
+    num_kv_heads: usize,
+    seq: usize,
+    dim: usize,
+) -> Vec<f32> {
+    let group = num_q_heads / num_kv_heads;
+    let scale = 1.0 / (dim as f32).sqrt();
+    // q: [h_q, s, d]; k/v: [h_kv, s, d]; output: [h_q, s, d] (head-first).
+    let qat = |h: usize, i: usize, x: usize| q[(h * seq + i) * dim + x];
+    let kat = |h: usize, j: usize, x: usize| k[(h * seq + j) * dim + x];
+    let vat = |h: usize, j: usize, x: usize| v[(h * seq + j) * dim + x];
+    let mut out = vec![0.0f32; num_q_heads * seq * dim];
+    for h in 0..num_q_heads {
+        let kvh = h / group;
+        for i in 0..seq {
+            let mut scores: Vec<f32> = (0..seq)
+                .map(|j| {
+                    if j <= i {
+                        (0..dim).map(|x| qat(h, i, x) * kat(kvh, j, x)).sum::<f32>() * scale
+                    } else {
+                        f32::NEG_INFINITY
+                    }
+                })
+                .collect();
+            let max = scores.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+            let sum: f32 = scores.iter().map(|s| (s - max).exp()).sum();
+            for sc in &mut scores {
+                *sc = (*sc - max).exp() / sum;
+            }
+            for x in 0..dim {
+                out[(h * seq + i) * dim + x] = (0..seq).map(|j| scores[j] * vat(kvh, j, x)).sum();
+            }
+        }
+    }
+    out
+}
+
+/// Regression (RIL ISS-010 / DEC-007): the production GQA path
+/// (`expand_kv` → transpose → `paged_attention`) must match an independent
+/// naive reference that groups query head `h` to KV head `h / group`.
+/// Pre-fix `expand_kv` tiled instead of blocked, so query heads past the
+/// first group attended to the wrong KV head and this diverges.
+#[test]
+fn test_gqa_attention_matches_naive_reference() {
+    // b=1, num_q_heads=4, num_kv_heads=2 (group=2), seq=3, dim=4.
+    let (num_q_heads, num_kv_heads, seq, dim) = (4usize, 2, 3, 4);
+    // Deterministic distinct values.
+    let q_hsd: Vec<f32> = (0..num_q_heads * seq * dim)
+        .map(|i| ((i * 7 + 3) % 11) as f32 - 5.0)
+        .collect();
+    let k_hsd: Vec<f32> = (0..num_kv_heads * seq * dim)
+        .map(|i| ((i * 5 + 1) % 9) as f32 - 4.0)
+        .collect();
+    let v_hsd: Vec<f32> = (0..num_kv_heads * seq * dim)
+        .map(|i| ((i * 3 + 2) % 13) as f32 - 6.0)
+        .collect();
+
+    // Reference (head-first inputs).
+    let reference =
+        naive_gqa_attention(&q_hsd, &k_hsd, &v_hsd, num_q_heads, num_kv_heads, seq, dim);
+
+    // Production path: expand_kv works on [b, s, h, d]; paged_attention on
+    // [b, h, s, d]. Mirror gqa/forward.rs: transpose to [b,s,h,d], expand,
+    // transpose back to [b,h,s,d].
+    let to_bs_hd = |t: &[f32], heads: usize| -> Tensor {
+        Tensor::from_slice(t, (1, heads, seq, dim), DEVICE)
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap()
+            .contiguous()
+            .unwrap()
+    };
+    let k_bs_hd = to_bs_hd(&k_hsd, num_kv_heads);
+    let v_bs_hd = to_bs_hd(&v_hsd, num_kv_heads);
+    let k_exp = expand_kv(&k_bs_hd, num_q_heads, num_kv_heads)
+        .unwrap()
+        .transpose(1, 2)
+        .unwrap()
+        .contiguous()
+        .unwrap();
+    let v_exp = expand_kv(&v_bs_hd, num_q_heads, num_kv_heads)
+        .unwrap()
+        .transpose(1, 2)
+        .unwrap()
+        .contiguous()
+        .unwrap();
+    let q_bhsd = Tensor::from_slice(&q_hsd, (1, num_q_heads, seq, dim), DEVICE).unwrap();
+
+    let out = paged_attention(&q_bhsd, &k_exp, &v_exp, num_q_heads, dim).unwrap();
+    // paged_attention returns [b, s, h*d]; reshape to [h, s, d] for comparison.
+    let out = out
+        .reshape((1, seq, num_q_heads, dim))
+        .unwrap()
+        .transpose(1, 2)
+        .unwrap()
+        .contiguous()
+        .unwrap();
+    let got: Vec<f32> = out.flatten_all().unwrap().to_vec1().unwrap();
+
+    assert_eq!(got.len(), reference.len());
+    for (i, (g, r)) in got.iter().zip(reference.iter()).enumerate() {
+        assert!(
+            (g - r).abs() < 1e-4,
+            "GQA attention diverges from naive reference at idx {i}: got {g}, want {r} \
+             (wrong head grouping => RIL ISS-010)"
+        );
+    }
+}
