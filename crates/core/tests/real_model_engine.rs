@@ -179,3 +179,35 @@ fn real_model_engine_populates_kv_cache() {
         "a real model prefill must populate the KV cache (KV-write path regression)"
     );
 }
+
+/// End-to-end smoke test: a GQA model (`num_kv_heads < num_heads`) runs a
+/// multi-block prefill through the real forward path and produces finite,
+/// non-zero logits. Grouping CORRECTNESS is pinned at the unit level by
+/// `test_gqa_attention_matches_naive_reference`; here we verify the GQA path
+/// (`expand_kv` with grouping) integrates without error and computes
+/// non-trivial logits. (A logits-equivalence check against a replicated-MHA
+/// model is degenerate on a tiny model — the residual stream washes out the
+/// attention's grouping-dependent contribution.)
+#[test]
+fn gqa_model_forward_produces_nontrivial_logits() {
+    let mut cfg = ModelConfig::test_tiny();
+    cfg.num_kv_heads = 2; // GQA: 4 query heads, 2 KV heads
+    let weights = tiny_weights(&cfg);
+    let mut model = LlamaModel::from_weights(cfg, &Device::Cpu, weights, 64, false).unwrap();
+
+    let prompt: Vec<Vec<TokenId>> = vec![(0..20).collect()];
+    let positions: Vec<Vec<usize>> = vec![(0..20).collect()];
+    let block_ids: Vec<Vec<usize>> = vec![vec![0, 1]];
+    let logits = model
+        .forward_logits(&[1], &prompt, &positions, &block_ids, &[0], &[true])
+        .unwrap();
+    let last = &logits[0];
+    assert!(
+        last.iter().all(|x| x.is_finite()),
+        "GQA logits must be finite"
+    );
+    assert!(
+        last.iter().any(|x| x.abs() > 1e-6),
+        "GQA logits must be non-zero"
+    );
+}
