@@ -1,0 +1,766 @@
+{
+  "ril_version": 1,
+  "round": 2,
+  "created_at": "2026-08-02T14:18:46+00:00",
+  "updated_at": "2026-08-02T15:07:03+00:00",
+  "nodes": {
+    "COMP-001": {
+      "id": "COMP-001",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:20+00:00",
+      "updated_at": "2026-08-02T14:19:20+00:00",
+      "touched_round": 0,
+      "title": "vllm-traits",
+      "role": "interface definitions (ModelBackend, kernel traits)"
+    },
+    "COMP-002": {
+      "id": "COMP-002",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:20+00:00",
+      "updated_at": "2026-08-02T14:19:20+00:00",
+      "touched_round": 0,
+      "title": "vllm-core",
+      "role": "engine, scheduler, KV cache, sampling, metrics"
+    },
+    "COMP-003": {
+      "id": "COMP-003",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:20+00:00",
+      "updated_at": "2026-08-02T14:19:20+00:00",
+      "touched_round": 0,
+      "title": "vllm-model",
+      "role": "model architectures, kernels, paged tensor store"
+    },
+    "COMP-004": {
+      "id": "COMP-004",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:20+00:00",
+      "updated_at": "2026-08-02T14:19:20+00:00",
+      "touched_round": 2,
+      "title": "vllm-server",
+      "role": "OpenAI-compatible HTTP API, auth, rate limiting"
+    },
+    "COMP-005": {
+      "id": "COMP-005",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:20+00:00",
+      "updated_at": "2026-08-02T14:19:20+00:00",
+      "touched_round": 0,
+      "title": "vllm-dist",
+      "role": "tensor parallel / KV transfer (multi-node feature)"
+    },
+    "COMP-006": {
+      "id": "COMP-006",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:20+00:00",
+      "updated_at": "2026-08-02T14:19:20+00:00",
+      "touched_round": 0,
+      "title": "vllm-testing",
+      "role": "test harness, factories, stubs"
+    },
+    "COMP-007": {
+      "id": "COMP-007",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:20+00:00",
+      "updated_at": "2026-08-02T14:19:20+00:00",
+      "touched_round": 2,
+      "title": "core/scheduler",
+      "role": "queue, preemption, eviction, batch composition"
+    },
+    "COMP-008": {
+      "id": "COMP-008",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:20+00:00",
+      "updated_at": "2026-08-02T14:19:20+00:00",
+      "touched_round": 2,
+      "title": "core/kv-cache-memory",
+      "role": "block allocator, prefix cache, memory manager refcounts"
+    },
+    "COMP-009": {
+      "id": "COMP-009",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:20+00:00",
+      "updated_at": "2026-08-02T14:19:20+00:00",
+      "touched_round": 2,
+      "title": "core/sampling",
+      "role": "sampler pipeline, temperature/top-p/top-k, stop sequences"
+    },
+    "EV-001": {
+      "id": "EV-001",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:33+00:00",
+      "updated_at": "2026-08-02T14:19:33+00:00",
+      "touched_round": 0,
+      "source": "cargo nextest run --workspace @ bded971a (2026-08-02)",
+      "title": "baseline: 2027/2037 pass; 10 failures all vllm-dist port-bind PermissionDenied (sandbox network restriction, not code defect)",
+      "confidence": 1.0
+    },
+    "EV-002": {
+      "id": "EV-002",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:33+00:00",
+      "updated_at": "2026-08-02T14:19:33+00:00",
+      "touched_round": 0,
+      "source": "cargo clippy --workspace --all-targets @ bded971a",
+      "title": "clippy deny-tier green; zero warnings including pedantic/nursery warn tiers",
+      "confidence": 1.0
+    },
+    "EV-003": {
+      "id": "EV-003",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:33+00:00",
+      "updated_at": "2026-08-02T14:19:33+00:00",
+      "touched_round": 0,
+      "source": "scripted audit of crates/**/src (excluding tests/benches/testing) 2026-08-02",
+      "title": "unwrap/expect audit: every production call site carries an invariant comment; AGENTS.md policy satisfied",
+      "confidence": 1.0
+    },
+    "EV-004": {
+      "id": "EV-004",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:33+00:00",
+      "updated_at": "2026-08-02T14:19:33+00:00",
+      "touched_round": 0,
+      "source": "git log --oneline -8 @ bded971a",
+      "title": "6 of last 8 commits are core fixes in sampling/memory/prefix-cache refcount area — bug hotspot signal",
+      "confidence": 1.0
+    },
+    "DEC-001": {
+      "id": "DEC-001",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:19:33+00:00",
+      "updated_at": "2026-08-02T14:19:33+00:00",
+      "touched_round": 0,
+      "title": "RIL bootstrap: storage and API",
+      "rationale": "Objective mandates a typed graph with schema/locking/lifecycle enforced centrally; a single committed JSON store plus one Python CLI gives auditability via git and enforcement in one place without adding a Rust build dependency to the loop.",
+      "alternatives_rejected": [
+        "parallel markdown notes (no schema enforcement, violates no-parallel-store rule)",
+        "Rust binary crate (build overhead for agent tooling, slower iteration)",
+        "SQLite (opaque diffs, poor git auditability)"
+      ]
+    },
+    "HYP-001": {
+      "id": "HYP-001",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T14:19:33+00:00",
+      "updated_at": "2026-08-02T14:35:59+00:00",
+      "touched_round": 2,
+      "title": "KV block lifecycle still has refcount leak or double-free defects in allocator/prefix-cache/eviction paths",
+      "confidence": 0.9,
+      "resolution_note": "confirmed: KV block lifecycle had a positional-corruption defect in execute_preemption (ISS-001) plus stale victim cache (ISS-002); no refcount leak/double-free found in allocator/prefix-cache proper during this audit"
+    },
+    "EV-005": {
+      "id": "EV-005",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:24:26+00:00",
+      "updated_at": "2026-08-02T14:24:26+00:00",
+      "touched_round": 0,
+      "source": "crates/core/src/scheduler/engine/memory.rs:60-97 + update.rs:107-108 @ bded971a",
+      "title": "execute_preemption removes arbitrary victim blocks from running seq.kv_blocks but leaves num_computed_tokens and seq.tokens unchanged; engine indexes blocks positionally (tokens.len().div_ceil(BLOCK_SIZE)) so holes shift the position->block mapping -> silent KV corruption; LRU rank evicts block 0 (prefix) of a sequence first",
+      "confidence": 0.9
+    },
+    "EV-006": {
+      "id": "EV-006",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:24:26+00:00",
+      "updated_at": "2026-08-02T14:24:26+00:00",
+      "touched_round": 1,
+      "source": "crates/core/src/scheduler/memory/eviction.rs:160-176,233-239 @ bded971a",
+      "title": "compute_seq_hash omits consecutive_decode_rounds though compute_priority depends on the >5 threshold -> cached victims go stale when a sequence crosses the threshold between allocations; touch_blocks mutates LRU order without invalidate_cache -> stale victim ordering",
+      "confidence": 0.85
+    },
+    "ISS-001": {
+      "id": "ISS-001",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T14:24:26+00:00",
+      "updated_at": "2026-08-02T14:35:59+00:00",
+      "touched_round": 0,
+      "title": "partial block eviction corrupts running sequences (position->block mapping shift)",
+      "severity": 0.8,
+      "category": "correctness"
+    },
+    "ISS-002": {
+      "id": "ISS-002",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T14:24:26+00:00",
+      "updated_at": "2026-08-02T14:35:59+00:00",
+      "touched_round": 0,
+      "title": "eviction victim cache can serve stale victims (hash omits decode rounds; touch without invalidation)",
+      "severity": 0.35,
+      "category": "correctness"
+    },
+    "TASK-001": {
+      "id": "TASK-001",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-02T14:24:26+00:00",
+      "updated_at": "2026-08-02T14:35:59+00:00",
+      "touched_round": 0,
+      "title": "fix execute_preemption: promote partial victim loss to whole-sequence preemption + regression test",
+      "category": "correctness",
+      "severity": 0.8,
+      "confidence": 0.85,
+      "effort": 2,
+      "unlock_factor": 1.5
+    },
+    "TASK-002": {
+      "id": "TASK-002",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-02T14:24:26+00:00",
+      "updated_at": "2026-08-02T14:35:59+00:00",
+      "touched_round": 0,
+      "title": "fix eviction cache staleness: hash decode rounds + invalidate on touch + comment correction",
+      "category": "correctness",
+      "severity": 0.35,
+      "confidence": 0.8,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "EV-007": {
+      "id": "EV-007",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:35:59+00:00",
+      "updated_at": "2026-08-02T14:35:59+00:00",
+      "touched_round": 0,
+      "source": "cargo nextest: test_preemption_never_leaves_partial_block_holes, test_victim_cache_invalidates_on_decode_rounds_change, test_touch_blocks_invalidates_victim_cache",
+      "title": "all 3 regression tests fail on pre-fix code (verified by temporarily restoring HEAD sources) and pass with fixes",
+      "confidence": 1.0
+    },
+    "EV-008": {
+      "id": "EV-008",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:35:59+00:00",
+      "updated_at": "2026-08-02T14:35:59+00:00",
+      "touched_round": 0,
+      "source": "cargo nextest run --workspace @ post-fix tree (2026-08-02)",
+      "title": "VERIFY: 2030/2040 pass (+3 new tests vs baseline); only the 10 pre-existing vllm-dist port-bind PermissionDenied failures remain (environmental, identical on pristine baseline); cargo fmt --check clean; clippy --all-targets --all-features -D warnings green",
+      "confidence": 1.0
+    },
+    "DEC-002": {
+      "id": "DEC-002",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:35:59+00:00",
+      "updated_at": "2026-08-02T14:35:59+00:00",
+      "touched_round": 0,
+      "title": "preemption: promote partial victim loss to whole-sequence recompute",
+      "rationale": "A sequence's block table is positional (block i <-> tokens i*BLOCK_SIZE..); interior removal shifts every later position onto the wrong physical block and silently corrupts attention, while num_computed_tokens overstates intact KV. Whole-sequence recompute reuses the proven Phase-2 recovery path and keeps priority-weighted victim ranking.",
+      "alternatives_rejected": [
+        "suffix-only eviction + num_computed_tokens/tokens truncation (partial recompute: complex, needs model-layer coordination, no test coverage)",
+        "exclude running-sequence blocks from victims entirely (makes Phase 1 a no-op after prefix-cache drain; loses priority-weighted selection)"
+      ]
+    },
+    "COMP-010": {
+      "id": "COMP-010",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:36:48+00:00",
+      "updated_at": "2026-08-02T14:36:48+00:00",
+      "touched_round": 1,
+      "title": "ril-tooling",
+      "role": "repository intelligence layer: scripts/ril.py + .planning/ril/graph.json"
+    },
+    "DEC-003": {
+      "id": "DEC-003",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:36:48+00:00",
+      "updated_at": "2026-08-02T14:36:48+00:00",
+      "touched_round": 1,
+      "title": "RIL consistency check: orphan audit records are not problems",
+      "rationale": "Evidence and decisions are append-only audit trail; a baseline observation (e.g. 'clippy green on day X') needs no edge to be valuable. Flagging them as orphans pressures agents to invent semantically-empty edges, which the typed-edge rule forbids. Work-bearing types (issue/hypothesis/task/change) remain flagged.",
+      "alternatives_rejected": [
+        "force every evidence node to attach to a hypothesis (fabricates edges, violates no-untyped-edge spirit)",
+        "drop consistency check entirely (loses cycle/dangling detection)"
+      ]
+    },
+    "EV-009": {
+      "id": "EV-009",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:42:42+00:00",
+      "updated_at": "2026-08-02T14:42:42+00:00",
+      "touched_round": 2,
+      "source": "crates/core/src/scheduler/radix_cache/tree.rs:65-84 + crates/core/src/scheduler/engine/update.rs:159-176 @ bded971a",
+      "title": "RadixTree::insert overwrites node.blocks without returning/releasing the previous entry: re-completing a prompt that hit the prefix cache records a new cache ref (refcount +1) while the old cache ref is orphaned -> refcount inflates on every repeat completion; inflated blocks never reach <=1 so select_victims skips them and drain_blocks releases only one ref, leaving the block pinned forever (pool exhaustion under repeated-prompt workloads). Also entry_count increments on overwrite so len() overcounts.",
+      "confidence": 0.9
+    },
+    "EV-010": {
+      "id": "EV-010",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:42:42+00:00",
+      "updated_at": "2026-08-02T14:42:42+00:00",
+      "touched_round": 2,
+      "source": "crates/core/src/scheduler/memory/mod.rs:528-549 + crates/core/src/scheduler/engine/update.rs:107-148 @ bded971a",
+      "title": "MemoryManager::rollback slices seq.kv_blocks[blocks_after..blocks_before] with bounds derived from num_computed_tokens; update_sequences increments num_computed_tokens BEFORE the allocation loop and silently breaks on OOM, so kv_blocks.len() can be < blocks_before -> out-of-range slice panic on a later draft rollback",
+      "confidence": 0.8
+    },
+    "ISS-003": {
+      "id": "ISS-003",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T14:42:42+00:00",
+      "updated_at": "2026-08-02T14:54:17+00:00",
+      "touched_round": 2,
+      "title": "prefix cache re-insert leaks cache refcounts (repeated prompts pin blocks, drain cannot reclaim)",
+      "severity": 0.7,
+      "category": "correctness"
+    },
+    "ISS-004": {
+      "id": "ISS-004",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T14:42:42+00:00",
+      "updated_at": "2026-08-02T14:54:17+00:00",
+      "touched_round": 2,
+      "title": "rollback panics on OOM-shortened kv_blocks (slice bounds from num_computed_tokens)",
+      "severity": 0.4,
+      "category": "stability"
+    },
+    "TASK-003": {
+      "id": "TASK-003",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-02T14:42:42+00:00",
+      "updated_at": "2026-08-02T14:54:17+00:00",
+      "touched_round": 2,
+      "title": "fix prefix cache re-insert: return replaced blocks, release stale cache ref, idempotent entry_count + regression tests",
+      "category": "correctness",
+      "severity": 0.7,
+      "confidence": 0.85,
+      "effort": 1.5,
+      "unlock_factor": 1.2
+    },
+    "TASK-004": {
+      "id": "TASK-004",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-02T14:42:43+00:00",
+      "updated_at": "2026-08-02T14:54:17+00:00",
+      "touched_round": 2,
+      "title": "guard rollback slice bounds against OOM-shortened kv_blocks + regression test",
+      "category": "stability",
+      "severity": 0.4,
+      "confidence": 0.75,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "EV-011": {
+      "id": "EV-011",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:48:16+00:00",
+      "updated_at": "2026-08-02T14:48:16+00:00",
+      "touched_round": 2,
+      "source": "crates/core/src/scheduler/engine/state/request.rs:57-67 + batch_composer/compose/prefill.rs PrefillAction::Skip + engine/state/batch.rs:44-63 @ bded971a; reproduced by test_repeated_prompt_completion_keeps_single_cache_refcount (request 1 spins >500 steps)",
+      "title": "full prefix-cache hit creates a Waiting sequence with num_computed_tokens==prompt_len; build_batch drains it into running, but the prefill composer skips sequences with no new tokens and decode batches only admit Decoding sequences -> the request never completes (prefix cache actively breaks repeated-prompt serving)",
+      "confidence": 0.95
+    },
+    "ISS-005": {
+      "id": "ISS-005",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T14:48:16+00:00",
+      "updated_at": "2026-08-02T14:54:17+00:00",
+      "touched_round": 2,
+      "title": "full prefix-cache hit stalls request forever (Waiting seq skipped by both composers)",
+      "severity": 0.9,
+      "category": "correctness"
+    },
+    "TASK-005": {
+      "id": "TASK-005",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-02T14:48:16+00:00",
+      "updated_at": "2026-08-02T14:54:17+00:00",
+      "touched_round": 2,
+      "title": "fix add_request: full prefix hit must enter Decoding, not Waiting",
+      "category": "correctness",
+      "severity": 0.9,
+      "confidence": 0.9,
+      "effort": 1,
+      "unlock_factor": 1.3
+    },
+    "DEC-004": {
+      "id": "DEC-004",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:48:16+00:00",
+      "updated_at": "2026-08-02T14:48:16+00:00",
+      "touched_round": 2,
+      "title": "round-2 main line switches to TASK-005 (full-hit stall)",
+      "rationale": "TASK-005 outscores TASK-003 10.53 vs 5.83 (ratio 1.8 > 1.5 switch threshold): a request-completion deadlock on the default prefix-cache path outranks a refcount leak. TASK-003 stays in the same round (same subsystem, disjoint files); the existing TASK-003 regression test is also the TASK-005 reproducer.",
+      "alternatives_rejected": [
+        "finish TASK-003 first (leaves a completion deadlock live while fixing a leak)",
+        "merge both into one commit (distinct root causes; atomic history preferred)"
+      ]
+    },
+    "ISS-006": {
+      "id": "ISS-006",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T14:51:18+00:00",
+      "updated_at": "2026-08-02T14:54:17+00:00",
+      "touched_round": 2,
+      "title": "prefix_cache_hit_rate always 0: record_prefix_cache_hit/request never called by scheduler",
+      "severity": 0.3,
+      "category": "correctness"
+    },
+    "TASK-006": {
+      "id": "TASK-006",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T14:51:18+00:00",
+      "updated_at": "2026-08-02T14:54:17+00:00",
+      "touched_round": 2,
+      "title": "wire prefix-cache hit/request metrics into resolve_prefix_tokens",
+      "category": "correctness",
+      "severity": 0.3,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "EV-012": {
+      "id": "EV-012",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T14:54:17+00:00",
+      "updated_at": "2026-08-02T14:54:17+00:00",
+      "touched_round": 2,
+      "source": "cargo nextest run --workspace @ post-round-2 tree; per-fix pre/post validation via temporary HEAD restores",
+      "title": "VERIFY round 2: 2034/2044 pass (+4 new tests vs round 1; 7 total new across both rounds); only the 10 environmental vllm-dist port-bind failures remain; fmt + clippy --all-targets --all-features -D warnings green. Each regression test individually confirmed failing on its pre-fix code: ISS-003 refcount [2]->[1], ISS-004 slice panic at memory/mod.rs:548, ISS-005 >500-step stall, ISS-006 hit_rate stuck at 0",
+      "confidence": 1.0
+    },
+    "EV-013": {
+      "id": "EV-013",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T15:01:40+00:00",
+      "updated_at": "2026-08-02T15:01:40+00:00",
+      "touched_round": 2,
+      "source": "full read of crates/core/src/sampling.rs + scheduler/batch.rs + engine/lifecycle.rs @ round 3",
+      "title": "sampling pipeline audit: no above-threshold defects. Pipeline order, NaN/degenerate guards, top-p cutoff consistency (sample vs logprobs), stop-sequence suffix logic, and seen-token wiring are all sound. Two below-threshold items spun off: TASK-007 (seeded RNG re-seeds per call -> per-step quantile lock; marginals correct, cross-step independence lost; contradicts OpenAI stream semantics but matches the documented DEC in sampling.rs), TASK-008 (apply_repeat_penalty doc says per-occurrence, impl dedupes per-distinct like llama.cpp — doc fix)",
+      "confidence": 0.9
+    },
+    "TASK-007": {
+      "id": "TASK-007",
+      "type": "task",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T15:01:40+00:00",
+      "updated_at": "2026-08-02T15:01:40+00:00",
+      "touched_round": 2,
+      "title": "sampling: seeded RNG should draw a per-step stream, not a constant threshold",
+      "category": "correctness",
+      "severity": 0.35,
+      "confidence": 0.8,
+      "effort": 2,
+      "unlock_factor": 1
+    },
+    "TASK-008": {
+      "id": "TASK-008",
+      "type": "task",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T15:01:40+00:00",
+      "updated_at": "2026-08-02T15:01:40+00:00",
+      "touched_round": 2,
+      "title": "docs: apply_repeat_penalty frequency-style claim contradicts deduping impl",
+      "category": "docs",
+      "severity": 0.3,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "ISS-007": {
+      "id": "ISS-007",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T15:01:59+00:00",
+      "updated_at": "2026-08-02T15:01:59+00:00",
+      "touched_round": 2,
+      "title": "seeded sampling draws a constant per-request threshold (per-step quantile lock) instead of an RNG stream",
+      "severity": 0.35,
+      "category": "correctness"
+    },
+    "ISS-008": {
+      "id": "ISS-008",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T15:01:59+00:00",
+      "updated_at": "2026-08-02T15:01:59+00:00",
+      "touched_round": 2,
+      "title": "apply_repeat_penalty doc claims per-occurrence penalty; impl dedupes per-distinct",
+      "severity": 0.3,
+      "category": "docs"
+    },
+    "ISS-009": {
+      "id": "ISS-009",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T15:04:30+00:00",
+      "updated_at": "2026-08-02T15:07:03+00:00",
+      "touched_round": 2,
+      "title": "zero-quota rate limit (max_requests=0 global or per-key override) panics middleware: wait_for divides by zero refill rate -> Duration::from_secs_f64(inf)",
+      "severity": 0.45,
+      "category": "stability"
+    },
+    "TASK-009": {
+      "id": "TASK-009",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-02T15:04:30+00:00",
+      "updated_at": "2026-08-02T15:07:03+00:00",
+      "touched_round": 2,
+      "title": "auth: wait_for must return Duration::MAX for non-positive refill rates + zero-quota tests + stale sliding-window docs",
+      "category": "stability",
+      "severity": 0.45,
+      "confidence": 0.85,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "EV-014": {
+      "id": "EV-014",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T15:07:03+00:00",
+      "updated_at": "2026-08-02T15:07:03+00:00",
+      "touched_round": 2,
+      "source": "cargo test -p vllm-server --lib test_zero_quota_denies_without_panic on guard-removed auth.rs: panic at core/src/time.rs:930 (Duration::from_secs_f64 non-finite); with guard: 3/3 pass; server suite 646/646",
+      "title": "ISS-009 validated: zero-quota rate limit panicked in wait_for via needed/0.0=inf; fix returns Duration::MAX for non-positive/non-finite refill rates; zero-window+zero-quota denies with ZERO wait; per-key revoke config no longer aborts requests",
+      "confidence": 0.95
+    }
+  },
+  "edges": [
+    {
+      "from": "COMP-007",
+      "to": "COMP-002",
+      "type": "part_of",
+      "created_at": "2026-08-02T14:19:20+00:00"
+    },
+    {
+      "from": "COMP-008",
+      "to": "COMP-002",
+      "type": "part_of",
+      "created_at": "2026-08-02T14:19:20+00:00"
+    },
+    {
+      "from": "COMP-009",
+      "to": "COMP-002",
+      "type": "part_of",
+      "created_at": "2026-08-02T14:19:20+00:00"
+    },
+    {
+      "from": "COMP-002",
+      "to": "COMP-001",
+      "type": "depends_on",
+      "created_at": "2026-08-02T14:19:20+00:00"
+    },
+    {
+      "from": "EV-005",
+      "to": "HYP-001",
+      "type": "validates",
+      "created_at": "2026-08-02T14:24:26+00:00"
+    },
+    {
+      "from": "ISS-001",
+      "to": "COMP-008",
+      "type": "located_in",
+      "created_at": "2026-08-02T14:24:26+00:00"
+    },
+    {
+      "from": "ISS-002",
+      "to": "COMP-008",
+      "type": "located_in",
+      "created_at": "2026-08-02T14:24:26+00:00"
+    },
+    {
+      "from": "TASK-001",
+      "to": "ISS-001",
+      "type": "addresses",
+      "created_at": "2026-08-02T14:24:26+00:00"
+    },
+    {
+      "from": "TASK-002",
+      "to": "ISS-002",
+      "type": "addresses",
+      "created_at": "2026-08-02T14:24:26+00:00"
+    },
+    {
+      "from": "EV-007",
+      "to": "HYP-001",
+      "type": "validates",
+      "created_at": "2026-08-02T14:35:59+00:00"
+    },
+    {
+      "from": "DEC-002",
+      "to": "COMP-008",
+      "type": "governs",
+      "created_at": "2026-08-02T14:35:59+00:00"
+    },
+    {
+      "from": "EV-006",
+      "to": "HYP-001",
+      "type": "validates",
+      "created_at": "2026-08-02T14:36:48+00:00"
+    },
+    {
+      "from": "DEC-003",
+      "to": "COMP-010",
+      "type": "governs",
+      "created_at": "2026-08-02T14:36:48+00:00"
+    },
+    {
+      "from": "ISS-003",
+      "to": "COMP-008",
+      "type": "located_in",
+      "created_at": "2026-08-02T14:42:42+00:00"
+    },
+    {
+      "from": "ISS-004",
+      "to": "COMP-008",
+      "type": "located_in",
+      "created_at": "2026-08-02T14:42:42+00:00"
+    },
+    {
+      "from": "TASK-003",
+      "to": "ISS-003",
+      "type": "addresses",
+      "created_at": "2026-08-02T14:42:43+00:00"
+    },
+    {
+      "from": "TASK-004",
+      "to": "ISS-004",
+      "type": "addresses",
+      "created_at": "2026-08-02T14:42:43+00:00"
+    },
+    {
+      "from": "ISS-005",
+      "to": "COMP-007",
+      "type": "located_in",
+      "created_at": "2026-08-02T14:48:16+00:00"
+    },
+    {
+      "from": "TASK-005",
+      "to": "ISS-005",
+      "type": "addresses",
+      "created_at": "2026-08-02T14:48:16+00:00"
+    },
+    {
+      "from": "ISS-006",
+      "to": "COMP-007",
+      "type": "located_in",
+      "created_at": "2026-08-02T14:51:18+00:00"
+    },
+    {
+      "from": "TASK-006",
+      "to": "ISS-006",
+      "type": "addresses",
+      "created_at": "2026-08-02T14:51:18+00:00"
+    },
+    {
+      "from": "ISS-007",
+      "to": "COMP-009",
+      "type": "located_in",
+      "created_at": "2026-08-02T15:01:59+00:00"
+    },
+    {
+      "from": "ISS-008",
+      "to": "COMP-009",
+      "type": "located_in",
+      "created_at": "2026-08-02T15:01:59+00:00"
+    },
+    {
+      "from": "TASK-007",
+      "to": "ISS-007",
+      "type": "addresses",
+      "created_at": "2026-08-02T15:01:59+00:00"
+    },
+    {
+      "from": "TASK-008",
+      "to": "ISS-008",
+      "type": "addresses",
+      "created_at": "2026-08-02T15:01:59+00:00"
+    },
+    {
+      "from": "ISS-009",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-02T15:04:30+00:00"
+    },
+    {
+      "from": "TASK-009",
+      "to": "ISS-009",
+      "type": "addresses",
+      "created_at": "2026-08-02T15:04:30+00:00"
+    }
+  ]
+}
