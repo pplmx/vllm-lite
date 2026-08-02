@@ -61,10 +61,21 @@ impl RadixTree {
         })
     }
 
-    /// Insert new cache entry
-    pub fn insert(&mut self, tokens: &[TokenId], blocks: Vec<BlockId>) {
+    /// Insert a new cache entry.
+    ///
+    /// If the same token sequence was already a complete entry, the
+    /// previous block list is returned so the caller can release the
+    /// cache's now-orphaned refcount on it (ARCH-01: each complete
+    /// entry owns exactly one refcount bump per block; overwriting
+    /// the entry transfers the old bump's ownership to the caller).
+    /// Returns `None` for fresh entries.
+    pub fn insert(
+        &mut self,
+        tokens: &[TokenId],
+        blocks: Vec<BlockId>,
+    ) -> Option<Arc<Vec<BlockId>>> {
         if tokens.is_empty() {
-            return;
+            return None;
         }
 
         let mut node = &mut self.root;
@@ -75,9 +86,12 @@ impl RadixTree {
                 .or_insert_with(|| Box::new(RadixNode::new()));
         }
 
-        node.blocks = Some(Arc::new(blocks));
-        node.is_complete = true;
-        self.entry_count += 1;
+        let replaced = node.blocks.replace(Arc::new(blocks));
+        if !node.is_complete {
+            node.is_complete = true;
+            self.entry_count += 1;
+        }
+        replaced
     }
 
     /// Get entry count.
@@ -145,6 +159,27 @@ mod tests {
         let result = result.unwrap();
         assert_eq!(result.matched_tokens, 3);
         assert_eq!(result.blocks.as_ref(), &vec![10, 20, 30]);
+    }
+
+    /// RIL TASK-003 / ISS-003: overwriting an existing entry must
+    /// return the replaced block list (so the caller can release the
+    /// stale cache refcount) and must not double-count the entry.
+    #[test]
+    fn test_radix_tree_insert_replace_returns_stale_blocks() {
+        let mut tree = RadixTree::new();
+        assert!(tree.insert(&[1, 2], vec![10, 20]).is_none());
+
+        let replaced = tree.insert(&[1, 2], vec![30, 40]);
+        assert_eq!(
+            replaced
+                .expect("overwrite must return the old blocks")
+                .as_ref(),
+            &vec![10, 20]
+        );
+        assert_eq!(tree.len(), 1, "len counts entries, not inserts");
+
+        let result = tree.longest_prefix_match(&[1, 2]).expect("entry exists");
+        assert_eq!(result.blocks.as_ref(), &vec![30, 40]);
     }
 
     #[test]

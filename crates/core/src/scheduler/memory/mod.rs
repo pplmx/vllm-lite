@@ -434,6 +434,16 @@ impl MemoryManager {
         self.eviction_policy.touch_blocks(blocks);
     }
 
+    /// Current eviction refcount for a block (`0` = free or unknown).
+    ///
+    /// Counts live owners recorded via `record_blocks` (running
+    /// sequences plus the prefix cache). Observability helper for
+    /// tests and metrics; the count drives `select_victims`
+    /// eligibility (only blocks with refcount ≤ 1 are evictable).
+    #[must_use]
+    pub fn get_block_ref_count(&self, block: BlockId) -> usize {
+        self.eviction_policy.get_block_ref_count(block)
+    }
     /// Returns the number of currently available (free) blocks.
     #[must_use]
     pub const fn available_blocks(&self) -> usize {
@@ -533,6 +543,16 @@ impl MemoryManager {
         let tokens_after_rollback = seq.num_computed_tokens.saturating_sub(num_tokens);
         let blocks_after = tokens_after_rollback.div_ceil(block_size);
         let blocks_before = seq.num_computed_tokens.div_ceil(block_size);
+
+        // Clamp to the blocks actually held: `update_sequences`
+        // increments `num_computed_tokens` before its allocation loop
+        // and silently stops allocating on OOM, so `kv_blocks` can be
+        // shorter than `blocks_before`. Without the clamp the slice
+        // below would panic on a later rollback of such a sequence
+        // (RIL ISS-004).
+        let held = seq.kv_blocks.len();
+        let blocks_after = blocks_after.min(held);
+        let blocks_before = blocks_before.min(held);
 
         if blocks_after < blocks_before {
             let blocks_to_free: Vec<BlockId> = seq.kv_blocks[blocks_after..blocks_before].to_vec();

@@ -59,8 +59,18 @@ impl SchedulerEngine {
             kv_blocks,
             num_computed_tokens: num_computed,
             prompt_len: req.prompt.len(),
-            status: if num_computed >= req.prompt.len() {
-                Status::Waiting
+            // Full prefix-cache hit: the prompt's KV is already
+            // computed, so the sequence goes straight to decode. The
+            // decode composer feeds the last prompt token exactly as
+            // it does for a freshly prefilled sequence. Leaving a
+            // full hit in `Waiting` stalls it forever — the prefill
+            // composer skips sequences with no new tokens, and decode
+            // batches only admit `Decoding` sequences (RIL ISS-005).
+            // Empty prompts never hit the cache and keep the normal
+            // prefill path (a `Decoding` sequence with no tokens
+            // would decode from a phantom token).
+            status: if num_computed >= req.prompt.len() && !req.prompt.is_empty() {
+                Status::Decoding
             } else {
                 Status::Prefilling
             },
@@ -121,7 +131,12 @@ impl SchedulerEngine {
         &mut self,
         req: &Request,
     ) -> (Vec<u32>, Arc<Vec<vllm_traits::BlockId>>, usize) {
+        // RIL ISS-006: the hit-rate counters were wired to the metrics
+        // collector but never recorded, so `prefix_cache_hit_rate()`
+        // always reported 0. Count every lookup, then every hit.
+        self.metrics.record_prefix_cache_request();
         if let Some(result) = self.prefix_cache.longest_prefix_match(&req.prompt) {
+            self.metrics.record_prefix_cache_hit();
             tracing::trace!(
                 request_id = req.id,
                 matched_tokens = result.matched_tokens,

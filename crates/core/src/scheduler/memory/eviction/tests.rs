@@ -156,3 +156,72 @@ fn test_cache_invalidation() {
 
     assert_eq!(victims1.len(), victims2.len());
 }
+
+/// Regression (RIL TASK-002 / ISS-002): the victim-cache hash must cover
+/// `consecutive_decode_rounds`, because `compute_priority` flips when a
+/// sequence crosses the 5-round threshold. Without it, a cached victim
+/// order computed before the crossing is served unchanged afterwards.
+#[test]
+fn test_victim_cache_invalidates_on_decode_rounds_change() {
+    let mut policy = EvictionPolicy::new();
+    policy.record_blocks(&[1]);
+    policy.record_blocks(&[2]);
+
+    // seq 1: new decode (rounds 0) -> priority 3; seq 2: long-running
+    // (rounds 6) -> priority 1. Higher priority values evict first.
+    let mut seq_a = create_test_sequence(1, vec![1], Status::Decoding);
+    let mut seq_b = create_test_sequence(2, vec![2], Status::Decoding);
+    seq_b.consecutive_decode_rounds = 6;
+
+    let victims = policy.select_victims(&[seq_a.clone(), seq_b.clone()], 2);
+    assert_eq!(victims, vec![1, 2], "priority-3 block evicts first");
+
+    // Cross the threshold on both sequences without changing id, status,
+    // or block counts: priorities flip (a -> 1, b -> 3).
+    seq_a.consecutive_decode_rounds = 7;
+    seq_b.consecutive_decode_rounds = 0;
+
+    let victims = policy.select_victims(&[seq_a, seq_b], 2);
+    assert_eq!(
+        victims,
+        vec![2, 1],
+        "cache must invalidate when decode rounds cross the priority threshold"
+    );
+}
+
+/// Regression (RIL TASK-002 / ISS-002): `touch_blocks` reorders the LRU
+/// deque that the victim order's tiebreak embeds, so it must invalidate
+/// the cached victim set.
+#[test]
+fn test_touch_blocks_invalidates_victim_cache() {
+    let mut policy = EvictionPolicy::new();
+    // Record order 1 then 2 -> deque [2, 1]; block 1 is the LRU victim.
+    policy.record_blocks(&[1, 2]);
+
+    let seq = create_test_sequence(1, vec![1, 2], Status::Decoding);
+    let victims = policy.select_victims(std::slice::from_ref(&seq), 2);
+    assert_eq!(victims, vec![1, 2], "LRU block 1 evicts first");
+
+    let hits_before = policy.stats().cache_hits;
+    let cached = policy.select_victims(std::slice::from_ref(&seq), 2);
+    assert_eq!(cached, vec![1, 2]);
+    assert_eq!(
+        policy.stats().cache_hits,
+        hits_before + 1,
+        "identical second call must hit the cache"
+    );
+
+    // Touch block 1 (now MRU): block 2 becomes the LRU victim.
+    policy.touch_blocks(&[1]);
+    let victims = policy.select_victims(std::slice::from_ref(&seq), 2);
+    assert_eq!(
+        victims,
+        vec![2, 1],
+        "touch must invalidate the cached victim order"
+    );
+    assert_eq!(
+        policy.stats().cache_hits,
+        hits_before + 1,
+        "post-touch call must recompute, not reuse the stale cache"
+    );
+}

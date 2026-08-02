@@ -28,11 +28,16 @@ use super::state::SchedulerEngine;
 impl SchedulerEngine {
     /// Execute preemption to free up memory blocks.
     ///
-    /// First tries **block-level eviction** via the eviction policy
-    /// (`EvictionPolicy::select_victims`), which selects individual blocks
-    /// with ref-count ≤ 1 in priority order. Sequences that lose *some*
-    /// blocks but retain others keep running with a reduced KV cache.
-    /// Sequences that lose *all* their blocks are reset and re-queued.
+    /// First selects victim blocks via the eviction policy
+    /// (`EvictionPolicy::select_victims`), which ranks individual blocks
+    /// with ref-count ≤ 1 in priority order. A sequence's block table is
+    /// positional — block `i` holds tokens `i * BLOCK_SIZE..(i + 1) *
+    /// BLOCK_SIZE` — so losing an interior block would shift every later
+    /// position onto the wrong physical block and silently corrupt
+    /// attention reads. Every sequence that owns *any* victim block is
+    /// therefore preempted wholesale: all of its blocks are released,
+    /// its state is reset (`Waiting`, zero computed tokens, tokens
+    /// preserved), and it is re-queued for full recompute.
     ///
     /// If the eviction policy can't free enough blocks (e.g. all blocks
     /// are prefix-cache shared with ref-count > 1), falls back to
@@ -53,56 +58,33 @@ impl SchedulerEngine {
                 self.memory.release_blocks(&blocks);
             }
         }
-        // Phase 1: priority-weighted block-level eviction.
+        // Phase 1: priority-weighted victim selection, applied at
+        // sequence granularity (see the function docs: a positional
+        // block table cannot tolerate interior holes, so any sequence
+        // owning a victim block is preempted wholesale).
         let victims = self.memory.select_victims(&self.running, blocks_needed);
         let victim_set: HashSet<_> = victims.iter().copied().collect();
 
         if !victim_set.is_empty() {
-            for seq in &mut self.running {
-                if seq.status != Status::Decoding && seq.status != Status::Prefilling {
-                    continue;
-                }
-
-                let seq_victims: Vec<_> = seq
-                    .kv_blocks
-                    .iter()
-                    .copied()
-                    .filter(|b| victim_set.contains(b))
-                    .collect();
-
-                if seq_victims.is_empty() {
-                    continue;
-                }
-
-                self.memory.release_blocks(&seq_victims);
-
-                // Remove evicted blocks from the sequence's kv_blocks.
-                let survivors: Vec<_> = seq
-                    .kv_blocks
-                    .iter()
-                    .copied()
-                    .filter(|b| !victim_set.contains(b))
-                    .collect();
-                seq.kv_blocks = Arc::new(survivors);
-
-                // If the sequence lost all its blocks, mark it for re-queue.
-                if seq.kv_blocks.is_empty() {
-                    seq.status = Status::Waiting;
-                    seq.num_computed_tokens = 0;
-                }
-            }
-
-            // Re-queue fully-preempted sequences (lost all blocks).
-            let to_requeue: Vec<_> = self
+            let preempted: Vec<SeqId> = self
                 .running
                 .iter()
-                .filter(|s| s.status == Status::Waiting && s.kv_blocks.is_empty())
+                .filter(|s| {
+                    (s.status == Status::Decoding || s.status == Status::Prefilling)
+                        && s.kv_blocks.iter().any(|b| victim_set.contains(b))
+                })
                 .map(|s| s.id)
                 .collect();
 
-            for seq_id in to_requeue {
+            let mut blocks_freed = 0usize;
+            for seq_id in preempted {
                 if let Some(pos) = self.running.iter().position(|s| s.id == seq_id) {
-                    let seq = self.running.remove(pos);
+                    let mut seq = self.running.remove(pos);
+                    blocks_freed += seq.kv_blocks.len();
+                    self.memory.release_blocks(seq.kv_blocks.as_ref());
+                    seq.kv_blocks = Arc::new(vec![]);
+                    seq.status = Status::Waiting;
+                    seq.num_computed_tokens = 0;
                     let ctx = SchedulingContext {
                         current_time: Instant::now(),
                         queue_length: self.request_queue.len(),
@@ -113,7 +95,7 @@ impl SchedulerEngine {
                 }
             }
 
-            if victim_set.len() >= blocks_needed {
+            if blocks_freed >= blocks_needed {
                 return;
             }
         }

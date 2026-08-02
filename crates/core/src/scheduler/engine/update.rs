@@ -173,7 +173,17 @@ impl SchedulerEngine {
                 .min(prompt_tokens.len().div_ceil(vllm_traits::BLOCK_SIZE));
             let blocks: Vec<BlockId> = seq.kv_blocks[..prompt_blocks].to_vec();
             self.memory.record_blocks(&blocks);
-            self.prefix_cache.insert(prompt_tokens, blocks);
+            let replaced = self.prefix_cache.insert(prompt_tokens, blocks);
+            // Repeated prompts re-insert an existing cache entry; the
+            // overwrite orphans the cache's previous refcount on the
+            // replaced blocks. Release it so refcounts match live
+            // owners — without this, every repeat completion inflated
+            // the count, making the blocks unevictable and immune to
+            // drain (RIL ISS-003). For a same-block overwrite this
+            // nets to zero against the `record_blocks` above.
+            if let Some(stale) = replaced {
+                self.memory.release_blocks(stale.as_ref());
+            }
         }
     }
 

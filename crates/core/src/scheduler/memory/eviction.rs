@@ -76,9 +76,13 @@ impl EvictionPolicy {
 
             for &block_id in seq.kv_blocks.as_ref() {
                 let priority = Self::compute_priority(seq);
-                // If multiple sequences share a block, use the most
-                // evictable priority (min) so shared blocks aren't
-                // inadvertently protected by a high-priority co-owner.
+                // If multiple sequences share a block, attribute the
+                // minimum priority across co-owners. Higher priority
+                // values evict first (see the sort below and
+                // `prop_eviction_prefers_higher_priority_blocks`), so
+                // `min` makes a shared block inherit its most-protected
+                // owner's rank: sharing a block must never make it
+                // easier to evict than its least-evictable owner.
                 //
                 // Bug fix (v28.0 I-5): the previous one-liner
                 // `entry().or_insert(...).1 = priority.min(get().map_or(0, ...))`
@@ -172,6 +176,14 @@ impl EvictionPolicy {
             hash = hash.wrapping_mul(31).wrapping_add(id_hash);
             hash = hash.wrapping_mul(31).wrapping_add(status_hash);
             hash = hash.wrapping_mul(31).wrapping_add(seq.kv_blocks.len());
+            // `compute_priority` flips when `consecutive_decode_rounds`
+            // crosses the 5-round threshold, so the hash must cover it —
+            // otherwise the cached victim set goes stale for every round
+            // between block allocations after a sequence crosses the
+            // threshold.
+            #[allow(clippy::cast_possible_truncation)]
+            let rounds_hash = seq.consecutive_decode_rounds as usize;
+            hash = hash.wrapping_mul(31).wrapping_add(rounds_hash);
         }
         hash
     }
@@ -235,6 +247,9 @@ impl EvictionPolicy {
             self.block_access_order.retain(|&b| b != block);
             self.block_access_order.push_front(block);
         }
+        // The cached victim order embeds LRU ranks; a touch changes
+        // those ranks, so the cache must be dropped with it.
+        self.invalidate_cache();
     }
 
     #[must_use]

@@ -602,3 +602,33 @@ fn memory_manager_block_data_source_clone_is_independent() {
         "both clones should point to the originally-stored source"
     );
 }
+
+/// Regression (RIL TASK-004 / ISS-004): `rollback` must tolerate a
+/// sequence whose `kv_blocks` is shorter than `num_computed_tokens`
+/// implies — the update path increments `num_computed_tokens` before
+/// allocating and silently stops on OOM. Before the fix the slice
+/// `kv_blocks[blocks_after..blocks_before]` panicked out of range.
+#[test]
+fn test_rollback_tolerates_oom_shortened_kv_blocks() {
+    let mut mm = MemoryManager::new(SchedulerConfig::default(), 8);
+    let blocks = mm.allocate(1).expect("pool has 8 blocks");
+    mm.record_blocks(&blocks);
+
+    // Claims 48 computed tokens (3 blocks) but holds only 1 block.
+    let mut seq = make_sequence(1, blocks.clone(), Status::Decoding);
+    seq.num_computed_tokens = 48;
+
+    mm.rollback(&mut seq, 16);
+
+    assert_eq!(seq.num_computed_tokens, 32, "token count rolls back");
+    assert_eq!(
+        seq.kv_blocks.len(),
+        1,
+        "the single held block must survive the clamped rollback"
+    );
+    assert_eq!(
+        mm.get_block_ref_count(blocks[0]),
+        1,
+        "held block keeps its recorded ref"
+    );
+}
