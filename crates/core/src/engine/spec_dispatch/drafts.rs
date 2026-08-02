@@ -216,7 +216,13 @@ impl crate::engine::Engine {
                 let token = output.next_tokens.get(j).map_or(0, |sampled| sampled.token);
                 draft_outputs[seq_idx].push(token);
                 current_tokens[seq_idx].push(token);
-                let new_pos = current_positions[seq_idx].len();
+                // Advance to the position AFTER the last token (RIL ISS-017).
+                // The old code pushed `current_positions[i].len()` (the count),
+                // which only equals the next position when positions start at 0.
+                // For a sequence decoding at position P the draft positions must
+                // be P, P+1, P+2, ... so the draft model applies RoPE at the
+                // true positions — matching the per-seq path's `last_pos + 1`.
+                let new_pos = current_positions[seq_idx].last().copied().unwrap_or(0) + 1;
                 current_positions[seq_idx].push(new_pos);
             }
         }

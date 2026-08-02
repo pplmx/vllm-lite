@@ -218,6 +218,9 @@ impl ModelBackend for PositionRecordingModel {
         num_computed_tokens: &[usize],
         is_prefill: &[bool],
     ) -> ModelResult<BatchOutput> {
+        if let Some(first) = positions.first() {
+            self.recorded.lock().unwrap().push(first.clone());
+        }
         self.inner.forward(
             seq_ids,
             input_tokens,
@@ -304,6 +307,47 @@ fn test_verification_uses_true_sequence_positions() {
             assert!(
                 pos >= 2,
                 "verification must use true sequence positions (>= 2 after a                  2-token prefill); got {pos} in {positions:?} — 0-based positions                  corrupt RoPE (RIL ISS-016)"
+            );
+        }
+    }
+}
+
+/// Regression (RIL ISS-017): the legacy BATCHED draft path must advance draft
+/// positions as `last_pos + 1` from the true base, not push
+/// `current_positions.len()`. For a sequence decoding at position P the draft
+/// positions must be P, P+1, P+2, ... so the draft model applies `RoPE` at the
+/// true positions. Pre-fix the 2nd/3rd drafts got positions 1, 2 (the count)
+/// regardless of P, corrupting the draft tokens. `Engine::new_boxed` leaves
+/// `draft_resolver = None`, so `step()` exercises this batched path.
+#[test]
+fn test_batched_draft_positions_advance_from_base() {
+    let target = FakeModel::new(42);
+    let draft = PositionRecordingModel::new(42);
+    let recorder = draft.clone();
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 3;
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio_mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10, 20], 10), tx);
+
+    // Step 1: prefill the 2-token prompt; sequence advances to decode pos >= 2.
+    let _ = engine.step().unwrap();
+    recorder.clear();
+
+    // Step 2: decode + batched draft generation at position >= 2.
+    let _ = engine.step().unwrap();
+
+    let recorded = recorder.recorded();
+    assert!(
+        !recorded.is_empty(),
+        "draft model forward must be invoked during batched draft generation"
+    );
+    for positions in &recorded {
+        for &pos in positions {
+            assert!(
+                pos >= 2,
+                "batched draft positions must advance from the true decode base                  (>= 2 after a 2-token prefill); got {pos} in {positions:?} —                  positions.len() instead of last_pos+1 (RIL ISS-017)"
             );
         }
     }
