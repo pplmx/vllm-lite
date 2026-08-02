@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 18,
+  "round": 19,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T20:20:27+00:00",
+  "updated_at": "2026-08-02T20:38:17+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1220,7 +1220,7 @@
       "version": 2,
       "created_at": "2026-08-02T19:25:03+00:00",
       "updated_at": "2026-08-02T19:25:03+00:00",
-      "touched_round": 15,
+      "touched_round": 19,
       "title": "Multi-block KV cache writes indexed blocks wrong: write_prefill_kv used block_ids[token_idx] (one-per-token) and read_decode_kv used raw block index as block id; both diverge from read_kv (block_ids[global_pos/block_size]) => KV scrambled for any prompt > 1 block (all real inference). Hidden because all tests used single block / contiguous block_ids=[0].",
       "severity": 0.95,
       "category": "correctness"
@@ -1370,7 +1370,7 @@
       "version": 2,
       "created_at": "2026-08-02T20:14:05+00:00",
       "updated_at": "2026-08-02T20:20:27+00:00",
-      "touched_round": 18,
+      "touched_round": 19,
       "title": "KV blocks allocated only AFTER the forward (in update), so prefill writes KV to unallocated blocks (block-0 fallback) then update allocates the correct EMPTY blocks => KV cache corrupted for ALL prefills with real models. Latent: StubModel passthrough_paged_prefill ignores KV (no write), and no real model run (OPS-04). Fundamental.",
       "severity": 0.95,
       "category": "correctness"
@@ -1449,6 +1449,44 @@
       "touched_round": 18,
       "source": "test_build_batch_preallocates_prefill_kv_blocks: 40-token prompt => 3 distinct blocks in batch.kv_block_ids; FAILS pre-fix (0 blocks). vllm-core 629/629, clippy default green, multi-node lib builds",
       "title": "VERIFY TASK-023: prefill KV blocks allocated before forward; load-bearing test",
+      "confidence": 0.95
+    },
+    "TASK-024": {
+      "id": "TASK-024",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T20:38:17+00:00",
+      "updated_at": "2026-08-02T20:38:17+00:00",
+      "touched_round": 19,
+      "title": "real-model prefill KV-write integration test (first test exercising the KV-write path StubModel skips; guard for ISS-019/022 class)",
+      "category": "test-quality",
+      "severity": 0.6,
+      "confidence": 0.9,
+      "effort": 2,
+      "unlock_factor": 1
+    },
+    "CHG-017": {
+      "id": "CHG-017",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T20:38:17+00:00",
+      "updated_at": "2026-08-02T20:38:17+00:00",
+      "touched_round": 19,
+      "commit": "d2fdc95c",
+      "title": "test(model): tiny LlamaModel (non-zero weights) prefill writes non-zero KV into given blocks, ungiven block stays empty"
+    },
+    "EV-033": {
+      "id": "EV-033",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T20:38:17+00:00",
+      "updated_at": "2026-08-02T20:38:17+00:00",
+      "touched_round": 19,
+      "source": "real_model_prefill_writes_kv_into_given_blocks: tiny LlamaModel via from_weights, 20-token prefill into blocks [0,1] => non-zero K/V in blocks 0,1, block 2 empty; vllm-model 549/549, clippy green",
+      "title": "VERIFY TASK-024: real-model KV-write path exercised end-to-end",
       "confidence": 0.95
     }
   },
@@ -2028,6 +2066,24 @@
       "to": "COMP-002",
       "type": "governs",
       "created_at": "2026-08-02T20:20:27+00:00"
+    },
+    {
+      "from": "TASK-024",
+      "to": "ISS-019",
+      "type": "addresses",
+      "created_at": "2026-08-02T20:38:17+00:00"
+    },
+    {
+      "from": "TASK-024",
+      "to": "ISS-022",
+      "type": "addresses",
+      "created_at": "2026-08-02T20:38:17+00:00"
+    },
+    {
+      "from": "CHG-017",
+      "to": "TASK-024",
+      "type": "implements",
+      "created_at": "2026-08-02T20:38:17+00:00"
     }
   ]
 }
