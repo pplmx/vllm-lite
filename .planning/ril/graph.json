@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 17,
+  "round": 18,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T19:59:26+00:00",
+  "updated_at": "2026-08-02T20:20:27+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 17,
+      "touched_round": 18,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -1362,6 +1362,94 @@
       "source": "code trace: DecoderLayer blanket impl + HybridBlock dispatch forward_prefill->forward_prefill_continue when num_computed>0; classify_prefill_seq start==0 bypassed it. test_partial_prefill_resume FAILS pre-fix; existing test_prefill_batch_with_partial_computed had pinned the bug (asserted is_prefill=false), corrected; vllm-core 628/628, workspace 1945/1945",
       "title": "VERIFY TASK-022: partial-prefill resume routes to forward_prefill_continue; load-bearing test + corrected bug-pinning test",
       "confidence": 0.97
+    },
+    "ISS-022": {
+      "id": "ISS-022",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T20:14:05+00:00",
+      "updated_at": "2026-08-02T20:20:27+00:00",
+      "touched_round": 18,
+      "title": "KV blocks allocated only AFTER the forward (in update), so prefill writes KV to unallocated blocks (block-0 fallback) then update allocates the correct EMPTY blocks => KV cache corrupted for ALL prefills with real models. Latent: StubModel passthrough_paged_prefill ignores KV (no write), and no real model run (OPS-04). Fundamental.",
+      "severity": 0.95,
+      "category": "correctness"
+    },
+    "HYP-004": {
+      "id": "HYP-004",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T20:14:06+00:00",
+      "updated_at": "2026-08-02T20:20:27+00:00",
+      "touched_round": 18,
+      "title": "Prefill must have its prompt KV blocks allocated BEFORE the forward pass writes to them",
+      "confidence": 0.9
+    },
+    "EV-031": {
+      "id": "EV-031",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T20:14:06+00:00",
+      "updated_at": "2026-08-02T20:14:06+00:00",
+      "touched_round": 18,
+      "source": "code trace: only allocate sites are memory/mod.rs:246 (impl) + update.rs:109 (after forward); build_batch does NOT allocate; passthrough_paged_prefill (stub.rs) has _kv_cache unused => StubModel never writes KV => tests miss it",
+      "title": "ISS-022 root cause confirmed by code analysis",
+      "confidence": 0.9
+    },
+    "TASK-023": {
+      "id": "TASK-023",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T20:20:27+00:00",
+      "updated_at": "2026-08-02T20:20:27+00:00",
+      "touched_round": 18,
+      "title": "build_batch pre-allocates prefill KV blocks before forward (mirrors update refcount/chain-hash); regression test",
+      "category": "correctness",
+      "severity": 0.95,
+      "confidence": 0.95,
+      "effort": 2,
+      "unlock_factor": 1
+    },
+    "CHG-016": {
+      "id": "CHG-016",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T20:20:27+00:00",
+      "updated_at": "2026-08-02T20:20:27+00:00",
+      "touched_round": 18,
+      "commit": "bd216908",
+      "title": "fix(core): build_batch allocates prefill KV blocks before forward (was update-after => block-0 corruption)"
+    },
+    "DEC-008": {
+      "id": "DEC-008",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T20:20:27+00:00",
+      "updated_at": "2026-08-02T20:20:27+00:00",
+      "touched_round": 18,
+      "title": "Prefill KV blocks must be allocated at admission (build_batch) before the forward writes KV; decode grows incrementally in update()",
+      "rationale": "The model forward writes KV to seq.kv_blocks; if unallocated, write_prefill_kv falls back to block 0 and corrupts the cache. Allocating at admission (after the memory/preemption check) guarantees batch.kv_block_ids covers the prompt before the forward. Decode allocation stays incremental in update().",
+      "alternatives_rejected": [
+        "allocate in add_request (no memory-pressure/preemption control at queue time)",
+        "engine-side allocate between build_batch and forward (duplicates scheduler memory ownership)"
+      ]
+    },
+    "EV-032": {
+      "id": "EV-032",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T20:20:27+00:00",
+      "updated_at": "2026-08-02T20:20:27+00:00",
+      "touched_round": 18,
+      "source": "test_build_batch_preallocates_prefill_kv_blocks: 40-token prompt => 3 distinct blocks in batch.kv_block_ids; FAILS pre-fix (0 blocks). vllm-core 629/629, clippy default green, multi-node lib builds",
+      "title": "VERIFY TASK-023: prefill KV blocks allocated before forward; load-bearing test",
+      "confidence": 0.95
     }
   },
   "edges": [
@@ -1904,6 +1992,42 @@
       "to": "TASK-022",
       "type": "implements",
       "created_at": "2026-08-02T19:59:26+00:00"
+    },
+    {
+      "from": "ISS-022",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-02T20:14:06+00:00"
+    },
+    {
+      "from": "EV-031",
+      "to": "HYP-004",
+      "type": "validates",
+      "created_at": "2026-08-02T20:14:06+00:00"
+    },
+    {
+      "from": "TASK-023",
+      "to": "ISS-022",
+      "type": "addresses",
+      "created_at": "2026-08-02T20:20:27+00:00"
+    },
+    {
+      "from": "CHG-016",
+      "to": "ISS-022",
+      "type": "resolves",
+      "created_at": "2026-08-02T20:20:27+00:00"
+    },
+    {
+      "from": "CHG-016",
+      "to": "TASK-023",
+      "type": "implements",
+      "created_at": "2026-08-02T20:20:27+00:00"
+    },
+    {
+      "from": "DEC-008",
+      "to": "COMP-002",
+      "type": "governs",
+      "created_at": "2026-08-02T20:20:27+00:00"
     }
   ]
 }
