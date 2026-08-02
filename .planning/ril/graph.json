@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 16,
+  "round": 17,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T19:47:09+00:00",
+  "updated_at": "2026-08-02T19:59:26+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 13,
+      "touched_round": 17,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -1312,6 +1312,56 @@
       "source": "empirical: 20-token prefill blocks [100x16, 1x4] read back [127,100,..]/[127,1,..] pre-fix; post-fix block0~100 block1~1. test_quantized_multi_block_roundtrip_per_block_scale FAILS pre-fix (token0=127); vllm-model 548/548, workspace 1944/1944, clippy --all-features green",
       "title": "VERIFY TASK-021: multi-block quantized KV round-trips per-block; load-bearing test",
       "confidence": 0.97
+    },
+    "ISS-021": {
+      "id": "ISS-021",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T19:59:26+00:00",
+      "updated_at": "2026-08-02T19:59:26+00:00",
+      "touched_round": 17,
+      "title": "Partial prefix-cache hit resume (num_computed>0, multi-token suffix) set is_prefill=false => run_layers dispatched the multi-token suffix to single-token forward_decode (reshape to seq_len=1 fails/mis-processes). forward_prefill_continue existed and was correct but unreachable. Affects shared-prefix production scenarios.",
+      "severity": 0.8,
+      "category": "correctness"
+    },
+    "TASK-022": {
+      "id": "TASK-022",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T19:59:26+00:00",
+      "updated_at": "2026-08-02T19:59:26+00:00",
+      "touched_round": 17,
+      "title": "classify_prefill_seq is_prefill=true for resumes (routes to forward_prefill_continue); regression test + correct the test that pinned the bug",
+      "category": "correctness",
+      "severity": 0.8,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "CHG-015": {
+      "id": "CHG-015",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T19:59:26+00:00",
+      "updated_at": "2026-08-02T19:59:26+00:00",
+      "touched_round": 17,
+      "commit": "4904468b",
+      "title": "fix(core): partial-prefill resume keeps is_prefill=true => forward_prefill_continue (was start==0 => single-token decode)"
+    },
+    "EV-030": {
+      "id": "EV-030",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T19:59:26+00:00",
+      "updated_at": "2026-08-02T19:59:26+00:00",
+      "touched_round": 17,
+      "source": "code trace: DecoderLayer blanket impl + HybridBlock dispatch forward_prefill->forward_prefill_continue when num_computed>0; classify_prefill_seq start==0 bypassed it. test_partial_prefill_resume FAILS pre-fix; existing test_prefill_batch_with_partial_computed had pinned the bug (asserted is_prefill=false), corrected; vllm-core 628/628, workspace 1945/1945",
+      "title": "VERIFY TASK-022: partial-prefill resume routes to forward_prefill_continue; load-bearing test + corrected bug-pinning test",
+      "confidence": 0.97
     }
   },
   "edges": [
@@ -1830,6 +1880,30 @@
       "to": "TASK-021",
       "type": "implements",
       "created_at": "2026-08-02T19:47:09+00:00"
+    },
+    {
+      "from": "ISS-021",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-02T19:59:26+00:00"
+    },
+    {
+      "from": "TASK-022",
+      "to": "ISS-021",
+      "type": "addresses",
+      "created_at": "2026-08-02T19:59:26+00:00"
+    },
+    {
+      "from": "CHG-015",
+      "to": "ISS-021",
+      "type": "resolves",
+      "created_at": "2026-08-02T19:59:26+00:00"
+    },
+    {
+      "from": "CHG-015",
+      "to": "TASK-022",
+      "type": "implements",
+      "created_at": "2026-08-02T19:59:26+00:00"
     }
   ]
 }
