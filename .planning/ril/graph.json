@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 11,
+  "round": 12,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T18:34:46+00:00",
+  "updated_at": "2026-08-02T18:43:35+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 0,
+      "touched_round": 12,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -1062,6 +1062,56 @@
       "source": "test @ 20f49406: test_gqa_attention_matches_naive_reference passes on blocked expand_kv, FAILS on tiled (idx 12: got 6 want -4); vllm-model 546/546",
       "title": "VERIFY TASK-016: reference test is load-bearing — would have caught ISS-010",
       "confidence": 0.98
+    },
+    "ISS-016": {
+      "id": "ISS-016",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:43:34+00:00",
+      "updated_at": "2026-08-02T18:43:35+00:00",
+      "touched_round": 12,
+      "title": "Speculative verification built verify_positions=[0..n] but RoPE uses absolute positions => wrong positions for any sequence past pos 0 (corrupts accept/reject); empty-drafts path was correct, drafts path inconsistent",
+      "severity": 0.85,
+      "category": "correctness"
+    },
+    "TASK-017": {
+      "id": "TASK-017",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:43:34+00:00",
+      "updated_at": "2026-08-02T18:43:35+00:00",
+      "touched_round": 12,
+      "title": "fix speculative verify_positions to start at true base position (batch.positions[i][0]); position-recording regression test",
+      "category": "correctness",
+      "severity": 0.85,
+      "confidence": 0.95,
+      "effort": 2,
+      "unlock_factor": 1
+    },
+    "CHG-010": {
+      "id": "CHG-010",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:43:34+00:00",
+      "updated_at": "2026-08-02T18:43:34+00:00",
+      "touched_round": 12,
+      "commit": "e2975ad6",
+      "title": "fix(core): speculative verify_positions start at true base (was 0-based => wrong RoPE for seq past pos 0)"
+    },
+    "EV-025": {
+      "id": "EV-025",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:43:35+00:00",
+      "updated_at": "2026-08-02T18:43:35+00:00",
+      "touched_round": 12,
+      "source": "code trace: positions flow unchanged forward_logits->forward_with_paged_kv->run_decoder_layers->LayerCtx.positions->RoPE (num_computed_tokens is separate, KV-slot only). test @ e2975ad6: PositionRecordingModel asserts verify positions >=2 after 2-token prefill; FAILS pre-fix (got 0 in [0,1,2,3]); vllm-core 626/626",
+      "title": "VERIFY TASK-017: verification uses true sequence positions; load-bearing test",
+      "confidence": 0.97
     }
   },
   "edges": [
@@ -1454,6 +1504,30 @@
       "to": "TASK-016",
       "type": "governs",
       "created_at": "2026-08-02T18:34:46+00:00"
+    },
+    {
+      "from": "ISS-016",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-02T18:43:35+00:00"
+    },
+    {
+      "from": "TASK-017",
+      "to": "ISS-016",
+      "type": "addresses",
+      "created_at": "2026-08-02T18:43:35+00:00"
+    },
+    {
+      "from": "CHG-010",
+      "to": "ISS-016",
+      "type": "resolves",
+      "created_at": "2026-08-02T18:43:35+00:00"
+    },
+    {
+      "from": "CHG-010",
+      "to": "TASK-017",
+      "type": "implements",
+      "created_at": "2026-08-02T18:43:35+00:00"
     }
   ]
 }
