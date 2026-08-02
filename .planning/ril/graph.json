@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 10,
+  "round": 11,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T18:27:51+00:00",
+  "updated_at": "2026-08-02T18:34:46+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -667,7 +667,7 @@
       "version": 2,
       "created_at": "2026-08-02T17:29:12+00:00",
       "updated_at": "2026-08-02T17:40:16+00:00",
-      "touched_round": 6,
+      "touched_round": 11,
       "title": "GQA expand_kv produces INTERLEAVED (tile) head expansion instead of BLOCKED grouping — most Q heads attend to the wrong KV head",
       "severity": 0.9,
       "category": "correctness"
@@ -893,7 +893,7 @@
       "version": 1,
       "created_at": "2026-08-02T18:06:17+00:00",
       "updated_at": "2026-08-02T18:06:17+00:00",
-      "touched_round": 8,
+      "touched_round": 11,
       "title": "Positional encoding: rotation must match the standard RoPE/HuggingFace convention (x1'=x1cos-x2sin, x2'=x2cos+x1sin); pin against reference values, not just shape",
       "rationale": "Checkpoints (Llama/Qwen/Mistral/Gemma, HF + GGUF) are trained with the standard apply_rotary_pos_emb. Any other convention (inverse signs, half-rotation) corrupts the relative-position encoding. Tests must pin rotation VALUES against the reference formula because shape/determinism tests cannot catch sign or half-rotation bugs (ISS-010/012/013 all slipped through shape-only tests).",
       "alternatives_rejected": [
@@ -1023,6 +1023,44 @@
       "touched_round": 10,
       "source": "probe + tests @ e2e384d8: round-trip 1.0->1.0, 2.0->2.0, worst normal-range rel err 4% (was 8x); 0.001->0.0 (was 44.0); round-trip test verified FAIL on pre-fix decode; vllm-model 545/545",
       "title": "VERIFY TASK-015: FP8 round-trip value-preserving within FP8 precision; subnormals flush to 0",
+      "confidence": 0.98
+    },
+    "TASK-016": {
+      "id": "TASK-016",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T18:34:46+00:00",
+      "updated_at": "2026-08-02T18:34:46+00:00",
+      "touched_round": 11,
+      "title": "add naive-reference correctness test for GQA attention (operationalizes DEC-007: pin values vs reference, not just shape/parity)",
+      "category": "test-quality",
+      "severity": 0.6,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1
+    },
+    "CHG-009": {
+      "id": "CHG-009",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:34:46+00:00",
+      "updated_at": "2026-08-02T18:34:46+00:00",
+      "touched_round": 11,
+      "commit": "20f49406",
+      "title": "test(model): GQA attention vs independent naive reference (catches grouping bug; verified fail-on-tiled)"
+    },
+    "EV-024": {
+      "id": "EV-024",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T18:34:46+00:00",
+      "updated_at": "2026-08-02T18:34:46+00:00",
+      "touched_round": 11,
+      "source": "test @ 20f49406: test_gqa_attention_matches_naive_reference passes on blocked expand_kv, FAILS on tiled (idx 12: got 6 want -4); vllm-model 546/546",
+      "title": "VERIFY TASK-016: reference test is load-bearing — would have caught ISS-010",
       "confidence": 0.98
     }
   },
@@ -1398,6 +1436,24 @@
       "to": "TASK-015",
       "type": "implements",
       "created_at": "2026-08-02T18:27:51+00:00"
+    },
+    {
+      "from": "TASK-016",
+      "to": "ISS-010",
+      "type": "addresses",
+      "created_at": "2026-08-02T18:34:46+00:00"
+    },
+    {
+      "from": "CHG-009",
+      "to": "TASK-016",
+      "type": "implements",
+      "created_at": "2026-08-02T18:34:46+00:00"
+    },
+    {
+      "from": "DEC-007",
+      "to": "TASK-016",
+      "type": "governs",
+      "created_at": "2026-08-02T18:34:46+00:00"
     }
   ]
 }
