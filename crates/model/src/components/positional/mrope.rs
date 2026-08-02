@@ -126,11 +126,22 @@ impl MRoPE {
         let freq_cos = freq_cos.reshape((1, seq, 1, half_dim))?;
         let freq_sin = freq_sin.reshape((1, seq, 1, half_dim))?;
 
-        let x_even_rot = x_even.broadcast_mul(&freq_cos)?;
-        let x_odd_rot = x_odd.broadcast_mul(&freq_sin)?;
-        let rotated = (x_even_rot - x_odd_rot)?;
+        // Standard `RoPE` rotation per section (matches `apply_rope_with_inv_freq`
+        // and `HuggingFace` `apply_rotary_pos_emb`): for pairs (x1, x2) = (first
+        // half, second half),
+        //   x1' = x1·cos − x2·sin
+        //   x2' = x2·cos + x1·sin
+        // RIL ISS-013: the second half was previously emitted UNCHANGED (`x_odd`),
+        // applying only half the rotation — the relative-position property
+        // requires both halves to rotate.
+        let first_cos = x_even.broadcast_mul(&freq_cos)?;
+        let first_sin = x_odd.broadcast_mul(&freq_sin)?;
+        let rotated_first = (first_cos - first_sin)?;
+        let second_cos = x_odd.broadcast_mul(&freq_cos)?;
+        let second_sin = x_even.broadcast_mul(&freq_sin)?;
+        let rotated_second = (second_cos + second_sin)?;
 
-        Tensor::cat(&[&rotated, &x.narrow(3, half_dim, half_dim)?], 3)
+        Tensor::cat(&[&rotated_first, &rotated_second], 3)
     }
 
     fn compute_freqs(&self, positions: &[i64], section_idx: usize) -> CandleResult<Tensor> {
@@ -278,5 +289,41 @@ mod tests {
             sections.iter().all(|s| s % 2 == 0),
             "Each section should be even for half-dim split"
         );
+    }
+
+    /// Regression (RIL ISS-013): `apply_rope_section` must rotate BOTH halves
+    /// of each section per the standard `RoPE` convention. Pre-fix the second
+    /// half was emitted unchanged (`x2`), applying only half the rotation.
+    /// A single size-4 section is identical to standard `RoPE`, so the output
+    /// must match the `HuggingFace` reference formula exactly.
+    #[test]
+    fn test_mrope_rotates_both_halves_standard_convention() {
+        let device = Device::Cpu;
+        let rope = MRoPE::new(4, 10000.0, vec![4], 1.0);
+        // first half x1=[1,2], second half x2=[3,4]
+        let q = Tensor::from_vec(vec![1.0f32, 2.0, 3.0, 4.0], (1, 1, 1, 4), &device).unwrap();
+        let (q_out, _k_out) = rope.apply(&q, &q, &[1i64]).unwrap();
+        let v: Vec<f32> = q_out.flatten_all().unwrap().to_vec1().unwrap();
+
+        let theta = 10000.0f32;
+        let inv = [1.0f32, theta.powf(-0.5)];
+        let (c0, s0) = (inv[0].cos(), inv[0].sin());
+        let (c1, s1) = (inv[1].cos(), inv[1].sin());
+        let (x10, x11, x20, x21) = (1.0f32, 2.0f32, 3.0f32, 4.0f32);
+        // Standard rotation: first = x1·cos − x2·sin ; second = x2·cos + x1·sin.
+        let expected = vec![
+            x10.mul_add(c0, -(x20 * s0)),
+            x11.mul_add(c1, -(x21 * s1)),
+            x20.mul_add(c0, x10 * s0),
+            x21.mul_add(c1, x11 * s1),
+        ];
+        assert_eq!(v.len(), 4);
+        for (got, want) in v.iter().zip(&expected) {
+            assert!(
+                (got - want).abs() < 1e-5,
+                "MRoPE must rotate both halves: got {v:?}, want {expected:?} \
+                 (unchanged second half => RIL ISS-013)"
+            );
+        }
     }
 }
