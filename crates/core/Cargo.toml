@@ -52,6 +52,7 @@ candle-core = { workspace = true }
 criterion = "0.8"
 proptest = { workspace = true }
 vllm-testing = { path = "../testing", version = "0.1.0" }
+vllm-model = { path = "../model", version = "0.1.0" }
 
 [[bench]]
 name = "radix_cache"
