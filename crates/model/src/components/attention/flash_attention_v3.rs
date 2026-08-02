@@ -224,8 +224,16 @@ impl MqaFlashAttention {
         if num_kv_heads == num_q_heads {
             return Ok(kv.clone());
         }
-        let repeat_factor = num_q_heads / num_kv_heads;
-        kv.repeat(&[1, repeat_factor, 1, 1])
+        // BLOCKED GQA expansion (RIL ISS-010): see `util::expand_kv` for
+        // the grouping rationale. Layout is `[batch, heads, seq, dim]`,
+        // so the group axis is inserted at position 2 (after heads).
+        let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
+        let (batch, seq, dim) = (kv.dims()[0], kv.dims()[2], kv.dims()[3]);
+        kv.reshape((batch, num_kv_heads, 1, seq, dim))?
+            .broadcast_as((batch, num_kv_heads, repeat_factor, seq, dim))?
+            .contiguous()?
+            .reshape((batch, num_kv_heads * repeat_factor, seq, dim))?
+            .narrow(1, 0, num_q_heads)
     }
 
     fn create_causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
@@ -304,14 +312,14 @@ impl GqaFlashAttention {
         }
         debug_assert_eq!(num_kv_heads, self.num_kv_heads);
 
-        if num_q_heads.is_multiple_of(num_kv_heads) {
-            let repeat_factor = num_q_heads / num_kv_heads;
-            kv.repeat(&[1, repeat_factor, 1, 1])
-        } else {
-            let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
-            let kv_repeated = kv.repeat(&[1, repeat_factor, 1, 1])?;
-            kv_repeated.narrow(1, 0, num_q_heads)
-        }
+        // BLOCKED GQA expansion (RIL ISS-010): see `util::expand_kv`.
+        let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
+        let (batch, seq, dim) = (kv.dims()[0], kv.dims()[2], kv.dims()[3]);
+        kv.reshape((batch, num_kv_heads, 1, seq, dim))?
+            .broadcast_as((batch, num_kv_heads, repeat_factor, seq, dim))?
+            .contiguous()?
+            .reshape((batch, num_kv_heads * repeat_factor, seq, dim))?
+            .narrow(1, 0, num_q_heads)
     }
 
     fn create_causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {

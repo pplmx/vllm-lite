@@ -34,10 +34,20 @@ impl AttentionConfig {
 }
 
 /// Expand a grouped-query-attention KV tensor along the head axis so it
-/// has the same number of heads as the query tensor.
+/// has the same number of heads as the query tensor, using **blocked**
+/// (repeat-interleave) grouping.
 ///
-/// When `num_q_heads == num_kv_heads` the input is returned unchanged. For
-/// GQA/MQA ratios the KV is broadcast along axis 2 (heads).
+/// When `num_q_heads == num_kv_heads` the input is returned unchanged.
+/// Otherwise each KV head is repeated contiguously `group_size` times so
+/// the expanded head order is `[K0, K0, ..., K1, K1, ...]` — query head
+/// `h` attends to KV head `h / group_size`, the GQA contract. Layout is
+/// `[batch, seq, heads, dim]`; the group axis is inserted at position 3.
+///
+/// **Why not `Tensor::repeat`:** `repeat` *tiles* (`[K0, K1, K0, K1, …]`),
+/// pairing query head `h` with KV head `h % num_kv_heads` — the wrong head
+/// for every group past the first, silently corrupting GQA attention
+/// (RIL ISS-010). The reshape→broadcast→reshape idiom below is the
+/// repeat-interleave equivalent (same as `gemma4/attention/kernels.rs`).
 /// # Errors
 ///
 /// Returns `Err` if the input tensor is not 4-dimensional, has the wrong
@@ -54,10 +64,10 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
         )));
     }
 
-    let _ = dims[0];
-    let _ = dims[1];
+    let batch = dims[0];
+    let seq = dims[1];
     let heads = dims[2];
-    let _ = dims[3];
+    let dim = dims[3];
 
     if heads != num_kv_heads {
         return Err(candle_core::Error::msg(format!(
@@ -65,14 +75,15 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
         )));
     }
 
-    if !num_q_heads.is_multiple_of(num_kv_heads) {
-        let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
-        let kv_repeated = kv.repeat(&[1, 1, repeat_factor, 1])?;
-        return kv_repeated.narrow(2, 0, num_q_heads);
-    }
-
-    let repeat_factor = num_q_heads / num_kv_heads;
-    kv.repeat(&[1, 1, repeat_factor, 1])
+    // Over-expand by `div_ceil` then narrow to the exact query-head count.
+    // Real GQA architectures always divide evenly (so the narrow is a
+    // no-op); the `div_ceil` keeps the math total for defensive callers.
+    let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
+    kv.reshape((batch, seq, heads, 1, dim))?
+        .broadcast_as((batch, seq, heads, repeat_factor, dim))?
+        .contiguous()?
+        .reshape((batch, seq, heads * repeat_factor, dim))?
+        .narrow(2, 0, num_q_heads)
 }
 
 /// Build a `[1, 1, seq_len, seq_len]` causal attention mask.

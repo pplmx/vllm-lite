@@ -285,3 +285,53 @@ fn test_paged_attention_single_token_decode() {
 
     assert_eq!(output.dims(), &[batch_size, seq_q, num_heads * head_dim]);
 }
+
+/// Regression (RIL ISS-010 / TASK-010): GQA expansion must be **blocked**
+/// (repeat-interleave), not tiled. Query head `h` attends to KV head
+/// `h / group_size`, so the expanded head order must be
+/// `[K0, K0, ..., K1, K1, ...]`. Pre-fix `expand_kv` used `Tensor::repeat`,
+/// which tiles (`[K0, K1, K0, K1, …]`) and pairs query head `h` with the
+/// WRONG KV head `h % num_kv_heads`.
+#[test]
+fn test_expand_kv_blocked_grouping() {
+    // Two KV heads with distinct constant values: head 0 = 0.0, head 1 = 1.0.
+    let kv = Tensor::from_vec(vec![0.0f32, 1.0], (1, 1, 2, 1), DEVICE).unwrap();
+    // 8 query heads / 2 KV heads => group_size 4.
+    let expanded = expand_kv(&kv, 8, 2).unwrap();
+    assert_eq!(expanded.dims(), &[1, 1, 8, 1]);
+    let vals: Vec<f32> = expanded.flatten_all().unwrap().to_vec1().unwrap();
+    assert_eq!(
+        vals,
+        vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+        "expansion must be blocked [K0x4, K1x4]; got {vals:?} (tiled => RIL ISS-010)"
+    );
+}
+
+/// Regression (RIL ISS-010 / TASK-010): end-to-end GQA grouping through
+/// `paged_attention`. With a single key position the softmax weight is
+/// exactly 1.0, so each query head's output equals its paired VALUE head
+/// verbatim — directly revealing the grouping. Query heads {0,1} (group 0)
+/// must output V0; query heads {2,3} (group 1) must output V1.
+#[test]
+fn test_gqa_grouping_end_to_end_single_token() {
+    let head_dim = 2;
+    // KV in [batch, seq, heads, dim]; V0 = [1,0], V1 = [0,1].
+    let v = Tensor::from_vec(vec![1.0f32, 0.0, 0.0, 1.0], (1, 1, 2, head_dim), DEVICE).unwrap();
+    let k = Tensor::zeros((1, 1, 2, head_dim), candle_core::DType::F32, DEVICE).unwrap();
+    // Expand to 4 query heads (group_size 2), then to [batch, heads, seq, dim].
+    let v_exp = expand_kv(&v, 4, 2).unwrap().transpose(1, 2).unwrap();
+    let k_exp = expand_kv(&k, 4, 2).unwrap().transpose(1, 2).unwrap();
+    let q = Tensor::zeros((1, 4, 1, head_dim), candle_core::DType::F32, DEVICE).unwrap();
+
+    let out = paged_attention(&q, &k_exp, &v_exp, 4, head_dim).unwrap();
+    assert_eq!(out.dims(), &[1, 1, 4 * head_dim]);
+    let vals: Vec<f32> = out.flatten_all().unwrap().to_vec1().unwrap();
+    // Blocked grouping => heads [V0, V0, V1, V1] = [1,0, 1,0, 0,1, 0,1].
+    // (Tiled grouping would give [V0, V1, V0, V1] = [1,0, 0,1, 1,0, 0,1].)
+    assert_eq!(
+        vals,
+        vec![1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0],
+        "query heads {{0,1}} must attend to KV head 0 and {{2,3}} to KV head 1; \
+         got {vals:?} (wrong grouping => RIL ISS-010)"
+    );
+}
