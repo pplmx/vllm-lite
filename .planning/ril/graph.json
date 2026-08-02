@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 3,
+  "round": 4,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T17:15:30+00:00",
+  "updated_at": "2026-08-02T17:21:05+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -523,11 +523,11 @@
     "TASK-008": {
       "id": "TASK-008",
       "type": "task",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-02T15:01:40+00:00",
-      "updated_at": "2026-08-02T15:01:40+00:00",
-      "touched_round": 2,
+      "updated_at": "2026-08-02T17:21:05+00:00",
+      "touched_round": 4,
       "title": "docs: apply_repeat_penalty frequency-style claim contradicts deduping impl",
       "category": "docs",
       "severity": 0.3,
@@ -550,11 +550,11 @@
     "ISS-008": {
       "id": "ISS-008",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-02T15:01:59+00:00",
-      "updated_at": "2026-08-02T15:01:59+00:00",
-      "touched_round": 2,
+      "updated_at": "2026-08-02T17:21:05+00:00",
+      "touched_round": 4,
       "title": "apply_repeat_penalty doc claims per-occurrence penalty; impl dedupes per-distinct",
       "severity": 0.3,
       "category": "docs"
@@ -635,6 +635,29 @@
       "touched_round": 3,
       "source": "cargo test -p vllm-core/-traits/-server/-model/-testing @ a0e4ca9d: 1930 pass / 0 fail; clippy --all-targets -D warnings green; fmt clean",
       "title": "VERIFY TASK-007: 6 new per-step-stream regression tests pass; 2 fragile seed tests + 1 integration test hardened to deterministic threshold-level assertions; only the 10 environmental vllm-dist port-bind failures remain",
+      "confidence": 0.95
+    },
+    "CHG-002": {
+      "id": "CHG-002",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:21:04+00:00",
+      "updated_at": "2026-08-02T17:21:04+00:00",
+      "touched_round": 4,
+      "commit": 86045217,
+      "title": "docs: correct repeat_penalty to per-distinct (llama.cpp-style), not frequency-style/per-occurrence"
+    },
+    "EV-016": {
+      "id": "EV-016",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:21:04+00:00",
+      "updated_at": "2026-08-02T17:21:04+00:00",
+      "touched_round": 4,
+      "source": "cargo doc --workspace clean; clippy --all-targets -D warnings green; 89 sampling + 148 validation tests pass @ 86045217",
+      "title": "VERIFY TASK-008: 4 false frequency-style/per-occurrence claims corrected to per-distinct; docs-only, no behavior change; intra-doc links intact",
       "confidence": 0.95
     }
   },
@@ -818,6 +841,18 @@
       "to": "COMP-009",
       "type": "governs",
       "created_at": "2026-08-02T17:15:30+00:00"
+    },
+    {
+      "from": "CHG-002",
+      "to": "ISS-008",
+      "type": "resolves",
+      "created_at": "2026-08-02T17:21:05+00:00"
+    },
+    {
+      "from": "CHG-002",
+      "to": "TASK-008",
+      "type": "implements",
+      "created_at": "2026-08-02T17:21:05+00:00"
     }
   ]
 }
