@@ -163,3 +163,23 @@ fn test_prefill_decode_parity() {
         "prefill+decode parity failed: max_diff={max_diff}"
     );
 }
+
+/// Regression (RIL ISS-010 family): `repeat_kv_heads` must use **blocked**
+/// grouping (repeat-interleave), matching `HuggingFace`'s canonical
+/// `repeat_kv`. V head `v` shares K/Q head `v / group`; the tiled
+/// `Tensor::repeat` instead pairs V head `v` with K/Q head
+/// `v % num_k_heads` — the wrong head for every group past the first.
+#[test]
+fn test_repeat_kv_heads_blocked_grouping() {
+    let device = Device::Cpu;
+    // [batch, seq, k_heads, dim] = [1,1,2,1]; K head 0 = 0.0, K head 1 = 1.0.
+    let kv = Tensor::from_vec(vec![0.0f32, 1.0], (1, 1, 2, 1), &device).unwrap();
+    let expanded = kernels::repeat_kv_heads(&kv, 4).unwrap(); // 4 v-heads, group 2
+    assert_eq!(expanded.dims(), &[1, 1, 4, 1]);
+    let vals: Vec<f32> = expanded.flatten_all().unwrap().to_vec1().unwrap();
+    assert_eq!(
+        vals,
+        vec![0.0, 0.0, 1.0, 1.0],
+        "repeat_kv_heads must be blocked [K0x2, K1x2]; got {vals:?} (tiled => RIL ISS-010)"
+    );
+}

@@ -26,8 +26,17 @@ pub(super) fn repeat_kv_heads(kv: &Tensor, num_v_heads: usize) -> CandleResult<T
             "num_v_heads {num_v_heads} must be a multiple of num_k_heads {num_k_heads}"
         )));
     }
+    // BLOCKED grouping (RIL ISS-010 family): V head `v` shares K/Q head
+    // `v / group`, so expansion must be repeat-interleave `[K0×g, K1×g, …]`,
+    // not the tiled `[K0, K1, …]` that `Tensor::repeat` produces (which
+    // pairs V head `v` with the wrong K/Q head `v % num_k_heads`). Matches
+    // HuggingFace's canonical `repeat_kv` and the attention `util::expand_kv`.
     let repeat = num_v_heads / num_k_heads;
-    kv.repeat(&[1, 1, repeat, 1])
+    let (batch, seq, dim) = (kv.dims()[0], kv.dims()[1], kv.dims()[3]);
+    kv.reshape((batch, seq, num_k_heads, 1, dim))?
+        .broadcast_as((batch, seq, num_k_heads, repeat, dim))?
+        .contiguous()?
+        .reshape((batch, seq, num_v_heads, dim))
 }
 
 pub(super) fn mixed_qkv_flat(q: &Tensor, k: &Tensor, v: &Tensor) -> CandleResult<Tensor> {
