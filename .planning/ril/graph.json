@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 19,
+  "round": 20,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T20:38:17+00:00",
+  "updated_at": "2026-08-02T20:50:26+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 18,
+      "touched_round": 20,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -1488,6 +1488,59 @@
       "source": "real_model_prefill_writes_kv_into_given_blocks: tiny LlamaModel via from_weights, 20-token prefill into blocks [0,1] => non-zero K/V in blocks 0,1, block 2 empty; vllm-model 549/549, clippy green",
       "title": "VERIFY TASK-024: real-model KV-write path exercised end-to-end",
       "confidence": 0.95
+    },
+    "TASK-025": {
+      "id": "TASK-025",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-02T20:50:26+00:00",
+      "updated_at": "2026-08-02T20:50:26+00:00",
+      "touched_round": 20,
+      "title": "end-to-end engine tests with a real KV-writing LlamaModel (first system-level exercise of the KV-write path StubModel skips; OPS-04 step): multiblock prefill->decode, determinism, KV populated",
+      "category": "test-quality",
+      "severity": 0.7,
+      "confidence": 0.9,
+      "effort": 2,
+      "unlock_factor": 1
+    },
+    "CHG-018": {
+      "id": "CHG-018",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T20:50:26+00:00",
+      "updated_at": "2026-08-02T20:50:26+00:00",
+      "touched_round": 20,
+      "commit": "f83249af",
+      "title": "test(core): real-model engine e2e tests (3) + vllm-model dev-dep; closes KV-write path test gap at system level"
+    },
+    "EV-034": {
+      "id": "EV-034",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T20:50:26+00:00",
+      "updated_at": "2026-08-02T20:50:26+00:00",
+      "touched_round": 20,
+      "source": "real_model_engine.rs: 3 tests pass (multiblock prefill->decode generates max_tokens; greedy deterministic run-to-run; KV cache populated). full workspace 1950/1950, clippy green",
+      "title": "VERIFY TASK-025: real model runs through full engine end-to-end",
+      "confidence": 0.95
+    },
+    "DEC-009": {
+      "id": "DEC-009",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T20:50:26+00:00",
+      "updated_at": "2026-08-02T20:50:26+00:00",
+      "touched_round": 20,
+      "title": "Real-model e2e tests live in crates/core/tests (vllm-model added as dev-dep); tiny LlamaModel with deterministic non-zero weights via from_weights is the reference vehicle for OPS-04",
+      "rationale": "StubModel/ConstModel skip the KV-write path, hiding KV-corruption bugs (ISS-019/022). A real KV-writing model in engine tests closes the gap. vllm-model as a dev-dep of vllm-core is acyclic (vllm-model depends only on vllm-traits).",
+      "alternatives_rejected": [
+        "put real-model tests in vllm-model tests (cannot access vllm-core Engine)",
+        "re-export LlamaModel via vllm-testing (adds coupling)"
+      ]
     }
   },
   "edges": [
@@ -2084,6 +2137,18 @@
       "to": "TASK-024",
       "type": "implements",
       "created_at": "2026-08-02T20:38:17+00:00"
+    },
+    {
+      "from": "CHG-018",
+      "to": "TASK-025",
+      "type": "implements",
+      "created_at": "2026-08-02T20:50:26+00:00"
+    },
+    {
+      "from": "DEC-009",
+      "to": "COMP-002",
+      "type": "governs",
+      "created_at": "2026-08-02T20:50:26+00:00"
     }
   ]
 }
