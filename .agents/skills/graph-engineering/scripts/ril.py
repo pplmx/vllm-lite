@@ -39,11 +39,35 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-STORE = Path(__file__).resolve().parent.parent / ".planning" / "ril" / "graph.json"
+
+def _repo_root() -> Path:
+    """Locate the repository root owning .planning/ril (or nearest git root)."""
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        if (parent / ".planning" / "ril").exists():
+            return parent
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        root = Path(out.stdout.strip())
+        if root.is_dir():
+            return root
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    print(f"ril: error: cannot locate repository root (.planning/ril) from {here}", file=sys.stderr)
+    sys.exit(1)
+
+
+STORE = _repo_root() / ".planning" / "ril" / "graph.json"
 
 NODE_TYPES = {"component", "issue", "hypothesis", "evidence", "decision", "change", "task"}
 STATUSES = {"active", "stale", "resolved", "superseded", "abandoned"}

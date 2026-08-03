@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 22,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T21:59:57+00:00",
+  "updated_at": "2026-08-03T03:09:10+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -300,12 +300,12 @@
       "id": "COMP-010",
       "type": "component",
       "status": "active",
-      "version": 1,
+      "version": 2,
       "created_at": "2026-08-02T14:36:48+00:00",
-      "updated_at": "2026-08-02T14:36:48+00:00",
-      "touched_round": 1,
+      "updated_at": "2026-08-03T03:09:10+00:00",
+      "touched_round": 22,
       "title": "ril-tooling",
-      "role": "repository intelligence layer: scripts/ril.py + .planning/ril/graph.json"
+      "role": "repository intelligence layer: .agents/skills/graph-engineering/scripts/ril.py + .planning/ril/graph.json"
     },
     "DEC-003": {
       "id": "DEC-003",

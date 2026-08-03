@@ -1,11 +1,14 @@
 # RIL Schema & CLI Reference
 
-Authoritative sources: `scripts/ril.py` (enforcement) and `.planning/ril/README.md` (docs).
-Store: `.planning/ril/graph.json` (committed, single source of truth).
+Authoritative sources: `.agents/skills/graph-engineering/scripts/ril.py`
+(enforcement) and `.planning/ril/README.md` (docs). Store:
+`.planning/ril/graph.json` (committed, single source of truth).
 
-**All reads/writes go through `scripts/ril.py`. Never edit `graph.json` by
-hand and never create a parallel knowledge store.** The CLI validates schema,
-edge typing, optimistic locking, lifecycle, and consistency.
+**All reads/writes go through the CLI
+`.agents/skills/graph-engineering/scripts/ril.py` (referred to below as
+`ril.py`). Never edit `graph.json` by hand and never create a parallel
+knowledge store.** The CLI validates schema, edge typing, optimistic locking,
+lifecycle, and consistency.
 
 ## Node schema
 
@@ -48,19 +51,21 @@ fact by EVALUATE (enforced by `ril.py check`).
 ## CLI commands
 
 ```bash
-python3 scripts/ril.py init                       # create the store
-python3 scripts/ril.py node add --type task --field category=correctness --field priority_score=... # add node (id auto-assigned TASK-N)
-python3 scripts/ril.py node set --id TASK-1 --expect-version 3 --field status=resolved   # optimistic update; mismatch aborts and dumps node to stderr
-python3 scripts/ril.py edge add --type addresses --from TASK-1 --to ISS-2
-python3 scripts/ril.py edge rm  --type addresses --from TASK-1 --to ISS-2
-python3 scripts/ril.py tasks                      # active tasks sorted by priority_score
-python3 scripts/ril.py show --id TASK-1 --hops 2  # neighbourhood load
-python3 scripts/ril.py lock --id TASK-1 --owner <instance-id> [--minutes 30]   # execution lock
-python3 scripts/ril.py unlock --id TASK-1         # release lock
-python3 scripts/ril.py round                      # bump loop counter
-python3 scripts/ril.py stale --rounds 10          # mark untouched hypothesis/task stale
-python3 scripts/ril.py check                      # orphans, cycles, evidence-less hypotheses
+ril.py init                       # create the store
+ril.py node add --type task --field category=correctness --field priority_score=... # add node (id auto-assigned TASK-N)
+ril.py node set --id TASK-1 --expect-version 3 --field status=resolved   # optimistic update; mismatch aborts and dumps node to stderr
+ril.py edge add --type addresses --from TASK-1 --to ISS-2
+ril.py edge rm  --type addresses --from TASK-1 --to ISS-2
+ril.py tasks                      # active tasks sorted by priority_score
+ril.py show --id TASK-1 --hops 2  # neighbourhood load
+ril.py lock --id TASK-1 --owner <instance-id> [--minutes 30]   # execution lock
+ril.py unlock --id TASK-1         # release lock
+ril.py round                      # bump loop counter
+ril.py stale --rounds 10          # mark untouched hypothesis/task stale
+ril.py check                      # orphans, cycles, evidence-less hypotheses
 ```
+
+In this repo `ril.py` = `.agents/skills/graph-engineering/scripts/ril.py`.
 
 Notes:
 

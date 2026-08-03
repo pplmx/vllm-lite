@@ -4,9 +4,12 @@ Typed engineering graph for the autonomous engineering loop
 (OBSERVE → MODEL → EVALUATE → SELECT → EXECUTE → VERIFY → LEARN).
 
 `graph.json` is the single source of truth for loop state. All reads and
-writes go through `scripts/ril.py`, which enforces the schema, edge
-typing, optimistic locking, lifecycle, and consistency rules. Do not
-edit `graph.json` by hand and do not create parallel knowledge stores.
+writes go through the skill-owned CLI
+`.agents/skills/graph-engineering/scripts/ril.py` (referred to below as
+`ril.py`), which enforces the schema, edge typing, optimistic locking,
+lifecycle, and consistency rules. Do not edit `graph.json` by hand and do
+not create parallel knowledge stores. Full schema + command reference:
+`.agents/skills/graph-engineering/references/ril-schema.md`.
 
 ## Node types
 

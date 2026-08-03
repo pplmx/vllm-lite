@@ -41,7 +41,7 @@ description: >
 
 ### 2.1 Schema（绑定到 RIL，而不是自然语言描述）
 
-图谱是类型化的节点+边，不是自由文本笔记。RIL（repository-intelligence-layer）的 schema 由 `scripts/ril.py` 强制校验，`.planning/ril/graph.json` 是唯一事实源；一律通过 `ril.py` 读写，**禁止手改 graph.json、禁止新建平行的知识存储**。完整 schema 与 CLI 清单见 `references/ril-schema.md` 和 `.planning/ril/README.md`。
+图谱是类型化的节点+边，不是自由文本笔记。RIL（repository-intelligence-layer）的 schema 由本技能自带的 CLI `.agents/skills/graph-engineering/scripts/ril.py`（下称 `ril.py`）强制校验，`.planning/ril/graph.json` 是唯一事实源；一律通过 `ril.py` 读写，**禁止手改 graph.json、禁止新建平行的知识存储**。完整 schema 与 CLI 清单见 `references/ril-schema.md` 和 `.planning/ril/README.md`。
 
 **节点类型**（每个节点必有 `id`, `type`, `status`, `version`, `created_at`, `updated_at`, `touched_round`；下表为各类型的额外必填字段）：
 
@@ -93,7 +93,7 @@ description: >
 若存在多个 agent instance（Loop Engineering 架构下这是常态）：
 
 - 写入图谱前，对目标节点/边执行乐观锁：`ril.py node set` 必须带 `--expect-version <当前 version>`；版本冲突时 CLI 报错并把节点输出到 stderr，此时重新读取并 diff 合并，而不是覆盖。
-- 两个 instance 不得同时对同一 component 下的代码发起 EXECUTE；开始 EXECUTE 前，用 RIL 分布式锁占用对应 task 节点：`python3 scripts/ril.py lock --id TASK-x --owner <instance_id>`（默认 30 分钟超时，过期自动释放），结束时 `python3 scripts/ril.py unlock --id TASK-x`。**不要**手写 `status=in_progress` 或 `owner=` 字段——RIL schema 没有这些字段，`ril.py` 会直接拒绝。
+- 两个 instance 不得同时对同一 component 下的代码发起 EXECUTE；开始 EXECUTE 前，用 RIL 分布式锁占用对应 task 节点：`python3 .agents/skills/graph-engineering/scripts/ril.py lock --id TASK-x --owner <instance_id>`（默认 30 分钟超时，过期自动释放），结束时 `python3 .agents/skills/graph-engineering/scripts/ril.py unlock --id TASK-x`。**不要**手写 `status=in_progress` 或 `owner=` 字段——RIL schema 没有这些字段，`ril.py` 会直接拒绝。
 - evidence 节点只增不改，天然无冲突，鼓励优先通过增加 evidence 而不是编辑已有节点来记录新发现。
 
 ## 3. EVALUATE
