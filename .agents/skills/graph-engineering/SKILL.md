@@ -41,30 +41,35 @@ description: >
 
 ### 2.1 Schema（绑定到 RIL，而不是自然语言描述）
 
-图谱是类型化的节点+边，不是自由文本笔记。若仓库已有 RIL（repository-intelligence-layer），一律通过其 API 读写，不新建平行的知识存储。
+图谱是类型化的节点+边，不是自由文本笔记。RIL（repository-intelligence-layer）的 schema 由 `scripts/ril.py` 强制校验，`.planning/ril/graph.json` 是唯一事实源；一律通过 `ril.py` 读写，**禁止手改 graph.json、禁止新建平行的知识存储**。完整 schema 与 CLI 清单见 `references/ril-schema.md` 和 `.planning/ril/README.md`。
 
-**节点类型**（每个节点必须有 `id`, `type`, `status`, `created_at`, `updated_at`, `confidence`）：
+**节点类型**（每个节点必有 `id`, `type`, `status`, `version`, `created_at`, `updated_at`, `touched_round`；下表为各类型的额外必填字段）：
 
-| 节点类型   | 说明                                                                                                                    |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------- |
-| component  | 模块/服务/文件级实体                                                                                                    |
-| issue      | 已识别问题（bug/风险/债务）                                                                                             |
-| hypothesis | 未验证的根因猜测，必须带 confidence（0-1）                                                                              |
-| evidence   | 支持或反驳某个 hypothesis 的具体观测（测试结果、日志、profiling 数据），必须引用来源（commit hash / 测试名 / 文件行号） |
-| decision   | 已做出的选择，必须带 rationale 和 alternatives_rejected                                                                 |
-| change     | 实际代码修改，关联 commit hash                                                                                          |
-| task       | 可执行的下一步行动，带 priority_score（见 EVALUATE）                                                                    |
+| 节点类型   | 额外必填字段                                                                                                            | 说明                                                                   |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| component  | —                                                                                                                       | 模块/服务/文件级实体                                                   |
+| issue      | —                                                                                                                       | 已识别问题（bug/风险/债务）                                            |
+| hypothesis | `confidence`（0-1）                                                                                                     | 未验证的根因猜测                                                       |
+| evidence   | `source`（commit hash / 测试名 / 文件行号），append-only                                                                | 支持或反驳某个 hypothesis 的具体观测（测试结果、日志、profiling 数据） |
+| decision   | `rationale`、`alternatives_rejected`，不可变                                                                            | 已做出的选择                                                           |
+| change     | `commit` hash                                                                                                           | 实际代码修改                                                           |
+| task       | `category`（correctness/security/stability/critical-bug/core-feature/performance/test-quality/maintainability/dx/docs） | 可执行的下一步行动，带 priority_score（见 EVALUATE）                   |
 
 **边类型**（有向，语义明确，禁止用无类型的"关联"边）：
 
-| 边类型              | 语义                                              |
-| ------------------- | ------------------------------------------------- |
-| depends_on          | task→task, component→component                    |
-| causes              | issue→issue，标注是根因还是症状                   |
-| blocks              | task→task                                         |
-| validates / refutes | evidence→hypothesis                               |
-| resolves            | change→issue                                      |
-| supersedes          | decision→decision，用于记录决策变更历史而不是覆盖 |
+| 边类型              | 允许的端点                                        | 语义                                              |
+| ------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| depends_on          | task→task, component→component                    | 硬依赖                                            |
+| causes              | issue→issue                                       | 根因/症状链接，标注是根因还是症状                 |
+| blocks              | task→task                                         | 执行阻塞                                          |
+| validates / refutes | evidence→hypothesis                               | 证据支持/反驳假设                                 |
+| resolves            | change→issue                                      | change 修复 issue                                 |
+| supersedes          | decision→decision                                 | 决策变更历史而不是覆盖                            |
+| addresses           | task→issue                                        | task 处理某个 issue                               |
+| located_in          | issue→component                                   | 问题所在位置                                      |
+| part_of             | component→component                               | 子系统层级                                        |
+| implements          | change→task                                       | change 交付 task                                  |
+| governs             | decision→component/task                           | decision 约束目标                                 |
 
 一个 hypothesis 在没有任何 validates/refutes 边之前，不得被 EVALUATE 当作 fact 使用。
 
@@ -87,8 +92,8 @@ description: >
 
 若存在多个 agent instance（Loop Engineering 架构下这是常态）：
 
-- 写入图谱前，对目标节点/边执行乐观锁（基于 `updated_at` 或版本号），冲突时重试并 diff 合并，而不是覆盖。
-- 两个 instance 不得同时对同一 component 下的代码发起 EXECUTE；开始 EXECUTE 前，在对应 task 节点上设置 `status=in_progress` + `owner=<instance_id>`，作为分布式锁。锁超时（默认 30 分钟无更新）自动释放。
+- 写入图谱前，对目标节点/边执行乐观锁：`ril.py node set` 必须带 `--expect-version <当前 version>`；版本冲突时 CLI 报错并把节点输出到 stderr，此时重新读取并 diff 合并，而不是覆盖。
+- 两个 instance 不得同时对同一 component 下的代码发起 EXECUTE；开始 EXECUTE 前，用 RIL 分布式锁占用对应 task 节点：`python3 scripts/ril.py lock --id TASK-x --owner <instance_id>`（默认 30 分钟超时，过期自动释放），结束时 `python3 scripts/ril.py unlock --id TASK-x`。**不要**手写 `status=in_progress` 或 `owner=` 字段——RIL schema 没有这些字段，`ril.py` 会直接拒绝。
 - evidence 节点只增不改，天然无冲突，鼓励优先通过增加 evidence 而不是编辑已有节点来记录新发现。
 
 ## 3. EVALUATE
