@@ -82,7 +82,7 @@ curl -X POST http://localhost:8000/v1/completions \
   -d '{"prompt": "Hello, how are you?", "max_tokens": 50}'
 ```
 
-> ⚠️ **诚实声明**：CLI 要求显式 `--model <PATH>`（或 `VLLM_MODEL`），
+> ⚠️ **特别说明**：CLI 要求显式 `--model <PATH>`（或 `VLLM_MODEL`），
 > 启动时不会下载权重。如果某个示例/教程声称无参启动或自动下载，
 > 那就是 bug，请报告给我们。
 
@@ -155,7 +155,7 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ### 🚀 核心推理优化
 
-> ⚠️ **诚实声明**：下表的百分比来自历史/受控基准，**不是当前实现的
+> ⚠️ **特别说明**：下表的百分比来自历史/受控基准，**不是当前实现的
 > 持续回归值**。当前批次调度仍是逐序列 `forward`（见
 > `docs/technical-due-diligence/architecture-performance.md` 的
 > PERF-01）；真实数字应由 release 阶段的稳定基准产生并写入
@@ -245,7 +245,7 @@ cargo run -p vllm-server -- --log-dir ./logs
 
 ## 📊 性能指标
 
-> ⚠️ **诚实声明**：吞吐量 / TTFT / P99 / 显存效率的数字来自历史内部
+> ⚠️ **特别说明**：吞吐量 / TTFT / P99 / 显存效率的数字来自历史内部
 > 测量，**当前实现尚未接入持续 GPU 基准**（CI-01 仍 deferred）。
 > 真实数字应以 `docs/perf/` 下的 release 阶段基准产物为准。本节保留
 > 数字仅为长期目标参考；不要将其作为当前部署的吞吐/延迟承诺。
@@ -380,7 +380,7 @@ auth:
 
 ### Scheduler 默认值（代码级，非 YAML 可配置）
 
-> ⚠️ **诚实声明**：调度参数在 `vllm-core` 中通过
+> ⚠️ **特别说明**：调度参数在 `vllm-core` 中通过
 > `SchedulerConfig::default()` 设定（`crates/core/src/types/scheduler_config.rs`），
 > **不**通过服务器 YAML 配置 —— `config.yaml` 中不存在 `scheduler:` 段，
 > 粘贴此类片段会被静默忽略。需要调整时请使用 Rust API
