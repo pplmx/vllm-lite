@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 22,
+  "round": 23,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-03T03:09:10+00:00",
+  "updated_at": "2026-08-03T03:15:10+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -303,7 +303,7 @@
       "version": 2,
       "created_at": "2026-08-02T14:36:48+00:00",
       "updated_at": "2026-08-03T03:09:10+00:00",
-      "touched_round": 22,
+      "touched_round": 23,
       "title": "ril-tooling",
       "role": "repository intelligence layer: .agents/skills/graph-engineering/scripts/ril.py + .planning/ril/graph.json"
     },
@@ -1670,6 +1670,88 @@
       "source": "full workspace 1951/1951 (excl dist), clippy --workspace --all-targets -D warnings green. logits_to_vector flattens all positions; verify forward is_prefill=true embeds all verify_tokens. FakeModel already returned all positions so spec tests passed pre-fix; fix makes CausalLm behave the same.",
       "title": "VERIFY TASK-027: speculative verification gets all-positions logits with real models",
       "confidence": 0.95
+    },
+    "TASK-028": {
+      "id": "TASK-028",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-03T03:15:05+00:00",
+      "updated_at": "2026-08-03T03:15:05+00:00",
+      "touched_round": 23,
+      "category": "maintainability",
+      "severity": 0.5,
+      "confidence": 0.9,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "title": "graph-engineering 技能落地：schema 对齐 RIL、CLI 由 skill 持有、文档去重"
+    },
+    "DEC-012": {
+      "id": "DEC-012",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-03T03:15:05+00:00",
+      "updated_at": "2026-08-03T03:15:05+00:00",
+      "touched_round": 23,
+      "title": "ril.py 工具链由 graph-engineering skill 持有",
+      "rationale": "技能是唯一消费者；skill 自包含可移植（SKILL.md+references+scripts 一体）；避免 repo 根目录脚本与技能文档漂移",
+      "alternatives_rejected": "保留在 scripts/（无其他消费者）；独立仓库或 crate（过度工程）"
+    },
+    "ISS-024": {
+      "id": "ISS-024",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-03T03:15:05+00:00",
+      "updated_at": "2026-08-03T03:15:05+00:00",
+      "touched_round": 23,
+      "severity": 0.5,
+      "title": "graph-engineering SKILL.md 与 ril.py schema 冲突（lock 协议、边类型、必填字段）"
+    },
+    "CHG-021": {
+      "id": "CHG-021",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-03T03:15:05+00:00",
+      "updated_at": "2026-08-03T03:15:05+00:00",
+      "touched_round": 23,
+      "commit": "92e82cec",
+      "title": "feat(agents): add graph-engineering autonomous loop skill"
+    },
+    "CHG-022": {
+      "id": "CHG-022",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-03T03:15:05+00:00",
+      "updated_at": "2026-08-03T03:15:05+00:00",
+      "touched_round": 23,
+      "commit": "b7082fba",
+      "title": "fix(agents): align graph-engineering skill with RIL schema (add references/ril-schema.md)"
+    },
+    "CHG-023": {
+      "id": "CHG-023",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-03T03:15:05+00:00",
+      "updated_at": "2026-08-03T03:15:05+00:00",
+      "touched_round": 23,
+      "commit": "53363ca6",
+      "title": "refactor(agents): move ril.py into graph-engineering skill (repo-root-aware store)"
+    },
+    "CHG-024": {
+      "id": "CHG-024",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-03T03:15:05+00:00",
+      "updated_at": "2026-08-03T03:15:05+00:00",
+      "touched_round": 23,
+      "commit": "253a151a",
+      "title": "docs(agents): dedupe RIL docs; make graph-engineering commands executable"
     }
   },
   "edges": [
@@ -2326,6 +2408,54 @@
       "to": "TASK-027",
       "type": "implements",
       "created_at": "2026-08-02T21:59:57+00:00"
+    },
+    {
+      "from": "TASK-028",
+      "to": "ISS-024",
+      "type": "addresses",
+      "created_at": "2026-08-03T03:15:10+00:00"
+    },
+    {
+      "from": "CHG-022",
+      "to": "ISS-024",
+      "type": "resolves",
+      "created_at": "2026-08-03T03:15:10+00:00"
+    },
+    {
+      "from": "CHG-021",
+      "to": "TASK-028",
+      "type": "implements",
+      "created_at": "2026-08-03T03:15:10+00:00"
+    },
+    {
+      "from": "CHG-022",
+      "to": "TASK-028",
+      "type": "implements",
+      "created_at": "2026-08-03T03:15:10+00:00"
+    },
+    {
+      "from": "CHG-023",
+      "to": "TASK-028",
+      "type": "implements",
+      "created_at": "2026-08-03T03:15:10+00:00"
+    },
+    {
+      "from": "CHG-024",
+      "to": "TASK-028",
+      "type": "implements",
+      "created_at": "2026-08-03T03:15:10+00:00"
+    },
+    {
+      "from": "DEC-012",
+      "to": "COMP-010",
+      "type": "governs",
+      "created_at": "2026-08-03T03:15:10+00:00"
+    },
+    {
+      "from": "ISS-024",
+      "to": "COMP-010",
+      "type": "located_in",
+      "created_at": "2026-08-03T03:15:10+00:00"
     }
   ]
 }
