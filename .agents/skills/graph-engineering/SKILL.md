@@ -41,7 +41,7 @@ description: >
 
 ### 2.1 Schema（绑定到 RIL，而不是自然语言描述）
 
-图谱是类型化的节点+边，不是自由文本笔记。RIL（repository-intelligence-layer）的 schema 由本技能自带的 CLI `.agents/skills/graph-engineering/scripts/ril.py`（下称 `ril.py`）强制校验，`.planning/ril/graph.json` 是唯一事实源；一律通过 `ril.py` 读写，**禁止手改 graph.json、禁止新建平行的知识存储**。完整 schema 与 CLI 清单见 `references/ril-schema.md` 和 `.planning/ril/README.md`。
+图谱是类型化的节点+边，不是自由文本笔记。RIL（repository-intelligence-layer）的 schema 由本技能自带的 CLI `.agents/skills/graph-engineering/scripts/ril.py`（下称 `ril.py`）强制校验，`.planning/ril/graph.json` 是唯一事实源；一律通过 `ril.py` 读写，**禁止手改 graph.json、禁止新建平行的知识存储**。完整 schema 与 CLI 清单以 `references/ril-schema.md` 为准；`.planning/ril/README.md` 只描述数据存储。
 
 **节点类型**（每个节点必有 `id`, `type`, `status`, `version`, `created_at`, `updated_at`, `touched_round`；下表为各类型的额外必填字段）：
 
@@ -73,18 +73,32 @@ description: >
 
 一个 hypothesis 在没有任何 validates/refutes 边之前，不得被 EVALUATE 当作 fact 使用。
 
+**常用命令**（`ril.py` 即 `.agents/skills/graph-engineering/scripts/ril.py`）：
+
+```bash
+ril.py check                      # 一致性检查（孤立节点/循环/无证据 hypothesis）
+ril.py tasks --top 10             # active task 按 priority_score 排序取 top-K
+ril.py show --id <id> --hops 2    # 拉取节点及其 1-2 跳邻域
+ril.py node add --type task --field category=correctness --field severity=...  # 建节点（id 自动分配 TASK-N）
+ril.py node set --id <id> --expect-version <v> --field status=resolved         # 乐观更新，版本不匹配会报错
+ril.py edge add --type addresses --from <task> --to <issue>                    # 建边
+ril.py lock --id <task> --owner <instance> [--minutes 30]                      # 分布式锁
+ril.py unlock --id <task>                                                      # 释放锁
+ril.py round | ril.py stale --rounds 10                                        # 生命周期维护
+```
+
 ### 2.2 生命周期与淘汰
 
 - 每个节点有 status：`active` / `stale` / `resolved` / `superseded` / `abandoned`。
-- 每轮 MODEL 阶段，对超过 N 轮（默认 10）未被任何新证据触碰的 hypothesis/task 标记为 `stale`，不删除（保留审计轨迹），但 EVALUATE 阶段默认跳过 stale 节点，除非新证据重新激活它。
+- 每轮 MODEL 阶段用 `ril.py round` 推进轮次；`ril.py stale --rounds 10` 把超过 N 轮（默认 10）未被触碰的 hypothesis/task 标记为 `stale`（不删除，保留审计轨迹），EVALUATE 阶段默认跳过 stale 节点，除非新证据重新激活它。
 - decision 永不删除，只能被新 decision 通过 `supersedes` 边替代，保留决策演化历史。
-- 图谱本身要定期（例如每 50 次 commit 或每周）跑一次一致性检查：孤立节点、循环 depends_on、长期未闭环的 blocks 边，作为一个具体 task 提交处理，而不是无限累积。
+- 图谱本身要定期（例如每 50 次 commit 或每周）跑一次 `ril.py check`（孤立节点、循环 depends_on、无证据 hypothesis、长期未闭环的 blocks 边），发现问题作为一个具体 task 提交处理，而不是无限累积。
 
 ### 2.3 跨 session 的加载策略
 
 每次 agent 启动是全新 context，不能靠"重读整个图谱"来恢复状态，成本不可控。规则：
 
-- 启动时只加载：所有 `status=active` 的 task（按 priority_score 排序取 top-K）、这些 task 直接关联的 component/issue/hypothesis 子图（1-2 跳），以及最近 N 次 decision。
+- 启动时用 `ril.py tasks --top K` 加载 `status=active` 的 task（按 priority_score 排序取 top-K），用 `ril.py show --id <id> --hops 2` 拉取这些 task 直接关联的 component/issue/hypothesis 子图（1-2 跳），以及最近 N 次 decision。
 - 不做全图扫描，除非本轮任务明确是"图谱一致性检查"或"深度探索"（见第 8 节）。
 - 如果某个 task 需要更大范围的上下文，允许按需扩展加载（跟着边走），但要在 LEARN 阶段记录"本轮实际使用的子图范围"，供后续 session 参考典型的加载半径。
 

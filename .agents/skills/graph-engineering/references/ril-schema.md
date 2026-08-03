@@ -1,8 +1,8 @@
 # RIL Schema & CLI Reference
 
-Authoritative sources: `.agents/skills/graph-engineering/scripts/ril.py`
-(enforcement) and `.planning/ril/README.md` (docs). Store:
-`.planning/ril/graph.json` (committed, single source of truth).
+Authoritative source: `.agents/skills/graph-engineering/scripts/ril.py`
+(enforcement). `.planning/ril/README.md` only describes the data store.
+Store: `.planning/ril/graph.json` (committed, single source of truth).
 
 **All reads/writes go through the CLI
 `.agents/skills/graph-engineering/scripts/ril.py` (referred to below as
@@ -56,7 +56,7 @@ ril.py node add --type task --field category=correctness --field priority_score=
 ril.py node set --id TASK-1 --expect-version 3 --field status=resolved   # optimistic update; mismatch aborts and dumps node to stderr
 ril.py edge add --type addresses --from TASK-1 --to ISS-2
 ril.py edge rm  --type addresses --from TASK-1 --to ISS-2
-ril.py tasks                      # active tasks sorted by priority_score
+ril.py tasks --top 10             # active tasks sorted by priority_score (top-K)
 ril.py show --id TASK-1 --hops 2  # neighbourhood load
 ril.py lock --id TASK-1 --owner <instance-id> [--minutes 30]   # execution lock
 ril.py unlock --id TASK-1         # release lock
