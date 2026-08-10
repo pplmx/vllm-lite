@@ -461,9 +461,14 @@ pub async fn auth_middleware(
     // health/readiness paths from API-key auth so probes succeed without
     // credentials (RIL ISS-018) — otherwise every probe gets 401 and the
     // pod never becomes ready. The guard against an unauthenticated public
-    // deployment is the startup refusal to bind non-loopback without keys
-    // (`main.rs`), not per-request auth on health. Sensitive ops endpoints
-    // (`/debug/*`, `/shutdown`, `/metrics`) are deliberately NOT exempt.
+    // deployment is the startup WARNING emitted by `main.rs` (SEC-01) when
+    // binding a non-loopback address with no API keys — plus the
+    // deliberately-fail-closed `require_admin` gates on `/debug/*` and
+    // `/shutdown` — not per-request auth on health. The warning is a
+    // warning, not a refusal: operators of intentional internal
+    // deployments pass `--insecure-allow-public-no-auth` (or bind a
+    // loopback address) to proceed. Sensitive ops endpoints (`/debug/*`,
+    // `/shutdown`, `/metrics`) are deliberately NOT exempt.
     if is_health_path(request.uri().path()) {
         return next.run(request).await;
     }
