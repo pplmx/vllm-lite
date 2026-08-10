@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 29,
+  "round": 30,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T11:42:18+00:00",
+  "updated_at": "2026-08-10T11:50:20+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1821,7 +1821,7 @@
       "version": 1,
       "created_at": "2026-08-10T10:39:57+00:00",
       "updated_at": "2026-08-10T10:39:57+00:00",
-      "touched_round": 26,
+      "touched_round": 30,
       "title": "vllm-core engine/speculative dispatch + scheduler update",
       "role": "speculative decoding step orchestration and scheduler state fold"
     },
@@ -2587,6 +2587,77 @@
       "touched_round": 29,
       "rationale": "单流跳过 token 分支改为构建与 n>1 相同的合法 JSON chunk（空 content/text），保证每条 SSE data 都是 JSON 或 [DONE]",
       "alternatives_rejected": "直接不发事件（客户端会等待缺失的 token 流）；保留空 data 事件（违反 OpenAI SSE 契约）"
+    },
+    "ISS-036": {
+      "id": "ISS-036",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:50:13+00:00",
+      "updated_at": "2026-08-10T11:50:20+00:00",
+      "touched_round": 30,
+      "title": "speculative 验证器用空 seen set 采样，repeat/presence penalty 被跳过，带惩罚时投机输出与常规解码不一致",
+      "severity": 8
+    },
+    "HYP-017": {
+      "id": "HYP-017",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:50:13+00:00",
+      "updated_at": "2026-08-10T11:50:20+00:00",
+      "touched_round": 30,
+      "confidence": 0.95,
+      "title": "verify_draft_tokens_logits 的 sample_or_argmax 传空 seen，apply_repeat_penalty 短路；常规路径用 tokens[prompt_len..]"
+    },
+    "EV-051": {
+      "id": "EV-051",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:50:13+00:00",
+      "updated_at": "2026-08-10T11:50:13+00:00",
+      "touched_round": 30,
+      "source": "crates/core/tests/real_model_engine.rs::real_model_speculative_output_matches_regular_with_repeat_penalty (before: spec=[532,393,464,464,791,518] vs regular=[532,393,464,373,9,518])",
+      "title": "真实模型回归：repeat_penalty=1.2 时修复前投机输出第 4-5 位不同（464/791 vs 373/9）；修复后逐 token 一致",
+      "confidence": 1.0
+    },
+    "TASK-039": {
+      "id": "TASK-039",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:50:13+00:00",
+      "updated_at": "2026-08-10T11:50:20+00:00",
+      "touched_round": 30,
+      "category": "correctness",
+      "severity": 8,
+      "confidence": 0.95,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "title": "验证器按位置携带 seen set（base=已生成 token，随接受 draft 增长），sample_or_argmax 传入；含真实模型等价回归"
+    },
+    "CHG-036": {
+      "id": "CHG-036",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:50:20+00:00",
+      "updated_at": "2026-08-10T11:50:20+00:00",
+      "touched_round": 30,
+      "commit": "4865f16c",
+      "title": "fix(core): speculative verifier applies the repeat-penalty seen set"
+    },
+    "DEC-023": {
+      "id": "DEC-023",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:50:20+00:00",
+      "updated_at": "2026-08-10T11:50:20+00:00",
+      "touched_round": 30,
+      "rationale": "验证器用与常规路径相同的 seen 集合（tokens[prompt_len..]），并在接受 draft 时增量增长，保证每位置惩罚上下文与常规解码一致（lossless 契约）",
+      "alternatives_rejected": "让 draft 生成也带惩罚（draft 只是提案，验证才是最终分布）；在验证后重采样（多余前向）"
     }
   },
   "edges": [
@@ -3699,6 +3770,42 @@
       "to": "TASK-038",
       "type": "governs",
       "created_at": "2026-08-10T11:42:18+00:00"
+    },
+    {
+      "from": "EV-051",
+      "to": "HYP-017",
+      "type": "validates",
+      "created_at": "2026-08-10T11:50:19+00:00"
+    },
+    {
+      "from": "TASK-039",
+      "to": "ISS-036",
+      "type": "addresses",
+      "created_at": "2026-08-10T11:50:19+00:00"
+    },
+    {
+      "from": "ISS-036",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-10T11:50:19+00:00"
+    },
+    {
+      "from": "CHG-036",
+      "to": "TASK-039",
+      "type": "implements",
+      "created_at": "2026-08-10T11:50:20+00:00"
+    },
+    {
+      "from": "CHG-036",
+      "to": "ISS-036",
+      "type": "resolves",
+      "created_at": "2026-08-10T11:50:20+00:00"
+    },
+    {
+      "from": "DEC-023",
+      "to": "TASK-039",
+      "type": "governs",
+      "created_at": "2026-08-10T11:50:20+00:00"
     }
   ]
 }
