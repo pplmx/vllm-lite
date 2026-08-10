@@ -258,12 +258,42 @@ impl SchedulerEngine {
         }
     }
 
+    /// Recovery after a step error (RIL ISS-045): roll back any sequence
+    /// left stranded in `running` before its prefill completed.
+    ///
+    /// A model-forward error in the engine's step propagates with `?`
+    /// before `update()` ever runs, so the freshly-admitted sequences stay
+    /// in `running` as `Prefilling` (fresh) or `Waiting` (preempted-resume)
+    /// with their KV blocks pinned. `build_batch` only re-includes
+    /// `Decoding` sequences from `running` and pulls prefill work from the
+    /// *queue*, so they are never re-scheduled — the scheduler spins forever
+    /// with `has_pending()` true, the KV blocks leak, and the client's
+    /// finish channel never fires. Release and re-queue them so the request
+    /// retries on a later round.
+    ///
+    /// The invariant "`running` only holds `Decoding` across steps" holds in
+    /// healthy operation: `update()` transitions every admitted sequence to
+    /// `Decoding` (or `Finished`) before the step returns, so any leftover
+    /// `Prefilling` / `Waiting` after a step is exactly the orphaned set.
+    pub(crate) fn requeue_stuck_prefills(&mut self) {
+        let mut i = 0;
+        while i < self.running.len() {
+            let status = self.running[i].status;
+            if status == Status::Prefilling || status == Status::Waiting {
+                let seq = self.running.remove(i);
+                self.requeue_seq(seq);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
     /// Release a freshly-admitted (never-forwarded) sequence's pre-allocated KV
     /// blocks and return it to the waiting queue as `Waiting::Prefill` so it is
     /// retried on a later round instead of stalling in `running` or serving a
-    /// corrupt KV table. Used for prefill overflow (ISS-041) and partial-block
-    /// OOM admission (ISS-042), both of which only ever requeue sequences that
-    /// were admitted this round and never forwarded.
+    /// corrupt KV table. Used for prefill overflow (ISS-041), partial-block
+    /// OOM admission (ISS-042), and forward-error recovery (ISS-045) — all
+    /// of which only ever requeue sequences that have not been advanced.
     fn requeue_seq(&mut self, mut seq: Sequence) {
         self.memory.release_blocks(seq.kv_blocks.as_ref());
         seq.kv_blocks = Arc::new(vec![]);

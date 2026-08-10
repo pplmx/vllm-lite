@@ -208,14 +208,26 @@ impl crate::engine::Engine {
     /// `Vec<(SeqId, SampledToken)>` so callers can surface
     /// per-token logprobs without re-running the softmax.
     pub fn step(&mut self) -> Result<Vec<(SeqId, SampledToken)>> {
-        if self.speculative_mode && (self.draft_model.is_some() || self.draft_resolver.is_some()) {
-            let max_draft = self
-                .adaptive_decoder
-                .as_ref()
-                .map_or(self.max_draft_tokens, super::super::speculative::adaptive::AdaptiveSpeculativeDecoder::current_max_draft_tokens);
+        let result = if self.speculative_mode
+            && (self.draft_model.is_some() || self.draft_resolver.is_some())
+        {
+            let max_draft = self.adaptive_decoder.as_ref().map_or(
+                self.max_draft_tokens,
+                super::super::speculative::adaptive::AdaptiveSpeculativeDecoder::current_max_draft_tokens,
+            );
             self.step_speculative_inner(max_draft)
         } else {
             self.step_regular()
+        };
+        // RIL ISS-045: a forward error propagates with `?` before
+        // `update()` runs, leaving freshly-admitted Prefilling sequences
+        // stranded in `running` (never re-scheduled, KV pinned, scheduler
+        // spinning, client hang). Roll them back before surfacing the
+        // error so a transient failure cannot permanently wedge the
+        // engine; the request retries on a later round.
+        if result.is_err() {
+            self.scheduler.requeue_stuck_prefills();
         }
+        result
     }
 }

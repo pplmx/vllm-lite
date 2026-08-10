@@ -45,33 +45,42 @@ impl Engine {
             return Ok(vec![]);
         }
 
-        let (output, batch, input_counts) = match graph_batch {
-            crate::scheduler::GraphBatch::Graph(prepared) => {
-                let batch = prepared.batch;
-                let input_counts: Vec<usize> =
-                    batch.input_tokens.iter().map(std::vec::Vec::len).collect();
-                let output = if let Some(ref executor) = self.cuda_graph {
-                    match executor.execute(&batch) {
-                        Ok(output) => output,
-                        Err(e) => {
-                            tracing::warn!("CUDA Graph execution failed: {}, falling back", e);
-                            self.execute_regular(&batch)?
+        let result = (|| {
+            let (output, batch, input_counts) = match graph_batch {
+                crate::scheduler::GraphBatch::Graph(prepared) => {
+                    let batch = prepared.batch;
+                    let input_counts: Vec<usize> =
+                        batch.input_tokens.iter().map(std::vec::Vec::len).collect();
+                    let output = if let Some(ref executor) = self.cuda_graph {
+                        match executor.execute(&batch) {
+                            Ok(output) => output,
+                            Err(e) => {
+                                tracing::warn!("CUDA Graph execution failed: {}, falling back", e);
+                                self.execute_regular(&batch)?
+                            }
                         }
-                    }
-                } else {
-                    self.execute_regular(&batch)?
-                };
-                (output, batch, input_counts)
-            }
-            crate::scheduler::GraphBatch::Regular(batch) => {
-                let input_counts: Vec<usize> =
-                    batch.input_tokens.iter().map(std::vec::Vec::len).collect();
-                let output = self.execute_regular(&batch)?;
-                (output, batch, input_counts)
-            }
-        };
+                    } else {
+                        self.execute_regular(&batch)?
+                    };
+                    (output, batch, input_counts)
+                }
+                crate::scheduler::GraphBatch::Regular(batch) => {
+                    let input_counts: Vec<usize> =
+                        batch.input_tokens.iter().map(std::vec::Vec::len).collect();
+                    let output = self.execute_regular(&batch)?;
+                    (output, batch, input_counts)
+                }
+            };
+            Ok(self.process_output(output, batch, input_counts, start))
+        })();
 
-        Ok(self.process_output(output, batch, input_counts, start))
+        // RIL ISS-045: same recovery as `Engine::step` — a forward error
+        // leaves freshly-admitted Prefilling sequences stranded in
+        // `running`; roll them back so the engine doesn't spin and leak.
+        if result.is_err() {
+            self.scheduler.requeue_stuck_prefills();
+        }
+        result
     }
 
     #[cfg(not(feature = "cuda-graph"))]
