@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 24,
+  "round": 25,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T10:53:31+00:00",
+  "updated_at": "2026-08-10T10:59:50+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1821,7 +1821,7 @@
       "version": 1,
       "created_at": "2026-08-10T10:39:57+00:00",
       "updated_at": "2026-08-10T10:39:57+00:00",
-      "touched_round": 24,
+      "touched_round": 25,
       "title": "vllm-core engine/speculative dispatch + scheduler update",
       "role": "speculative decoding step orchestration and scheduler state fold"
     },
@@ -2000,6 +2000,77 @@
       "touched_round": 24,
       "rationale": "验证 span block 预分配后 rejected draft KV 处于 num_computed 之外（永不读取、随增长被覆盖），因此完全移除 rollback 调用；ensure_verification_blocks 用 num_computed+span 计算块数（覆盖 decode 边界）；read_kv 在 start_token>=seq_len 时 break 以容忍 headroom",
       "alternatives_rejected": "保留 rollback 但改成按 prefill/decode 分阶段（其 block 数学仍无法从写入 span 正确还原）；在 update_speculative 后再补分配 block（KV 已写入错误位置）"
+    },
+    "ISS-028": {
+      "id": "ISS-028",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:59:37+00:00",
+      "updated_at": "2026-08-10T10:59:50+00:00",
+      "touched_round": 25,
+      "title": "CUDA-Graph 批构建路径（build_batch_with_graph）未预分配 prefill KV block，导致 cuda-graph 构建下所有 prefill 写入 block 0 回退并损坏缓存",
+      "severity": 9
+    },
+    "HYP-009": {
+      "id": "HYP-009",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:59:37+00:00",
+      "updated_at": "2026-08-10T10:59:50+00:00",
+      "touched_round": 25,
+      "confidence": 0.95,
+      "title": "ISS-022 只修了 build_batch；select_sequences_for_phase 单独把新序列移入 running 而未预分配，write_prefill_kv 的 unwrap_or(0) 回退把整个 prompt 写进 block 0"
+    },
+    "EV-042": {
+      "id": "EV-042",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:59:41+00:00",
+      "updated_at": "2026-08-10T10:59:41+00:00",
+      "touched_round": 25,
+      "source": "crates/core/src/scheduler/engine/tests.rs::test_build_batch_with_graph_preallocates_prefill_kv_blocks (without fix: batch.kv_block_ids empty for 40-token prompt)",
+      "title": "回归测试：修复前 build_batch_with_graph 的 40-token prefill batch 无任何 KV block（0/3），修复后为 3 个互异 block",
+      "confidence": 1.0
+    },
+    "TASK-032": {
+      "id": "TASK-032",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:59:41+00:00",
+      "updated_at": "2026-08-10T10:59:50+00:00",
+      "touched_round": 25,
+      "category": "correctness",
+      "severity": 9,
+      "confidence": 0.95,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "title": "把 ISS-022 预分配抽成 SchedulerEngine::preallocate_kv_blocks 并在 build_batch 与 build_batch_with_graph 两个批构建路径调用（含回归测试）"
+    },
+    "CHG-028": {
+      "id": "CHG-028",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:59:46+00:00",
+      "updated_at": "2026-08-10T10:59:46+00:00",
+      "touched_round": 25,
+      "commit": "0a8a0c40",
+      "title": "fix(core): pre-allocate prefill KV blocks in the CUDA-Graph batch builder"
+    },
+    "DEC-016": {
+      "id": "DEC-016",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:59:46+00:00",
+      "updated_at": "2026-08-10T10:59:46+00:00",
+      "touched_round": 25,
+      "rationale": "把 ISS-022 的预分配循环抽成共享 helper preallocate_kv_blocks，两个批构建路径（regular + graph）都调用，避免同类 block-0 回退缺陷在 cuda-graph 构建上复现",
+      "alternatives_rejected": "仅复制代码到 graph.rs（两份逻辑会漂移）；在 step_with_graph 里补预分配（batch 已组合，block_ids 快照已固化）"
     }
   },
   "edges": [
@@ -2824,6 +2895,42 @@
       "to": "TASK-031",
       "type": "governs",
       "created_at": "2026-08-10T10:53:31+00:00"
+    },
+    {
+      "from": "EV-042",
+      "to": "HYP-009",
+      "type": "validates",
+      "created_at": "2026-08-10T10:59:45+00:00"
+    },
+    {
+      "from": "TASK-032",
+      "to": "ISS-028",
+      "type": "addresses",
+      "created_at": "2026-08-10T10:59:45+00:00"
+    },
+    {
+      "from": "ISS-028",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-10T10:59:45+00:00"
+    },
+    {
+      "from": "CHG-028",
+      "to": "TASK-032",
+      "type": "implements",
+      "created_at": "2026-08-10T10:59:50+00:00"
+    },
+    {
+      "from": "CHG-028",
+      "to": "ISS-028",
+      "type": "resolves",
+      "created_at": "2026-08-10T10:59:50+00:00"
+    },
+    {
+      "from": "DEC-016",
+      "to": "TASK-032",
+      "type": "governs",
+      "created_at": "2026-08-10T10:59:50+00:00"
     }
   ]
 }
