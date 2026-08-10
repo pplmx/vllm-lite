@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 32,
+  "round": 33,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T11:59:32+00:00",
+  "updated_at": "2026-08-10T12:05:25+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2766,6 +2766,32 @@
       "touched_round": 32,
       "rationale": "默认 CI 只测 default features；把 multi-node/cuda-graph 测试加入独立 job（CPU 可跑，CUDA 仅编译不执行）",
       "alternatives_rejected": "用 --all-features 跑整个 workspace（cuda-graph 需要 vllm-model 且部分测试需 GPU，会编译失败）；不加（继续依赖手动验证）"
+    },
+    "TASK-042": {
+      "id": "TASK-042",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T12:05:25+00:00",
+      "updated_at": "2026-08-10T12:05:25+00:00",
+      "touched_round": 33,
+      "category": "test-quality",
+      "severity": 5,
+      "confidence": 0.9,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "title": "修复 all-targets clippy 在回归测试中的 lint（uninlined_format_args/doc_markdown/unused），恢复 just ci 门禁"
+    },
+    "CHG-039": {
+      "id": "CHG-039",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T12:05:25+00:00",
+      "updated_at": "2026-08-10T12:05:25+00:00",
+      "touched_round": 33,
+      "commit": "28f8ae6a",
+      "title": "test: fix all-targets clippy lints in regression tests"
     }
   },
   "edges": [
@@ -3962,6 +3988,12 @@
       "to": "TASK-041",
       "type": "governs",
       "created_at": "2026-08-10T11:59:32+00:00"
+    },
+    {
+      "from": "CHG-039",
+      "to": "TASK-042",
+      "type": "implements",
+      "created_at": "2026-08-10T12:05:25+00:00"
     }
   ]
 }
