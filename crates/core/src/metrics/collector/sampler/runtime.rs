@@ -34,6 +34,11 @@ impl EnhancedMetricsCollector {
         self.runtime.record_kv_cache_usage(used, total);
     }
 
+    /// Snapshot the current number of complete prefix-cache entries.
+    pub fn record_prefix_cache_nodes(&self, nodes: usize) {
+        self.runtime.record_prefix_cache_nodes(nodes);
+    }
+
     /// Increment prefix-cache hit counter after a radix-tree match.
     pub fn record_prefix_cache_hit(&self) {
         self.runtime.record_prefix_cache_hit();

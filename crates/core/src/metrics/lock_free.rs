@@ -38,6 +38,8 @@ pub struct MetricsSnapshot {
     pub kv_cache_usage_percent: f64,
     /// Prefix-cache hit rate since process start.
     pub prefix_cache_hit_rate: f64,
+    /// Number of complete entries currently in the prefix (radix) cache.
+    pub prefix_cache_nodes: usize,
     /// Prefill-phase tokens per second.
     pub prefill_throughput: f64,
     /// Decode-phase tokens per second.
@@ -63,6 +65,8 @@ pub struct LockFreeMetrics {
     prefix_cache_hits: Arc<AtomicU64>,
     /// Total prefix-cache lookups.
     prefix_cache_requests: Arc<AtomicU64>,
+    /// Current number of complete prefix-cache (radix-tree) entries.
+    prefix_cache_nodes: Arc<AtomicU64>,
     /// Cumulative prefill-phase tokens.
     prefill_tokens: Arc<AtomicU64>,
     /// Cumulative decode-phase tokens.
@@ -107,6 +111,7 @@ impl LockFreeMetrics {
             kv_cache_blocks_total: Arc::new(AtomicU64::new(0)),
             prefix_cache_hits: Arc::new(AtomicU64::new(0)),
             prefix_cache_requests: Arc::new(AtomicU64::new(0)),
+            prefix_cache_nodes: Arc::new(AtomicU64::new(0)),
             prefill_tokens: Arc::new(AtomicU64::new(0)),
             decode_tokens: Arc::new(AtomicU64::new(0)),
             start_time: std::time::Instant::now(),
@@ -159,6 +164,14 @@ impl LockFreeMetrics {
     /// regardless of hit/miss).
     pub fn record_prefix_cache_request(&self) {
         self.prefix_cache_requests.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Snapshot the current number of complete prefix-cache entries. Stored as
+    /// an absolute count (not an increment); the engine refreshes it on each
+    /// metrics request from the radix tree's live entry count.
+    pub fn record_prefix_cache_nodes(&self, nodes: usize) {
+        self.prefix_cache_nodes
+            .store(nodes as u64, Ordering::Relaxed);
     }
 
     /// Total number of requests served since start.
@@ -256,6 +269,8 @@ impl LockFreeMetrics {
             0.0
         };
 
+        let prefix_cache_nodes = self.prefix_cache_nodes.load(Ordering::Relaxed) as usize;
+
         let uptime = self.start_time.elapsed().as_secs_f64();
         let prefill_throughput = if uptime > 0.0 {
             self.prefill_tokens.load(Ordering::Relaxed) as f64 / uptime
@@ -288,6 +303,7 @@ impl LockFreeMetrics {
             kv_cache_blocks_total: kv_total,
             kv_cache_usage_percent,
             prefix_cache_hit_rate,
+            prefix_cache_nodes,
             prefill_throughput,
             decode_throughput,
             avg_scheduler_wait_time_ms: avg_wait,

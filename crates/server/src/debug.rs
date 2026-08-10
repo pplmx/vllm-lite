@@ -234,7 +234,7 @@ pub async fn kv_cache_dump(
         used_blocks: usize::try_from(used_blocks).unwrap_or(usize::MAX),
         available_blocks: usize::try_from(available_blocks).unwrap_or(usize::MAX),
         usage_percent: kv_cache_usage_percent,
-        prefix_cache_nodes: 0,
+        prefix_cache_nodes: metrics.prefix_cache_nodes,
         prefix_cache_hit_rate: metrics.prefix_cache_hit_rate,
     })
     .into_response()

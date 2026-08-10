@@ -28,6 +28,7 @@ fn test_metrics_snapshot_new_fields() {
     collector.record_kv_cache_usage(50, 100);
     collector.record_prefix_cache_hit();
     collector.record_prefix_cache_request();
+    collector.record_prefix_cache_nodes(7);
     collector.record_prefill_tokens(100);
     collector.record_decode_tokens(50);
     collector.record_scheduler_wait_time(10.0);
@@ -42,6 +43,9 @@ fn test_metrics_snapshot_new_fields() {
     // endpoints can report REAL totals instead of fabricating 1024.
     assert_eq!(snapshot.kv_cache_blocks_used, 50);
     assert_eq!(snapshot.kv_cache_blocks_total, 100);
+    // RIL ISS-040: real prefix-cache entry count rides on the snapshot so
+    // kv_cache_dump stops fabricating `prefix_cache_nodes: 0`.
+    assert_eq!(snapshot.prefix_cache_nodes, 7);
 }
 
 #[test]

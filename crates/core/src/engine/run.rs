@@ -56,6 +56,9 @@ impl Engine {
                     EngineMessage::GetMetrics { response_tx } => {
                         let (used, total) = self.scheduler.get_kv_cache_usage();
                         self.scheduler.metrics.record_kv_cache_usage(used, total);
+                        self.scheduler
+                            .metrics
+                            .record_prefix_cache_nodes(self.scheduler.prefix_cache().len());
                         let _ = response_tx.send(self.scheduler.metrics.snapshot());
                     }
                     EngineMessage::GetEmbeddings {
