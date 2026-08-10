@@ -219,18 +219,20 @@ pub async fn kv_cache_dump(
         .flatten()
         .unwrap_or_default();
 
-    let available_blocks = metrics.current_batch_size;
+    // RIL ISS-039: report the REAL KV-block accounting from the engine
+    // metrics snapshot. Pre-fix the dump fabricated `total_blocks = 1024`
+    // (wrong for any non-default block count) and used `current_batch_size`
+    // as "available blocks" — a category error that made the endpoint
+    // misleading in production.
+    let total_blocks = metrics.kv_cache_blocks_total;
+    let used_blocks = metrics.kv_cache_blocks_used;
+    let available_blocks = total_blocks.saturating_sub(used_blocks);
     let kv_cache_usage_percent = metrics.kv_cache_usage_percent;
 
-    // invariant: kv_cache_usage_percent is a 0..=100 ratio; 1024 * pct / 100 is
-    // bounded by 1024, well within usize range.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let used_blocks = (1024.0 * kv_cache_usage_percent / 100.0) as usize;
-
     Json(KvCacheDumpResponse {
-        total_blocks: 1024,
-        used_blocks,
-        available_blocks,
+        total_blocks: usize::try_from(total_blocks).unwrap_or(usize::MAX),
+        used_blocks: usize::try_from(used_blocks).unwrap_or(usize::MAX),
+        available_blocks: usize::try_from(available_blocks).unwrap_or(usize::MAX),
         usage_percent: kv_cache_usage_percent,
         prefix_cache_nodes: 0,
         prefix_cache_hit_rate: metrics.prefix_cache_hit_rate,

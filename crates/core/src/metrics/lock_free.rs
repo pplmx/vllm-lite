@@ -30,6 +30,10 @@ pub struct MetricsSnapshot {
     pub current_batch_size: usize,
     /// Requests currently in the scheduler (waiting + running).
     pub requests_in_flight: u64,
+    /// KV-cache blocks currently allocated.
+    pub kv_cache_blocks_used: u64,
+    /// Total KV-cache blocks available.
+    pub kv_cache_blocks_total: u64,
     /// Fraction of KV-cache blocks currently in use.
     pub kv_cache_usage_percent: f64,
     /// Prefix-cache hit rate since process start.
@@ -280,6 +284,8 @@ impl LockFreeMetrics {
             avg_batch_size: avg_batch,
             current_batch_size: current_batch,
             requests_in_flight,
+            kv_cache_blocks_used: kv_used,
+            kv_cache_blocks_total: kv_total,
             kv_cache_usage_percent,
             prefix_cache_hit_rate,
             prefill_throughput,

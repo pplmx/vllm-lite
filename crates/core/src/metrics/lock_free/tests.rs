@@ -38,6 +38,10 @@ fn test_metrics_snapshot_new_fields() {
     assert_eq!(snapshot.requests_in_flight, 0);
     assert!((snapshot.kv_cache_usage_percent - 50.0).abs() < 0.01);
     assert!((snapshot.prefix_cache_hit_rate - 100.0).abs() < 0.01);
+    // RIL ISS-039: raw block counts must ride on the snapshot so debug
+    // endpoints can report REAL totals instead of fabricating 1024.
+    assert_eq!(snapshot.kv_cache_blocks_used, 50);
+    assert_eq!(snapshot.kv_cache_blocks_total, 100);
 }
 
 #[test]
