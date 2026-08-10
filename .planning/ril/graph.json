@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 42,
+  "round": 43,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T16:10:00+00:00",
+  "updated_at": "2026-08-10T17:05:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3278,6 +3278,66 @@
       "source": "crates/core/tests/forward_error_recovery.rs (persistent_forward_error_recovers_orphaned_prefill, transient_forward_error_retries_and_succeeds) + commit 77f5183a",
       "confidence": 1.0,
       "title": "TDD: with pre-fix step() the persistent backend strands the seq in running (running=1) and the transient backend loses the request (waiting=0); with recovery both tests green — transient retries and completes the prefill (num_computed=prompt_len, status Decoding); full vllm-core suite green."
+    },
+    "ISS-046": {
+      "id": "ISS-046",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T17:05:00+00:00",
+      "updated_at": "2026-08-10T17:05:00+00:00",
+      "touched_round": 43,
+      "title": "Engine is single-threaded and run() had no panic guard around the target-model forward — a panic (GPU kernel fault, assert in an architecture impl, aborted candle op) unwound run() and killed the whole server; the draft path was catch_unwind-wrapped but the canonical forward was not, and [profile.release] panic=\"abort\" made even the draft guard a no-op in production"
+    },
+    "TASK-050": {
+      "id": "TASK-050",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T17:05:00+00:00",
+      "updated_at": "2026-08-10T17:05:00+00:00",
+      "touched_round": 43,
+      "category": "stability",
+      "severity": 4,
+      "confidence": 0.97,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "priority_score": 21.9,
+      "title": "catch_unwind the canonical step in run() (convert model panic to step error + ISS-045 recovery + error backoff) and make release unwind so the guard works in production"
+    },
+    "CHG-049": {
+      "id": "CHG-049",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T17:05:00+00:00",
+      "updated_at": "2026-08-10T17:05:00+00:00",
+      "touched_round": 43,
+      "commit": "4f18c922",
+      "title": "fix(core): protect the engine loop from model-forward panics"
+    },
+    "DEC-033": {
+      "id": "DEC-033",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T17:05:00+00:00",
+      "updated_at": "2026-08-10T17:05:00+00:00",
+      "touched_round": 43,
+      "rationale": "模型 forward panic 会让单线程引擎进程整体死亡；draft 路径已有 catch_unwind，但 canonical forward 无保护，且 release 配置 panic=\"abort\" 使任何 unwinding 保护在生产都是空操作。决策：run() 用 catch_unwind 包裹 step，把 panic 转成 step error（error_count++、ISS-045 孤儿恢复、错误后 50ms 退避），并把 release profile 改为 unwind。panic 仍会污染模型的 std Mutex，之后 LockPoisoned 被作为错误体现（不静默信任已变更的模型）——guard 的价值是保住进程存活、错误上浮、健康检查可报告降级，而不是掩盖模型损坏。",
+      "alternatives_rejected": "① 保留 panic=\"abort\" 仅加 guard：生产无效，纯属装饰；② 捕获 panic 后静默吞下并继续信任模型状态：不安全，模型可能已被改写；③ 把模型锁改成 parking_lot（不污染）：目标/草稿模型字段是 pub API，改类型会触发 public-api gate 并需 CHANGELOG，且\"不信任损坏状态\"语义本就该通过 LockPoisoned 表达。"
+    },
+    "EV-062": {
+      "id": "EV-062",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T17:05:00+00:00",
+      "updated_at": "2026-08-10T17:05:00+00:00",
+      "touched_round": 43,
+      "source": "crates/core/tests/engine_panic_recovery.rs (model_forward_panic_does_not_kill_the_engine_loop) + commit 4f18c922",
+      "confidence": 1.0,
+      "title": "TDD: pre-fix the panicking forward unwinds the spawned engine thread (test fails on join); post-fix the loop survives (thread not finished), error_count backoff prevents a hot loop, and Shutdown + join succeed. Full vllm-core suite green; cargo check --release passes with unwind. Debug trace confirmed catch -> LockPoisoned on retry (model mutex poisoned by the panic) — recovery keeps the server alive, not a broken model serving."
     }
   },
   "edges": [
@@ -4720,6 +4780,30 @@
       "to": "TASK-049",
       "type": "governs",
       "created_at": "2026-08-10T16:10:00+00:00"
+    },
+    {
+      "from": "TASK-050",
+      "to": "ISS-046",
+      "type": "addresses",
+      "created_at": "2026-08-10T17:05:00+00:00"
+    },
+    {
+      "from": "CHG-049",
+      "to": "TASK-050",
+      "type": "implements",
+      "created_at": "2026-08-10T17:05:00+00:00"
+    },
+    {
+      "from": "CHG-049",
+      "to": "ISS-046",
+      "type": "resolves",
+      "created_at": "2026-08-10T17:05:00+00:00"
+    },
+    {
+      "from": "DEC-033",
+      "to": "TASK-050",
+      "type": "governs",
+      "created_at": "2026-08-10T17:05:00+00:00"
     }
   ]
 }
