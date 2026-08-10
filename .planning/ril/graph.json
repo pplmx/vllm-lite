@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 48,
+  "round": 49,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T20:40:00+00:00",
+  "updated_at": "2026-08-10T21:30:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3608,20 +3608,20 @@
     "ISS-052": {
       "id": "ISS-052",
       "type": "issue",
-      "status": "active",
+      "status": "resolved",
       "version": 1,
       "created_at": "2026-08-10T20:40:00+00:00",
-      "updated_at": "2026-08-10T20:40:00+00:00",
+      "updated_at": "2026-08-10T21:30:00+00:00",
       "touched_round": 48,
       "title": "Silent cache corruption on decode block-growth failure: push_token_and_allocate (update.rs) breaks silently when a boundary-crossing allocate() returns None (pool exhausted); with the table one block short, the next decode forward writes that token's KV through the block-0 fallback (paged_gqa unwrap_or(0)), corrupting the first prompt block. Preemption at the next build_batch frees blocks but does not assign the growth block to the sequence before the forward. Same class as ISS-026/028 (closed for new-prefill admission by ISS-042) but open for decode growth and the speculative ensure_verification_blocks path"
     },
     "TASK-056": {
       "id": "TASK-056",
       "type": "task",
-      "status": "active",
+      "status": "resolved",
       "version": 1,
       "created_at": "2026-08-10T20:40:00+00:00",
-      "updated_at": "2026-08-10T20:40:00+00:00",
+      "updated_at": "2026-08-10T21:30:00+00:00",
       "touched_round": 48,
       "category": "correctness",
       "severity": 4,
@@ -3630,6 +3630,40 @@
       "unlock_factor": 1.0,
       "priority_score": 20.8,
       "title": "Before composing a running Decoding sequence, ensure its KV table covers tokens.len() (grow originals, not clones); if the pool cannot provide it after the preemption gate, exclude the sequence from the batch this round so it is never forwarded with a short table (no block-0 write) — and mirror for ensure_verification_blocks under memory pressure. Add a decode-growth-under-pressure regression test. Integrate carefully with the preemption gate ordering and ISS-041/042 clone-vs-original handling"
+    },
+    "CHG-054": {
+      "id": "CHG-054",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T21:30:00+00:00",
+      "updated_at": "2026-08-10T21:30:00+00:00",
+      "touched_round": 49,
+      "commit": "74021713",
+      "title": "fix(core): never compose a decode sequence with a short KV table"
+    },
+    "DEC-038": {
+      "id": "DEC-038",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T21:30:00+00:00",
+      "updated_at": "2026-08-10T21:30:00+00:00",
+      "touched_round": 49,
+      "rationale": "解码序列跨块边界分配失败时，KV 表短一块；下一次 forward 会经 block-0 回退写坏首个 prompt 块。逐层追踪发现两条耦合缺陷：① execute_preemption 阶段0（前缀缓存 drain）释放了所需的块，但代码仍落入 阶段1/2（阶段2 把 blocks_freed 重置为 victim_set.len() 丢掉阶段0 的实际释放），导致过度抢占——把本可原地生长的序列整体回卷重 prefill；② 即使有空闲块，running Decoding 序列的短表也会被 compose 进批量。决策：缓存 drain 若自身已满足 blocks_needed 则短路返回（仅当 drain 真发生时才短路，保留直接调用时阶段1 的 victim 选择语义，由 block-hole 测试钉住）；并在 build_batch 的 Decode 阶段对 running 原表先行生长（用完 gate 释放的块），仍无法满足的序列本回合推迟——即 ISS-042 prefill 入学门槛的 decode 对偶。",
+      "alternatives_rejected": "① 只做模型层 fail-loud（把 unwrap_or(0) 改为错误）：探测后确认 forward 出错会使 update 永不运行、表永不生长、该序列永久错误循环，属死锁而非修复；② 只修 execute_preemption 记账：能把序列留在 running，但短表仍会被 compose，需两者同时改；③ 提前到 update() 内生长：顺序上 update 在 forward 之后，无法在写前补齐表。"
+    },
+    "EV-067": {
+      "id": "EV-067",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T21:30:00+00:00",
+      "updated_at": "2026-08-10T21:30:00+00:00",
+      "touched_round": 49,
+      "source": "crates/core/tests/scheduler_integration.rs decode_growth_failure_composes_only_complete_tables + commit 74021713",
+      "confidence": 1.0,
+      "title": "TDD: the regression test constructs the exact window (blocks pinned by finished sequences cached blocks, growth fails, cache-drain frees them) and fails against EITHER half (short table composed without the decode gate; needless preemption without the drain short-circuit) and passes with both. Full vllm-core suite + preemption block-hole test green."
     }
   },
   "edges": [
@@ -5216,6 +5250,24 @@
       "to": "COMP-007",
       "type": "located_in",
       "created_at": "2026-08-10T20:40:00+00:00"
+    },
+    {
+      "from": "CHG-054",
+      "to": "TASK-056",
+      "type": "implements",
+      "created_at": "2026-08-10T21:30:00+00:00"
+    },
+    {
+      "from": "CHG-054",
+      "to": "ISS-052",
+      "type": "resolves",
+      "created_at": "2026-08-10T21:30:00+00:00"
+    },
+    {
+      "from": "DEC-038",
+      "to": "TASK-056",
+      "type": "governs",
+      "created_at": "2026-08-10T21:30:00+00:00"
     }
   ]
 }
