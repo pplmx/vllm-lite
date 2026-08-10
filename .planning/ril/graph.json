@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 36,
+  "round": 37,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T12:19:01+00:00",
+  "updated_at": "2026-08-10T12:29:46+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 35,
+      "touched_round": 36,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 35,
+      "touched_round": 36,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -2923,6 +2923,65 @@
       "touched_round": 35,
       "commit": "45bc96e4",
       "title": "fix(server,core): kv_cache_dump reports real KV-block accounting"
+    },
+    "ISS-040": {
+      "id": "ISS-040",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T12:29:41+00:00",
+      "updated_at": "2026-08-10T12:29:41+00:00",
+      "touched_round": 36,
+      "title": "kv_cache_dump fabricates prefix_cache_nodes: 0 while reporting a real hit rate; real radix-tree entry count exists (RadixTree::len) but is not exposed on MetricsSnapshot"
+    },
+    "TASK-045": {
+      "id": "TASK-045",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T12:29:41+00:00",
+      "updated_at": "2026-08-10T12:29:41+00:00",
+      "touched_round": 36,
+      "title": "Expose real prefix-cache entry count (radix-tree len) on MetricsSnapshot and have kv_cache_dump report it instead of hardcoded 0",
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 0.97,
+      "effort": 1,
+      "unlock_factor": 1.0
+    },
+    "EV-055": {
+      "id": "EV-055",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T12:29:41+00:00",
+      "updated_at": "2026-08-10T12:29:41+00:00",
+      "touched_round": 36,
+      "source": "crates/server/src/debug.rs (pre-fix line 237): prefix_cache_nodes: 0 literal while prefix_cache_hit_rate comes from real counters",
+      "confidence": 1.0,
+      "title": "debug kv_cache_dump fabricated prefix_cache_nodes=0; RadixTree::len() (scheduler.prefix_cache().len()) provides the real complete-entry count"
+    },
+    "DEC-028": {
+      "id": "DEC-028",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T12:29:41+00:00",
+      "updated_at": "2026-08-10T12:29:41+00:00",
+      "touched_round": 36,
+      "rationale": "与 ISS-039 同类的调试遥测造假：prefix_cache_nodes 硬编码 0。把真实 radix 树完整条目数 (RadixTree::len via scheduler.prefix_cache().len()) 通过 record_prefix_cache_nodes 记入 MetricsSnapshot，debug 端点直接读取",
+      "alternatives_rejected": "在 debug 端点实时查询 scheduler（破坏 REL-01 不阻塞语义）；保留 0 硬编码（持续误导运维）"
+    },
+    "CHG-042": {
+      "id": "CHG-042",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T12:29:41+00:00",
+      "updated_at": "2026-08-10T12:29:41+00:00",
+      "touched_round": 36,
+      "commit": "455973cc",
+      "title": "fix(server,core): kv_cache_dump reports real prefix-cache node count"
     }
   },
   "edges": [
@@ -4197,6 +4256,42 @@
       "to": "TASK-044",
       "type": "governs",
       "created_at": "2026-08-10T12:18:59+00:00"
+    },
+    {
+      "from": "ISS-040",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-10T12:29:41+00:00"
+    },
+    {
+      "from": "ISS-040",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-10T12:29:41+00:00"
+    },
+    {
+      "from": "TASK-045",
+      "to": "ISS-040",
+      "type": "addresses",
+      "created_at": "2026-08-10T12:29:41+00:00"
+    },
+    {
+      "from": "CHG-042",
+      "to": "TASK-045",
+      "type": "implements",
+      "created_at": "2026-08-10T12:29:41+00:00"
+    },
+    {
+      "from": "CHG-042",
+      "to": "ISS-040",
+      "type": "resolves",
+      "created_at": "2026-08-10T12:29:41+00:00"
+    },
+    {
+      "from": "DEC-028",
+      "to": "TASK-045",
+      "type": "governs",
+      "created_at": "2026-08-10T12:29:41+00:00"
     }
   ]
 }
