@@ -107,6 +107,15 @@ impl Engine {
         if let Ok(mut model) = crate::sync::lock_mutex(&self.target_model) {
             model.on_sequence_finished(seq_id);
         }
+        // Draft models (legacy single draft + registry-loaded external/self-
+        // spec drafts) hold per-sequence state too (a Qwen3.5 hybrid used as
+        // a draft leaks its GDN map the same way); notify them as well.
+        if let Some(draft) = &self.draft_model
+            && let Ok(mut backend) = draft.lock()
+        {
+            backend.on_sequence_finished(seq_id);
+        }
+        self.draft_registry.notify_sequence_finished(seq_id);
     }
 
     /// Cancel an in-flight or queued request identified by `seq_id`.

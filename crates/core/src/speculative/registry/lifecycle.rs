@@ -15,6 +15,7 @@ use super::types::{DraftId, DraftState};
 use crate::speculative::DraftModelRegistry;
 use std::sync::{Arc, Mutex};
 use vllm_traits::ModelBackend;
+use vllm_traits::SeqId;
 
 impl DraftModelRegistry {
     /// Transition a `Loaded` entry back to `Unloaded`, dropping the backend and
@@ -210,6 +211,26 @@ impl DraftModelRegistry {
         };
         drop(guard);
         result
+    }
+
+    /// Notify every loaded draft backend that `seq_id` finished so it can
+    /// release per-sequence state (RIL ISS-034). Best-effort: poisoned locks
+    /// are skipped.
+    ///
+    /// Lock order: registry read lock → backend mutex, the same order the
+    /// step path uses (`get_loaded_backend` returns an `Arc` clone, so no
+    /// backend mutex is ever held while taking the registry lock).
+    pub fn notify_sequence_finished(&self, seq_id: SeqId) {
+        let Ok(guard) = self.drafts.read() else {
+            return;
+        };
+        for state in guard.values() {
+            if let DraftState::Loaded(loaded) = state
+                && let Ok(mut backend) = loaded.backend.lock()
+            {
+                backend.on_sequence_finished(seq_id);
+            }
+        }
     }
 
     /// Read-only lookup of the current state. Does NOT trigger loading.

@@ -358,3 +358,76 @@ fn test_draft_spec_estimated_total_bytes() {
     let expected = 1024 + 2 * (16 * 1024 * 1024);
     assert_eq!(spec.estimated_total_bytes(), expected);
 }
+
+/// Regression (RIL ISS-034 draft side): `notify_sequence_finished` must
+/// forward the notification to every LOADED draft backend so stateful
+/// drafts (e.g. a Qwen3.5 hybrid used as a draft) can release per-sequence
+/// state. Unloaded specs are skipped.
+#[test]
+fn test_notify_sequence_finished_reaches_loaded_backends() {
+    #[derive(Default)]
+    struct RecordingBackend {
+        finished: std::sync::Arc<std::sync::Mutex<Vec<u64>>>,
+    }
+    impl ModelBackend for RecordingBackend {
+        fn forward(
+            &mut self,
+            _seq_ids: &[vllm_traits::SeqId],
+            _input_tokens: &[Vec<vllm_traits::TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> vllm_traits::Result<vllm_traits::BatchOutput> {
+            panic!("should not be called")
+        }
+        fn forward_logits(
+            &mut self,
+            _seq_ids: &[vllm_traits::SeqId],
+            _input_tokens: &[Vec<vllm_traits::TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> vllm_traits::Result<Vec<Vec<f32>>> {
+            panic!("should not be called")
+        }
+        fn embed(
+            &mut self,
+            _input_tokens: &[Vec<vllm_traits::TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> vllm_traits::Result<Vec<Vec<f32>>> {
+            panic!("should not be called")
+        }
+        fn vocab_size(&self) -> usize {
+            100
+        }
+        fn num_layers(&self) -> usize {
+            1
+        }
+        fn num_heads(&self) -> usize {
+            1
+        }
+        fn on_sequence_finished(&mut self, seq_id: vllm_traits::SeqId) {
+            self.finished.lock().unwrap().push(seq_id);
+        }
+    }
+
+    let registry = DraftModelRegistry::new();
+    let backend = RecordingBackend::default();
+    let finished = backend.finished.clone();
+    registry.register(dummy_spec("a", 64)).unwrap();
+    registry
+        .attach_loaded(&DraftId("a".into()), Box::new(backend))
+        .unwrap();
+
+    // Unloaded draft must not be touched (no backend to notify).
+    registry.register(dummy_spec("b", 8)).unwrap();
+
+    registry.notify_sequence_finished(42);
+    assert_eq!(
+        *finished.lock().unwrap(),
+        vec![42],
+        "loaded draft backends must receive on_sequence_finished (RIL ISS-034)"
+    );
+}
