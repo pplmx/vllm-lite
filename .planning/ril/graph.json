@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 31,
+  "round": 32,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T11:55:36+00:00",
+  "updated_at": "2026-08-10T11:59:32+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2729,6 +2729,43 @@
       "touched_round": 31,
       "rationale": "超出当前 token 数的预分配块不喂 chain-cursor（token 尚未写入，cursor 是 best-effort 占位，写入时会刷新），避免切片 panic",
       "alternatives_rejected": "在 ensure_verification_blocks 限制预分配不超过 tokens.len()（破坏 ISS-026 的 span 覆盖）；把切片改成空 vec 喂入（无意义 hash）"
+    },
+    "TASK-041": {
+      "id": "TASK-041",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:59:31+00:00",
+      "updated_at": "2026-08-10T11:59:32+00:00",
+      "touched_round": 32,
+      "category": "maintainability",
+      "severity": 6,
+      "confidence": 0.9,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "title": "CI 增加 feature-gated 测试 job（multi-node + cuda-graph），防止 ISS-037 类特性门控回归"
+    },
+    "CHG-038": {
+      "id": "CHG-038",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:59:31+00:00",
+      "updated_at": "2026-08-10T11:59:31+00:00",
+      "touched_round": 32,
+      "commit": "df02c3b5",
+      "title": "ci: add feature-gated test job for multi-node and cuda-graph"
+    },
+    "DEC-025": {
+      "id": "DEC-025",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:59:32+00:00",
+      "updated_at": "2026-08-10T11:59:32+00:00",
+      "touched_round": 32,
+      "rationale": "默认 CI 只测 default features；把 multi-node/cuda-graph 测试加入独立 job（CPU 可跑，CUDA 仅编译不执行）",
+      "alternatives_rejected": "用 --all-features 跑整个 workspace（cuda-graph 需要 vllm-model 且部分测试需 GPU，会编译失败）；不加（继续依赖手动验证）"
     }
   },
   "edges": [
@@ -3913,6 +3950,18 @@
       "to": "TASK-040",
       "type": "governs",
       "created_at": "2026-08-10T11:55:35+00:00"
+    },
+    {
+      "from": "CHG-038",
+      "to": "TASK-041",
+      "type": "implements",
+      "created_at": "2026-08-10T11:59:31+00:00"
+    },
+    {
+      "from": "DEC-025",
+      "to": "TASK-041",
+      "type": "governs",
+      "created_at": "2026-08-10T11:59:32+00:00"
     }
   ]
 }
