@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 28,
+  "round": 29,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T11:36:46+00:00",
+  "updated_at": "2026-08-10T11:42:18+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2505,6 +2505,88 @@
       "source": "crates/core/src/speculative/registry/tests.rs::test_notify_sequence_finished_reaches_loaded_backends",
       "title": "注册表单测：loaded draft 收到 on_sequence_finished(42)，unloaded spec 被跳过",
       "confidence": 1.0
+    },
+    "ISS-035": {
+      "id": "ISS-035",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:42:10+00:00",
+      "updated_at": "2026-08-10T11:42:18+00:00",
+      "touched_round": 29,
+      "title": "单流（n=1）SSE 流式路径对跳过 token 发出空 data 事件，不是合法 OpenAI JSON，且与 n>1 路径不一致",
+      "severity": 6
+    },
+    "HYP-016": {
+      "id": "HYP-016",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:42:10+00:00",
+      "updated_at": "2026-08-10T11:42:18+00:00",
+      "touched_round": 29,
+      "confidence": 0.95,
+      "title": "stream_chat_completion / stream_completion 的 should_skip_token_text 分支用 Event::default().data(\"\") 产生空 SSE 事件"
+    },
+    "EV-050": {
+      "id": "EV-050",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:42:10+00:00",
+      "updated_at": "2026-08-10T11:42:10+00:00",
+      "touched_round": 29,
+      "source": "crates/server/src/openai/chat/tests.rs::test_skipped_token_chunk_is_valid_json_with_empty_content + completions/tests.rs::test_skipped_token_chunk_is_valid_json_with_empty_text",
+      "title": "回归测试：跳过 token 的 SSE data 现在是可解析 JSON 且内容为空（与 n>1 形状一致）",
+      "confidence": 1.0
+    },
+    "TASK-038": {
+      "id": "TASK-038",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:42:10+00:00",
+      "updated_at": "2026-08-10T11:42:18+00:00",
+      "touched_round": 29,
+      "category": "correctness",
+      "severity": 6,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "title": "把单流跳过 token 分支改为发出合法 JSON chunk（空 content/text），与 n>1 路径一致（含 wire-shape 单测）"
+    },
+    "COMP-014": {
+      "id": "COMP-014",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:42:18+00:00",
+      "updated_at": "2026-08-10T11:42:18+00:00",
+      "touched_round": 29,
+      "title": "vllm-server openai streaming SSE",
+      "role": "chat/completions SSE 流式响应"
+    },
+    "CHG-035": {
+      "id": "CHG-035",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:42:18+00:00",
+      "updated_at": "2026-08-10T11:42:18+00:00",
+      "touched_round": 29,
+      "commit": "b3621b7d",
+      "title": "fix(server): streaming paths emit valid JSON chunks for skipped tokens"
+    },
+    "DEC-022": {
+      "id": "DEC-022",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:42:18+00:00",
+      "updated_at": "2026-08-10T11:42:18+00:00",
+      "touched_round": 29,
+      "rationale": "单流跳过 token 分支改为构建与 n>1 相同的合法 JSON chunk（空 content/text），保证每条 SSE data 都是 JSON 或 [DONE]",
+      "alternatives_rejected": "直接不发事件（客户端会等待缺失的 token 流）；保留空 data 事件（违反 OpenAI SSE 契约）"
     }
   },
   "edges": [
@@ -3581,6 +3663,42 @@
       "to": "HYP-015",
       "type": "validates",
       "created_at": "2026-08-10T11:36:46+00:00"
+    },
+    {
+      "from": "EV-050",
+      "to": "HYP-016",
+      "type": "validates",
+      "created_at": "2026-08-10T11:42:18+00:00"
+    },
+    {
+      "from": "TASK-038",
+      "to": "ISS-035",
+      "type": "addresses",
+      "created_at": "2026-08-10T11:42:18+00:00"
+    },
+    {
+      "from": "ISS-035",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-08-10T11:42:18+00:00"
+    },
+    {
+      "from": "CHG-035",
+      "to": "TASK-038",
+      "type": "implements",
+      "created_at": "2026-08-10T11:42:18+00:00"
+    },
+    {
+      "from": "CHG-035",
+      "to": "ISS-035",
+      "type": "resolves",
+      "created_at": "2026-08-10T11:42:18+00:00"
+    },
+    {
+      "from": "DEC-022",
+      "to": "TASK-038",
+      "type": "governs",
+      "created_at": "2026-08-10T11:42:18+00:00"
     }
   ]
 }
