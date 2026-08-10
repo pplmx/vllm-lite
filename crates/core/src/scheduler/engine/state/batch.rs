@@ -84,25 +84,8 @@ impl SchedulerEngine {
         self.preallocate_kv_blocks(&mut new_sequences);
 
         // ISS-042: do not admit a sequence whose KV block table could not be
-        // fully pre-allocated (the pool is exhausted even after the preemption
-        // gate above). Serving it would let `write_prefill_kv` fall back to
-        // block 0 and corrupt the cache (see ISS-026/028). Defer such
-        // sequences: release their partial blocks, reset to Waiting, and
-        // re-queue so they are retried once memory frees. Only prefill needs
-        // the whole table up front; decode sequences grow blocks incrementally
-        // in `update()`.
-        if phase == Phase::Prefill {
-            let mut admissible = Vec::with_capacity(new_sequences.len());
-            for seq in new_sequences {
-                let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
-                if seq.kv_blocks.len() < blocks_needed {
-                    self.requeue_seq(seq);
-                } else {
-                    admissible.push(seq);
-                }
-            }
-            new_sequences = admissible;
-        }
+        // fully pre-allocated (see the helper for the full rationale).
+        new_sequences = self.filter_fully_allocated_prefills(new_sequences, phase);
 
         // Add new sequences to the batch (now with allocated KV blocks)
         sequences.extend(new_sequences.iter().cloned());
@@ -133,28 +116,10 @@ impl SchedulerEngine {
         // Build the batch
         let batch = self.batch_composer.compose(sequences.clone(), phase);
 
-        // ISS-041: `compose` includes at most `max_batch_size` sequences and
-        // breaks once the token budget is exceeded, but every drained prefill
-        // was already moved into `running` above. A freshly-admitted prefill
-        // that was NOT composed is left `Status::Prefilling` in `running`,
-        // where it is never re-scheduled (running is only re-included when
-        // `status == Decoding`; once the waiting queue empties the Prefill
-        // phase is never selected again) — a permanent stall that also pins
-        // its pre-allocated KV blocks. Release and re-queue the overflow so
-        // it is retried on a later round. Decode overflow is harmless because
-        // `Decoding` sequences are re-included on the next decode round.
-        if phase == Phase::Prefill {
-            let composed: HashSet<SeqId> = batch.seq_ids.iter().copied().collect();
-            for seq_id in admitted {
-                if composed.contains(&seq_id) {
-                    continue;
-                }
-                if let Some(pos) = self.running.iter().position(|s| s.id == seq_id) {
-                    let seq = self.running.remove(pos);
-                    self.requeue_seq(seq);
-                }
-            }
-        }
+        // ISS-041: `compose` only serves `max_batch_size` / the token budget;
+        // requeue the admitted-but-uncomposed prefill overflow (see the
+        // helper for the full rationale).
+        self.requeue_uncomposed_prefills(&admitted, &batch, phase);
 
         // Record CUDA Graph metrics if applicable
         if phase == Phase::Decode && self.cuda_graph.enabled {
@@ -231,6 +196,64 @@ impl SchedulerEngine {
                 } else {
                     break;
                 }
+            }
+        }
+    }
+
+    /// ISS-042: drop any prefill sequence whose KV block table could not be
+    /// fully pre-allocated. With the pool exhausted even after the preemption
+    /// gate, serving such a sequence would let `write_prefill_kv` fall back to
+    /// block 0 and corrupt the cache (see ISS-026/028). Defer: release the
+    /// partial blocks, reset to Waiting-Prefill, and re-queue so it retries
+    /// once memory frees. Only prefill needs the whole table up front; decode
+    /// sequences grow blocks incrementally in `update()`.
+    fn filter_fully_allocated_prefills(
+        &mut self,
+        new_sequences: Vec<Sequence>,
+        phase: Phase,
+    ) -> Vec<Sequence> {
+        if phase != Phase::Prefill {
+            return new_sequences;
+        }
+        let mut admissible = Vec::with_capacity(new_sequences.len());
+        for seq in new_sequences {
+            let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
+            if seq.kv_blocks.len() < blocks_needed {
+                self.requeue_seq(seq);
+            } else {
+                admissible.push(seq);
+            }
+        }
+        admissible
+    }
+
+    /// ISS-041: `compose` includes at most `max_batch_size` sequences and
+    /// breaks once the token budget is exceeded, but every drained prefill was
+    /// already moved into `running` above. A freshly-admitted prefill that was
+    /// NOT composed would be left `Status::Prefilling` in `running`, where it
+    /// is never re-scheduled (running is only re-included when
+    /// `status == Decoding`; once the waiting queue empties the Prefill phase
+    /// is never selected again) — a permanent stall that also pins its
+    /// pre-allocated KV blocks. Release and re-queue the overflow so it is
+    /// retried on a later round. Decode overflow is harmless because
+    /// `Decoding` sequences are re-included on the next decode round.
+    fn requeue_uncomposed_prefills(
+        &mut self,
+        admitted: &HashSet<SeqId>,
+        batch: &vllm_traits::Batch,
+        phase: Phase,
+    ) {
+        if phase != Phase::Prefill {
+            return;
+        }
+        let composed: HashSet<SeqId> = batch.seq_ids.iter().copied().collect();
+        for seq_id in admitted {
+            if composed.contains(seq_id) {
+                continue;
+            }
+            if let Some(pos) = self.running.iter().position(|s| s.id == *seq_id) {
+                let seq = self.running.remove(pos);
+                self.requeue_seq(seq);
             }
         }
     }
