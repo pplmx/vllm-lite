@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 33,
+  "round": 34,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T12:05:25+00:00",
+  "updated_at": "2026-08-10T12:10:40+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2457,7 +2457,7 @@
       "version": 1,
       "created_at": "2026-08-10T11:33:42+00:00",
       "updated_at": "2026-08-10T11:33:42+00:00",
-      "touched_round": 28,
+      "touched_round": 34,
       "title": "vllm-model HybridLm (Qwen3.5 GDN hybrid)",
       "role": "hybrid causal LM with per-seq recurrent GDN state"
     },
@@ -2792,6 +2792,77 @@
       "touched_round": 33,
       "commit": "28f8ae6a",
       "title": "test: fix all-targets clippy lints in regression tests"
+    },
+    "ISS-038": {
+      "id": "ISS-038",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T12:10:32+00:00",
+      "updated_at": "2026-08-10T12:10:40+00:00",
+      "touched_round": 34,
+      "title": "Qwen3.5 hybrid（GDN 线性层）全前缀命中时直接进入 Decode，GDN 递归状态为 None，第一步 decode 报 \"missing GDN state\" 错误",
+      "severity": 9
+    },
+    "HYP-019": {
+      "id": "HYP-019",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T12:10:32+00:00",
+      "updated_at": "2026-08-10T12:10:40+00:00",
+      "touched_round": 34,
+      "confidence": 0.95,
+      "title": "GDN 递归状态不在 paged KV cache 中，前缀命中无法重建；模型没有能力标记，调度器照常跳过 prefill"
+    },
+    "EV-053": {
+      "id": "EV-053",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T12:10:32+00:00",
+      "updated_at": "2026-08-10T12:10:32+00:00",
+      "touched_round": 34,
+      "source": "crates/core/tests/real_model_engine.rs::qwen35_hybrid_full_prefix_hit_does_not_error (before: Err(missing GDN state for linear layer 0))",
+      "title": "真实 Qwen35HybridModel 回归：第二个相同请求（全前缀命中）第一步报错；修复后走全 prefill 通过",
+      "confidence": 1.0
+    },
+    "TASK-043": {
+      "id": "TASK-043",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T12:10:32+00:00",
+      "updated_at": "2026-08-10T12:10:40+00:00",
+      "touched_round": 34,
+      "category": "correctness",
+      "severity": 9,
+      "confidence": 0.95,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "title": "给 ModelBackend 加 supports_prefix_caching（默认 true），HybridLm 返回 false，引擎对有状态模型走无前缀准入（全 prefill）"
+    },
+    "CHG-040": {
+      "id": "CHG-040",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T12:10:39+00:00",
+      "updated_at": "2026-08-10T12:10:39+00:00",
+      "touched_round": 34,
+      "commit": "c8de63cc",
+      "title": "fix(core,model): stateful hybrid models bypass the prefix cache"
+    },
+    "DEC-026": {
+      "id": "DEC-026",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T12:10:40+00:00",
+      "updated_at": "2026-08-10T12:10:40+00:00",
+      "touched_round": 34,
+      "rationale": "有状态后端（GDN 递归状态不在 KV cache）声明 supports_prefix_caching=false，引擎路由到 add_request_without_prefix_cache 走全 prefill；普通 transformer 保持前缀快路径",
+      "alternatives_rejected": "把 GDN 状态纳入前缀缓存存储（需要序列化/校验递归张量，改动大且复杂）；在 decode 遇到 None 状态时用零状态继续（输出错误）"
     }
   },
   "edges": [
@@ -3994,6 +4065,42 @@
       "to": "TASK-042",
       "type": "implements",
       "created_at": "2026-08-10T12:05:25+00:00"
+    },
+    {
+      "from": "EV-053",
+      "to": "HYP-019",
+      "type": "validates",
+      "created_at": "2026-08-10T12:10:39+00:00"
+    },
+    {
+      "from": "TASK-043",
+      "to": "ISS-038",
+      "type": "addresses",
+      "created_at": "2026-08-10T12:10:39+00:00"
+    },
+    {
+      "from": "ISS-038",
+      "to": "COMP-013",
+      "type": "located_in",
+      "created_at": "2026-08-10T12:10:39+00:00"
+    },
+    {
+      "from": "CHG-040",
+      "to": "TASK-043",
+      "type": "implements",
+      "created_at": "2026-08-10T12:10:40+00:00"
+    },
+    {
+      "from": "CHG-040",
+      "to": "ISS-038",
+      "type": "resolves",
+      "created_at": "2026-08-10T12:10:40+00:00"
+    },
+    {
+      "from": "DEC-026",
+      "to": "TASK-043",
+      "type": "governs",
+      "created_at": "2026-08-10T12:10:40+00:00"
     }
   ]
 }
