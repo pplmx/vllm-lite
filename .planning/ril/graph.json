@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 45,
+  "round": 46,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T18:45:00+00:00",
+  "updated_at": "2026-08-10T19:20:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3458,6 +3458,66 @@
       "source": "crates/server/src/openai/sampling_validation.rs + crates/server/src/openai/completions/tests.rs test_completions_rejects_invalid_temperature + commit 4e103c8b",
       "confidence": 1.0,
       "title": "TDD: handler-level test passes temperature -1 / NaN / +inf and asserts 400; red-check with the validator unwired fails (the bad temperature reaches the engine). 6 unit tests + handler test green; full server suite 0 failures."
+    },
+    "ISS-049": {
+      "id": "ISS-049",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T19:20:00+00:00",
+      "updated_at": "2026-08-10T19:20:00+00:00",
+      "touched_round": 46,
+      "title": "Timing side-channel on API-key comparison: Vec::contains / String == String short-circuit on the first differing byte, so response time leaks how many key-prefix bytes matched — an attacker iterating candidate bearer tokens recovers the key prefix byte-by-byte over the network, defeating bearer-token auth"
+    },
+    "TASK-053": {
+      "id": "TASK-053",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T19:20:00+00:00",
+      "updated_at": "2026-08-10T19:20:00+00:00",
+      "touched_round": 46,
+      "category": "security",
+      "severity": 3,
+      "confidence": 0.97,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "priority_score": 29.1,
+      "title": "Add constant-time string comparison and use it at all three key-verification sites (auth.rs / debug.rs / api.rs)"
+    },
+    "CHG-052": {
+      "id": "CHG-052",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T19:20:00+00:00",
+      "updated_at": "2026-08-10T19:20:00+00:00",
+      "touched_round": 46,
+      "commit": "e8df5c79",
+      "title": "fix(server): constant-time API-key comparison"
+    },
+    "DEC-036": {
+      "id": "DEC-036",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T19:20:00+00:00",
+      "updated_at": "2026-08-10T19:20:00+00:00",
+      "touched_round": 46,
+      "rationale": "密钥比较用 contains / == 会在首字节不同即提前返回，响应时间随匹配前缀字节数增长——网络攻击者可逐字节还原密钥。决策：新增 timing::constant_time_eq（恒定扫描全部字节、仅泄漏长度），替换三处校验点（auth 中间件 / debug require_admin / shutdown）。长度泄漏不可避免且双方长度本就是公开数据；跨多个候选 key 的 any 短路仅泄漏配置密钥个数（服务器侧公开信息），不在边信道范围内。",
+      "alternatives_rejected": "① 引入 subtle/ring 库做 HMAC 式比较：为 3 处比较引入整条加密依赖过重，字节 XOR 恒等比较在该场景足够；② 固定长度填充后全等比较：需知密钥最大长度且更复杂，收益有限。"
+    },
+    "EV-065": {
+      "id": "EV-065",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T19:20:00+00:00",
+      "updated_at": "2026-08-10T19:20:00+00:00",
+      "touched_round": 46,
+      "source": "crates/server/src/security/timing.rs tests + crates/server/src/auth.rs / debug.rs / api.rs + commit e8df5c79",
+      "confidence": 1.0,
+      "title": "constant_time_eq unit tests pin equivalence (equal/diff/length-mismatch); the 60 existing auth tests confirm the middleware verify acceptance/rejection behavior is unchanged after switching to the constant-time comparator; full server suite 0 failures."
     }
   },
   "edges": [
@@ -4972,6 +5032,30 @@
       "to": "TASK-052",
       "type": "governs",
       "created_at": "2026-08-10T18:45:00+00:00"
+    },
+    {
+      "from": "TASK-053",
+      "to": "ISS-049",
+      "type": "addresses",
+      "created_at": "2026-08-10T19:20:00+00:00"
+    },
+    {
+      "from": "CHG-052",
+      "to": "TASK-053",
+      "type": "implements",
+      "created_at": "2026-08-10T19:20:00+00:00"
+    },
+    {
+      "from": "CHG-052",
+      "to": "ISS-049",
+      "type": "resolves",
+      "created_at": "2026-08-10T19:20:00+00:00"
+    },
+    {
+      "from": "DEC-036",
+      "to": "TASK-053",
+      "type": "governs",
+      "created_at": "2026-08-10T19:20:00+00:00"
     }
   ]
 }
