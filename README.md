@@ -386,17 +386,17 @@ auth:
 > 粘贴此类片段会被静默忽略。需要调整时请使用 Rust API
 > （`SchedulerConfig::builder().with_*()`，见下文代码示例）。
 
-| 参数                                | 默认值      | 说明                                |
-| ----------------------------------- | ----------- | ----------------------------------- |
-| `max_num_seqs`                      | `256`       | 单批最大序列数                      |
-| `max_num_batched_tokens`            | `4096`      | 单批最大 Token 数（prompt+生成）    |
-| `max_consecutive_decode`            | `10`        | 强制插入 prefill 前的连续 decode 轮 |
-| `enable_pd_separation`              | `true`      | Prefill/Decode 分相调度             |
-| `prefill_chunk_size`                | `512`       | 单次 prefill 的最大 prompt token    |
-| `decode_preference_ratio`           | `0.7`       | 混合批次中 decode 权重 (0.0-1.0)    |
-| `enable_priority_scheduling`        | `false`     | 优先级调度                          |
-| `enable_dynamic_batching`           | `true`      | 动态批处理                          |
-| `min_batch_size` / `max_batch_size` | `1` / `256` | 动态批处理的批大小边界              |
+| 参数                                | 默认值      | 说明                                                            |
+| ----------------------------------- | ----------- | --------------------------------------------------------------- |
+| `max_num_seqs`                      | `256`       | 单批最大序列数                                                  |
+| `max_num_batched_tokens`            | `4096`      | 单批最大 Token 数（prompt+生成）                                |
+| `max_consecutive_decode`            | `10`        | 强制插入 prefill 前的连续 decode 轮                             |
+| `enable_pd_separation`              | `true`      | Prefill/Decode 分相调度（引擎当前恒为纯相批次，见 RIL ISS-043） |
+| `prefill_chunk_size`                | `512`       | 单次 prefill 的最大 prompt token（未生效，见 RIL ISS-043）      |
+| `decode_preference_ratio`           | `0.7`       | 混合批次中 decode 权重（未生效，见 RIL ISS-043）                |
+| `enable_priority_scheduling`        | `false`     | 优先级调度（已生效：构造引擎时安装 PriorityPolicy）             |
+| `enable_dynamic_batching`           | `true`      | 动态批处理（未生效，见 RIL ISS-043）                            |
+| `min_batch_size` / `max_batch_size` | `1` / `256` | 动态批处理的批大小边界                                          |
 
 调度策略（FCFS / SJF / Priority）通过 Rust API 选择：
 `engine.set_policy(Box::new(SjfPolicy::new(0.3, 0.7)))`，见下方代码示例。

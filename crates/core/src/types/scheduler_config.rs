@@ -6,6 +6,14 @@ use crate::types::sequence_packing::SequencePackingConfig;
 /// Configuration for the request scheduler.
 ///
 /// Controls batching behavior, prefill/decode separation, and priority handling.
+///
+/// **Not-yet-effective flags (RIL ISS-043):** the engine currently builds
+/// only pure-phase (`Prefill`/`Decode`) batches on the FCFS policy by
+/// default. [`Self::enable_pd_separation`], [`Self::enable_dynamic_batching`],
+/// [`Self::prefill_chunk_size`] and [`Self::decode_preference_ratio`] are
+/// accepted for API compatibility but are not read by the scheduler yet —
+/// setting them changes nothing today. [`Self::enable_priority_scheduling`]
+/// IS honored: it installs `PriorityPolicy` at engine construction.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub struct SchedulerConfig {
