@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 24,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T10:40:35+00:00",
+  "updated_at": "2026-08-10T10:45:26+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1846,6 +1846,77 @@
       "touched_round": 24,
       "rationale": "把 speculative 结果按序列分组后经新的 update_speculative 入账：每序列 input_count = input_len + accepted，确保 prefill 一步完成且所有发出 token 都记录进 seq.tokens",
       "alternatives_rejected": "保留扁平 seq_ids/sampled + 每序列 input_counts 的调用方式（zip 截断导致状态丢失）；在 update 内猜测分组（无法从扁平向量恢复每组边界）"
+    },
+    "ISS-026": {
+      "id": "ISS-026",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:45:14+00:00",
+      "updated_at": "2026-08-10T10:45:26+00:00",
+      "touched_round": 24,
+      "title": "speculative 验证的 draft KV 写入超过预分配 block 表时回退到 block 0，覆盖 prompt 首个 block 的 KV",
+      "severity": 9
+    },
+    "HYP-007": {
+      "id": "HYP-007",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:45:15+00:00",
+      "updated_at": "2026-08-10T10:45:26+00:00",
+      "touched_round": 24,
+      "confidence": 0.95,
+      "title": "batch composer 只预分配 input_len 的 block，验证 forward 处理 input_len+drafts 个 token，write_prefill_kv 的 block_ids.get(block_idx).unwrap_or(0) 把越界 draft KV 写入 block 0"
+    },
+    "EV-039": {
+      "id": "EV-039",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:45:18+00:00",
+      "updated_at": "2026-08-10T10:45:18+00:00",
+      "touched_round": 24,
+      "source": "crates/core/tests/real_model_engine.rs::real_model_speculative_prefill_does_not_corrupt_first_block (before fix: k max diff 0.162, v max diff 0.159)",
+      "title": "真实模型回归测试复现：16-token prompt + max_draft=4 的 speculative prefill 一步后 block 0 KV 被 draft 覆盖（k/v max diff ~0.16）",
+      "confidence": 1.0
+    },
+    "TASK-030": {
+      "id": "TASK-030",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:45:19+00:00",
+      "updated_at": "2026-08-10T10:45:26+00:00",
+      "touched_round": 24,
+      "category": "correctness",
+      "severity": 9,
+      "confidence": 0.95,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "title": "在 speculative 验证 forward 前把每个序列 block 表扩到 input_len + max_draft，杜绝 draft KV 回退 block 0（含真实模型回归测试）"
+    },
+    "CHG-026": {
+      "id": "CHG-026",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:45:23+00:00",
+      "updated_at": "2026-08-10T10:45:23+00:00",
+      "touched_round": 24,
+      "commit": "b64b239e",
+      "title": "fix(core): pre-allocate speculative verification span so draft KV never falls back to block 0"
+    },
+    "DEC-014": {
+      "id": "DEC-014",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:45:23+00:00",
+      "updated_at": "2026-08-10T10:45:23+00:00",
+      "touched_round": 24,
+      "rationale": "在 step_speculative_inner 的 warmup/验证之前按 input_len+max_draft 预分配 block 表（ensure_blocks_for_tokens），并同步 batch.kv_block_ids 快照；多余 block 由序列持有、结束释放，拒绝 draft 的 block 只是未用容量",
+      "alternatives_rejected": "修改 batch composer 感知 draft 预算（scheduler 不持有 draft 配置，API 侵入大）；在验证后补分配（KV 已写入错误 block，来不及）"
     }
   },
   "edges": [
@@ -2592,6 +2663,42 @@
       "to": "TASK-029",
       "type": "governs",
       "created_at": "2026-08-10T10:40:29+00:00"
+    },
+    {
+      "from": "EV-039",
+      "to": "HYP-007",
+      "type": "validates",
+      "created_at": "2026-08-10T10:45:23+00:00"
+    },
+    {
+      "from": "TASK-030",
+      "to": "ISS-026",
+      "type": "addresses",
+      "created_at": "2026-08-10T10:45:23+00:00"
+    },
+    {
+      "from": "ISS-026",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-10T10:45:23+00:00"
+    },
+    {
+      "from": "CHG-026",
+      "to": "TASK-030",
+      "type": "implements",
+      "created_at": "2026-08-10T10:45:26+00:00"
+    },
+    {
+      "from": "CHG-026",
+      "to": "ISS-026",
+      "type": "resolves",
+      "created_at": "2026-08-10T10:45:26+00:00"
+    },
+    {
+      "from": "DEC-014",
+      "to": "TASK-030",
+      "type": "governs",
+      "created_at": "2026-08-10T10:45:26+00:00"
     }
   ]
 }
