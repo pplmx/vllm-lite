@@ -17,7 +17,22 @@ impl SchedulerEngine {
     ///
     /// Checks the prefix cache for matching prompts and creates a sequence.
     /// Returns the assigned sequence ID.
-    pub fn add_request(&mut self, mut req: Request) -> SeqId {
+    pub fn add_request(&mut self, req: Request) -> SeqId {
+        self.add_request_inner(req, true)
+    }
+
+    /// Add a request WITHOUT consulting the prefix cache (RIL ISS-038).
+    ///
+    /// Stateful backends whose recurrent hidden state is not stored in the
+    /// KV cache (Qwen3.5 hybrid GDN layers) cannot safely resume from a
+    /// prefix hit — a full hit would admit the sequence into Decode with
+    /// fresh `None` states. The engine routes such requests here so they
+    /// always run the full prefill (rebuilding the recurrent state).
+    pub fn add_request_without_prefix_cache(&mut self, req: Request) -> SeqId {
+        self.add_request_inner(req, false)
+    }
+
+    fn add_request_inner(&mut self, mut req: Request, use_prefix_cache: bool) -> SeqId {
         let _span = tracing::info_span!(
             "scheduler.add_request",
             request_id = req.id,
@@ -34,8 +49,14 @@ impl SchedulerEngine {
             self.next_seq_id += 1;
         }
 
-        // Check prefix cache for prompt reuse
-        let (tokens, kv_blocks, num_computed) = self.resolve_prefix_tokens(&req);
+        // Check prefix cache for prompt reuse (skipped for stateful models
+        // that cannot resume from cached KV — see
+        // `add_request_without_prefix_cache`).
+        let (tokens, kv_blocks, num_computed) = if use_prefix_cache {
+            self.resolve_prefix_tokens(&req)
+        } else {
+            (req.prompt.clone(), Arc::new(vec![]), 0)
+        };
 
         // Distributed prefix-cache lookup (OPS-05b3): even when the
         // local `RadixTree` misses, some peer node (post OPS-05c)
@@ -44,7 +65,11 @@ impl SchedulerEngine {
         // gRPC transfer protocol. We dispatch an observer event so
         // metrics collectors / tracing can report cross-node hit
         // rates.
-        let distributed_matched_tokens = self.lookup_distributed_matched_tokens(&req);
+        let distributed_matched_tokens = if use_prefix_cache {
+            self.lookup_distributed_matched_tokens(&req)
+        } else {
+            0
+        };
         if distributed_matched_tokens > 0 {
             tracing::trace!(
                 request_id = req.id,

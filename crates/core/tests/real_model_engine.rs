@@ -12,6 +12,8 @@ use vllm_core::engine::Engine;
 use vllm_core::types::{Request, SchedulerConfig};
 use vllm_model::config::ModelConfig;
 use vllm_model::llama::LlamaModel;
+use vllm_model::qwen3::config::Qwen3Config;
+use vllm_model::qwen3_5::Qwen35HybridModel;
 use vllm_traits::{ModelBackend, TokenId};
 
 /// Deterministic non-zero, non-constant weights.
@@ -523,6 +525,68 @@ fn real_model_speculative_output_matches_regular_with_repeat_penalty() {
          (verifier must apply the seen set; RIL ISS-036); spec={spec_tokens:?} \
          regular={regular_tokens:?}"
     );
+}
+
+/// Regression (RIL ISS-038): a Qwen3.5 hybrid model (GDN linear-attention
+/// layers with per-sequence recurrent state) must survive a full
+/// prefix-cache hit.
+///
+/// The GDN recurrent state lives in the model, not in the KV cache. A full
+/// prefix hit admits the sequence straight into Decode with fresh
+/// `None` GDN states — `forward_decode` then errors with "missing GDN state
+/// for linear layer" on the first step.
+#[test]
+fn qwen35_hybrid_full_prefix_hit_does_not_error() {
+    let config = Qwen3Config {
+        text_config: Some(vllm_model::qwen3::config::TextConfig {
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(2),
+            num_key_value_heads: Some(2),
+            hidden_size: Some(64),
+            intermediate_size: Some(128),
+            layer_types: Some(vec![
+                "linear_attention".to_string(),
+                "full_attention".to_string(),
+            ]),
+            ..Default::default()
+        }),
+        head_dim: Some(32),
+        vocab_size: Some(128),
+        ..Default::default()
+    };
+    let model = Qwen35HybridModel::new(config, candle_core::Device::Cpu, 64, false).unwrap();
+    let mut engine = Engine::with_config_boxed(
+        Box::new(model),
+        None::<Box<dyn ModelBackend>>,
+        scheduler_config(),
+        4,
+        64,
+    );
+
+    let (tx1, _rx1) = mpsc::channel(64);
+    let prompt: Vec<TokenId> = (0..16).collect();
+    engine.add_request(Request::new(1, prompt.clone(), 2), tx1);
+    for _ in 0..10 {
+        engine.step().unwrap();
+        if engine.scheduler.get_sequence(1).is_none() {
+            break;
+        }
+    }
+
+    // Second identical request: full prefix-cache hit.
+    let (tx2, _rx2) = mpsc::channel(64);
+    engine.add_request(Request::new(2, prompt, 2), tx2);
+    for _ in 0..10 {
+        let result = engine.step();
+        assert!(
+            result.is_ok(),
+            "full prefix-cache hit must not error on a Qwen3.5 hybrid model \
+             (GDN state must be rebuilt; RIL ISS-038): {result:?}"
+        );
+        if engine.scheduler.get_sequence(2).is_none() {
+            break;
+        }
+    }
 }
 
 #[test]

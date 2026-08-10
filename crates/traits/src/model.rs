@@ -115,6 +115,19 @@ pub trait ModelBackend: Send + Sync {
     /// Number of query attention heads.
     fn num_heads(&self) -> usize;
 
+    /// Whether a prefix-cache hit can safely skip prefill for a NEW
+    /// sequence sharing a cached prompt prefix.
+    ///
+    /// Default `true` (the paged KV cache fully captures a plain
+    /// transformer's sequence state). Stateful backends whose hidden state
+    /// is NOT stored in the KV cache — e.g. the Qwen3.5 hybrid GDN recurrent
+    /// layers — MUST return `false`: a full prefix hit would admit the
+    /// sequence straight into Decode with fresh `None` recurrent states,
+    /// erroring on the first decode (RIL ISS-038).
+    fn supports_prefix_caching(&self) -> bool {
+        true
+    }
+
     /// Called by the engine when a sequence finishes (`max_tokens`, stop
     /// sequence, or cancel) so the backend can release per-sequence state.
     ///

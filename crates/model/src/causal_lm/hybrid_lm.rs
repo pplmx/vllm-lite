@@ -241,6 +241,14 @@ where
         self.config.num_kv_heads()
     }
 
+    fn supports_prefix_caching(&self) -> bool {
+        // RIL ISS-038: the GDN recurrent state is NOT in the paged KV cache,
+        // so a full prefix hit would admit a new sequence straight into
+        // Decode with fresh `None` states and error on the first linear
+        // layer. Fall back to full prefill instead.
+        false
+    }
+
     fn on_sequence_finished(&mut self, seq_id: SeqId) {
         // RIL ISS-034: drop the recurrent GDN state for a finished sequence.
         // `gdn_states` is keyed by engine-assigned SeqId (monotonic), so

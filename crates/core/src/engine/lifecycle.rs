@@ -171,7 +171,16 @@ impl Engine {
             return 0;
         }
 
-        let seq_id = self.scheduler.add_request(req);
+        // RIL ISS-038: stateful backends (Qwen3.5 hybrid GDN) cannot resume
+        // from a prefix-cache hit — their recurrent state is not in the KV
+        // cache — so route them through the no-prefix path (full prefill).
+        let supports_prefix_caching = crate::sync::lock_mutex(&self.target_model)
+            .map_or(true, |model| model.supports_prefix_caching());
+        let seq_id = if supports_prefix_caching {
+            self.scheduler.add_request(req)
+        } else {
+            self.scheduler.add_request_without_prefix_cache(req)
+        };
         self.response_txs.insert(seq_id, response_tx);
         seq_id
     }
