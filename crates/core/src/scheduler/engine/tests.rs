@@ -18,6 +18,7 @@ use std::sync::Arc;
 use vllm_traits::{BatchPhase, SampledToken};
 
 use crate::metrics::EnhancedMetricsCollector;
+use crate::scheduler::SchedulerCudaGraphConfig;
 use crate::scheduler::engine::SchedulerEngine;
 use crate::types::{Request, SchedulerConfig};
 
@@ -432,6 +433,50 @@ fn test_build_batch_preallocates_prefill_kv_blocks() {
         batch.kv_block_ids[0].len()
     );
     // The allocated blocks must be distinct (not all the block-0 fallback).
+    let unique: std::collections::HashSet<usize> = batch.kv_block_ids[0].iter().copied().collect();
+    assert_eq!(
+        unique.len(),
+        expected_blocks,
+        "prefill KV blocks must be distinct allocations, not the block-0 fallback"
+    );
+}
+
+/// Regression (RIL ISS-028): the CUDA-Graph batch builder
+/// (`build_batch_with_graph`) must pre-allocate prefill KV blocks exactly
+/// like `build_batch` (RIL ISS-022). Pre-fix, `select_sequences_for_phase`
+/// admitted fresh prefill sequences with empty `kv_blocks`, so the model's
+/// `write_prefill_kv` fell back to block 0 and corrupted the cache on every
+/// `cuda-graph` build.
+#[test]
+fn test_build_batch_with_graph_preallocates_prefill_kv_blocks() {
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    let mut engine = create_test_engine(config, 1024);
+    // 40-token prompt => ceil(40 / BLOCK_SIZE=16) = 3 blocks.
+    let prompt: Vec<u32> = (0..40).collect();
+    let expected_blocks = prompt.len().div_ceil(vllm_traits::BLOCK_SIZE);
+    assert_eq!(expected_blocks, 3);
+    engine.add_request(Request::new(0, prompt, 5));
+
+    let graph_batch = engine.build_batch_with_graph();
+    assert!(
+        !graph_batch.is_graph(),
+        "prefill must stay on the regular path"
+    );
+    let batch = graph_batch.into_regular();
+    assert_eq!(batch.len(), 1);
+    assert_eq!(
+        batch.kv_block_ids[0].len(),
+        expected_blocks,
+        "build_batch_with_graph must allocate the prompt's KV blocks before \
+         the forward (got {} blocks, expected {expected_blocks}) (RIL ISS-028)",
+        batch.kv_block_ids[0].len()
+    );
     let unique: std::collections::HashSet<usize> = batch.kv_block_ids[0].iter().copied().collect();
     assert_eq!(
         unique.len(),

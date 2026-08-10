@@ -10,7 +10,7 @@ use super::SchedulerEngine;
 use crate::scheduler::SchedulerState;
 use crate::scheduler::observer::ObserverEvent;
 use crate::scheduler::policy::SchedulingContext;
-use crate::types::{Phase, Status};
+use crate::types::{Phase, Sequence, Status};
 
 impl SchedulerEngine {
     /// Build the next batch of sequences to process
@@ -80,36 +80,7 @@ impl SchedulerEngine {
         // were allocated only in `update()`, AFTER the forward, so the first
         // prefill wrote its KV to the wrong blocks.) Decode sequences still
         // grow incrementally in `update()` as they cross block boundaries.
-        for seq in &mut new_sequences {
-            let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
-            while seq.kv_blocks.len() < blocks_needed {
-                if let Some(new_blocks) = self.memory.allocate(1) {
-                    // ARCH-01: record the freshly allocated blocks so the
-                    // refcount matches the live owners (this sequence = 1).
-                    self.memory.record_blocks(&new_blocks);
-                    #[cfg(feature = "multi-node")]
-                    {
-                        let block_idx = seq.kv_blocks.len();
-                        let start = block_idx * vllm_traits::BLOCK_SIZE;
-                        let end = (start + vllm_traits::BLOCK_SIZE).min(seq.tokens.len());
-                        let parent_hash = self.chain_cursors.get(&seq.id).copied().unwrap_or(0);
-                        for &block_id in &new_blocks {
-                            let hash = self.memory.record_block_tokens(
-                                block_id,
-                                parent_hash,
-                                &seq.tokens[start..end],
-                            );
-                            self.chain_cursors.insert(seq.id, hash);
-                        }
-                    }
-                    let mut blocks = (*seq.kv_blocks).clone();
-                    blocks.extend(new_blocks);
-                    seq.kv_blocks = Arc::new(blocks);
-                } else {
-                    break;
-                }
-            }
-        }
+        self.preallocate_kv_blocks(&mut new_sequences);
 
         // Add new sequences to the batch (now with allocated KV blocks)
         sequences.extend(new_sequences.iter().cloned());
@@ -170,5 +141,49 @@ impl SchedulerEngine {
         );
 
         batch
+    }
+}
+
+impl SchedulerEngine {
+    /// Allocate KV blocks for freshly-admitted sequences BEFORE the forward
+    /// pass writes their KV (RIL ISS-022).
+    ///
+    /// Shared by both batch builders (`build_batch` and
+    /// `build_batch_with_graph`): the model's prefill writes KV to
+    /// `seq.kv_blocks`, and if blocks are not allocated yet, `write_prefill_kv`
+    /// falls back to block 0 and corrupts the cache. The CUDA-Graph batch
+    /// builder previously skipped this step, corrupting every prefill on
+    /// `cuda-graph` builds (RIL ISS-028).
+    pub(crate) fn preallocate_kv_blocks(&mut self, seqs: &mut [Sequence]) {
+        for seq in seqs.iter_mut() {
+            let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
+            while seq.kv_blocks.len() < blocks_needed {
+                if let Some(new_blocks) = self.memory.allocate(1) {
+                    // ARCH-01: record the freshly allocated blocks so the
+                    // refcount matches the live owners (this sequence = 1).
+                    self.memory.record_blocks(&new_blocks);
+                    #[cfg(feature = "multi-node")]
+                    {
+                        let block_idx = seq.kv_blocks.len();
+                        let start = block_idx * vllm_traits::BLOCK_SIZE;
+                        let end = (start + vllm_traits::BLOCK_SIZE).min(seq.tokens.len());
+                        let parent_hash = self.chain_cursors.get(&seq.id).copied().unwrap_or(0);
+                        for &block_id in &new_blocks {
+                            let hash = self.memory.record_block_tokens(
+                                block_id,
+                                parent_hash,
+                                &seq.tokens[start..end],
+                            );
+                            self.chain_cursors.insert(seq.id, hash);
+                        }
+                    }
+                    let mut blocks = (*seq.kv_blocks).clone();
+                    blocks.extend(new_blocks);
+                    seq.kv_blocks = Arc::new(blocks);
+                } else {
+                    break;
+                }
+            }
+        }
     }
 }

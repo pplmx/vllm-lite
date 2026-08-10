@@ -72,7 +72,13 @@ impl SchedulerEngine {
             .cloned()
             .collect();
 
-        let new_sequences = self.request_queue.drain_by_phase(phase);
+        let mut new_sequences = self.request_queue.drain_by_phase(phase);
+        // RIL ISS-028: pre-allocate the newly-admitted sequences' KV blocks
+        // before the forward writes their KV — same contract as
+        // `build_batch` (RIL ISS-022). The CUDA-Graph builder previously
+        // skipped this, so every prefill on `cuda-graph` builds wrote its KV
+        // to the block-0 fallback and corrupted the cache.
+        self.preallocate_kv_blocks(&mut new_sequences);
         sequences.extend(new_sequences.iter().cloned());
         self.running.extend(new_sequences);
 
