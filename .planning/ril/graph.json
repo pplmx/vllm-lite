@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 47,
+  "round": 48,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T20:05:00+00:00",
+  "updated_at": "2026-08-10T20:40:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3578,6 +3578,58 @@
       "source": "crates/server/src/auth.rs SEC-01 comment + crates/server/src/app.rs mounting gate + crates/server/src/auth.rs tests::test_auth_middleware_no_keys_allow_all + commit 9476bc76",
       "confidence": 1.0,
       "title": "grep confirmed main.rs logs a warning (not a refusal) and the auth middleware is only mounted when api_keys is non-empty; a unit test explicitly pins the empty-keys accept-all path (unreachable in production). Doc corrected to state the true policy; full workspace suite green."
+    },
+    "ISS-051": {
+      "id": "ISS-051",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T20:40:00+00:00",
+      "updated_at": "2026-08-10T20:40:00+00:00",
+      "touched_round": 48,
+      "title": "Long-prompt deadlock: a prefill whose tokens exceed max_num_batched_tokens (default 4096) is never served — compose_prefill_batch returns Break when a single sequence overruns the token budget, there is no intra-sequence chunking in the production compose path (compose_with_chunking is test-only dead code), and the phase scheduler keeps the queue in Prefill forever. After the ISS-041 requeue fix it no longer strands, but it retries every round with zero tokens produced and is_healthy() true — a 10k-token prompt with default config never completes"
+    },
+    "TASK-055": {
+      "id": "TASK-055",
+      "type": "task",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T20:40:00+00:00",
+      "updated_at": "2026-08-10T20:40:00+00:00",
+      "touched_round": 48,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 0.95,
+      "effort": 4,
+      "unlock_factor": 1.0,
+      "priority_score": 14.2,
+      "title": "Implement chunked prefill so a prompt longer than max_num_batched_tokens is split across rounds: compose a chunk (tokens[start..start+limit]), update advances num_computed, requeue the partial as Waiting-Prefill (preserving kv_blocks + num_computed) so the next round resumes via forward_prefill_continue; also wires the inert prefill_chunk_size knob (ISS-043). Careful integration with the ISS-041/042/045 build_batch admission and requeue invariants (running never holds Prefilling across steps)"
+    },
+    "ISS-052": {
+      "id": "ISS-052",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T20:40:00+00:00",
+      "updated_at": "2026-08-10T20:40:00+00:00",
+      "touched_round": 48,
+      "title": "Silent cache corruption on decode block-growth failure: push_token_and_allocate (update.rs) breaks silently when a boundary-crossing allocate() returns None (pool exhausted); with the table one block short, the next decode forward writes that token's KV through the block-0 fallback (paged_gqa unwrap_or(0)), corrupting the first prompt block. Preemption at the next build_batch frees blocks but does not assign the growth block to the sequence before the forward. Same class as ISS-026/028 (closed for new-prefill admission by ISS-042) but open for decode growth and the speculative ensure_verification_blocks path"
+    },
+    "TASK-056": {
+      "id": "TASK-056",
+      "type": "task",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T20:40:00+00:00",
+      "updated_at": "2026-08-10T20:40:00+00:00",
+      "touched_round": 48,
+      "category": "correctness",
+      "severity": 4,
+      "confidence": 0.9,
+      "effort": 3,
+      "unlock_factor": 1.0,
+      "priority_score": 20.8,
+      "title": "Before composing a running Decoding sequence, ensure its KV table covers tokens.len() (grow originals, not clones); if the pool cannot provide it after the preemption gate, exclude the sequence from the batch this round so it is never forwarded with a short table (no block-0 write) — and mirror for ensure_verification_blocks under memory pressure. Add a decode-growth-under-pressure regression test. Integrate carefully with the preemption gate ordering and ISS-041/042 clone-vs-original handling"
     }
   },
   "edges": [
@@ -5140,6 +5192,30 @@
       "to": "TASK-054",
       "type": "governs",
       "created_at": "2026-08-10T20:05:00+00:00"
+    },
+    {
+      "from": "TASK-055",
+      "to": "ISS-051",
+      "type": "addresses",
+      "created_at": "2026-08-10T20:40:00+00:00"
+    },
+    {
+      "from": "TASK-056",
+      "to": "ISS-052",
+      "type": "addresses",
+      "created_at": "2026-08-10T20:40:00+00:00"
+    },
+    {
+      "from": "ISS-051",
+      "to": "COMP-007",
+      "type": "located_in",
+      "created_at": "2026-08-10T20:40:00+00:00"
+    },
+    {
+      "from": "ISS-052",
+      "to": "COMP-007",
+      "type": "located_in",
+      "created_at": "2026-08-10T20:40:00+00:00"
     }
   ]
 }
