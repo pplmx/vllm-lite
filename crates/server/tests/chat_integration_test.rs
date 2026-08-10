@@ -7034,9 +7034,11 @@ async fn test_completions_n_two_streaming_wire_shape() {
     //     special-token decodes but the field MUST be present.
     //
     // (b) **Intermediate per-candidate finish events** carry
-    //     exactly ONE choice with only the finished candidate's
-    //     `index + finish_reason` (no `text` field — they're
-    //     terminal markers, not token payloads). For `n = 2` with
+    //     exactly ONE choice with the finished candidate's
+    //     `index`, an empty `text`, and `finish_reason` — every
+    //     `choices[]` entry must carry `text` per the OpenAI
+    //     contract so clients concatenating chunk texts never hit
+    //     a missing key (RIL ISS-047). For `n = 2` with
     //     candidates finishing at different rates, up to N-1 such
     //     intermediate events may appear before the final
     //     consolidated event. (Note: the mock engine emits all
@@ -7159,11 +7161,14 @@ async fn test_completions_n_two_streaming_wire_shape() {
             c["index"].as_u64().is_some(),
             "every choice in the final consolidated event must carry index; got: {c:?}"
         );
-        // Final consolidated choices have NO `text` field (they're
-        // close-of-stream markers, not token payloads).
-        assert!(
-            c.get("text").is_none(),
-            "final consolidated choices must NOT carry `text` (reserved for token events); got: {c:?}"
+        // Final consolidated choices carry an EMPTY `text` field — every
+        // `choices[]` entry must carry `text` per the OpenAI streaming
+        // contract so clients concatenating chunk texts never hit a
+        // missing key (RIL ISS-047).
+        assert_eq!(
+            c["text"],
+            serde_json::Value::String(String::new()),
+            "every choice in the final consolidated event must carry an empty text field; got: {c:?}"
         );
     }
 
@@ -7193,8 +7198,9 @@ async fn test_completions_n_two_streaming_wire_shape() {
             "pre-final event choice index must be 0 or 1 for n=2; got: {idx}"
         );
         // Token events carry `text`; intermediate finish events
-        // carry `finish_reason` instead. Both are valid pre-final
-        // shapes — pin each separately below.
+        // carry `finish_reason` (and now an empty `text` per the
+        // OpenAI contract). Both are valid pre-final shapes — pin
+        // each separately below.
         let has_text = c.get("text").is_some();
         let has_finish = c.get("finish_reason").is_some();
         assert!(
@@ -7204,19 +7210,17 @@ async fn test_completions_n_two_streaming_wire_shape() {
     }
 
     // Pin (b) — if any intermediate per-candidate finish events
-    // appear (single-choice with `finish_reason` and no `text`),
-    // each must carry ONLY the finished candidate's
-    // `index + finish_reason` (no `text`, no other candidate's
-    // choice). Already covered above by the "exactly one choice"
-    // and "has finish_reason OR text" assertions, but reinforce
-    // the "no `text`" half explicitly for intermediate finishes.
+    // appear (single-choice with `finish_reason`), each must carry
+    // ONLY the finished candidate's choice, with a string
+    // `finish_reason` AND the always-present empty `text` field
+    // (RIL ISS-047).
     for (i, event) in json_events.iter().enumerate() {
         if i == final_event_idx {
             continue;
         }
         let choices = event["choices"].as_array().unwrap();
         let c = &choices[0];
-        if c.get("finish_reason").is_some() && c.get("text").is_none() {
+        if c.get("finish_reason").is_some() {
             // Intermediate per-candidate finish — pin the
             // one-candidate-only contract.
             assert_eq!(
@@ -7228,6 +7232,11 @@ async fn test_completions_n_two_streaming_wire_shape() {
             assert!(
                 c["finish_reason"].as_str().is_some(),
                 "intermediate finish event must carry a string finish_reason; got: {c:?}"
+            );
+            assert_eq!(
+                c["text"],
+                serde_json::Value::String(String::new()),
+                "intermediate finish event must carry an empty text field; got: {c:?}"
             );
         }
     }

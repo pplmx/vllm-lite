@@ -323,3 +323,35 @@ fn test_skipped_token_chunk_is_valid_json_with_empty_text() {
         "skipped-token chunk must carry empty text"
     );
 }
+
+/// RIL ISS-047: every `n > 1` streaming *finish* `choices[]` entry must
+/// carry a `text` field (empty string), exactly like the token chunks do.
+/// Before the fix the consolidated final event and the intermediate
+/// per-candidate finish event emitted only `{"index", "finish_reason"}`
+/// — a client concatenating chunk `text` values hit a missing key and
+/// strict OpenAI-SDK parsers rejected the malformed choice.
+#[test]
+fn test_parallel_finish_choice_always_carries_text_field() {
+    for (index, reason) in [(0usize, "length"), (1, "stop"), (7, "stop")] {
+        let choice = parallel_finish_choice(index, reason);
+        assert_eq!(
+            choice["text"],
+            serde_json::Value::String(String::new()),
+            "finish choice must carry an empty text field (index {index})"
+        );
+        assert_eq!(choice["index"], serde_json::Value::from(index as u64));
+        assert_eq!(
+            choice["finish_reason"],
+            serde_json::Value::String(reason.into())
+        );
+
+        // The entry must round-trip through JSON as a well-formed object —
+        // strict stream parsers deserialize every event.
+        let parsed: serde_json::Value =
+            serde_json::from_str(&choice.to_string()).expect("finish choice must be valid JSON");
+        assert!(
+            parsed.get("text").is_some(),
+            "wire shape must retain the text key (index {index})"
+        );
+    }
+}

@@ -27,6 +27,20 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
     tokenizer.clean_special_tokens(text)
 }
 
+/// Build one `choices[]` entry for an `n > 1` streaming *finish* event.
+///
+/// `OpenAI`'s streaming-completions contract requires every `choices[]`
+/// entry to carry a `text` field (even an empty string) so clients that
+/// concatenate chunk texts never hit a missing key. The token chunks all
+/// emit `text`; the finish events must too (RIL ISS-047).
+fn parallel_finish_choice(index: usize, finish_reason: &str) -> serde_json::Value {
+    serde_json::json!({
+        "index": index,
+        "text": "",
+        "finish_reason": finish_reason,
+    })
+}
+
 /// Extract the bare [`vllm_traits::TokenId`] sequence from a `Vec<SampledToken>`.
 /// Used when passing per-token data to the tokenizer (which only
 /// understands `&[u32]`); the `logprob` + `top_logprobs` fields are
@@ -1108,10 +1122,7 @@ async fn stream_n_parallel_completions(
                                         vllm_traits::FinishReason::Stop
                                         | vllm_traits::FinishReason::Cancelled => "stop",
                                     };
-                                    serde_json::json!({
-                                        "index": i,
-                                        "finish_reason": reason_str,
-                                    })
+                                    parallel_finish_choice(i, reason_str)
                                 })
                                 .collect();
                             let chunk = serde_json::json!({
@@ -1136,10 +1147,7 @@ async fn stream_n_parallel_completions(
                             let chunk = serde_json::json!({
                                 "id": "cmpl-stream",
                                 "object": "text_completion",
-                                "choices": [{
-                                    "index": index,
-                                    "finish_reason": reason_string,
-                                }],
+                                "choices": [parallel_finish_choice(index, reason_string)],
                             });
                             Some((Ok(Event::default().data(chunk.to_string())), state))
                         }
