@@ -84,15 +84,48 @@ impl crate::engine::Engine {
             results.push((*seq_id, sampled.clone()));
         }
 
-        // Multi-token scheduler input tracking (Plan 17.1-E)
-        let seq_ids: Vec<SeqId> = results.iter().map(|(id, _)| *id).collect();
-        let sampled: Vec<SampledToken> = results.iter().map(|(_, s)| s.clone()).collect();
-        // Build input_counts from accepted counts + 1 bonus token
-        let input_counts: Vec<usize> = accepted_counts
-            .iter()
-            .map(|&accepted| accepted + 1) // accepted drafts + the target token
-            .collect();
-        self.scheduler.update(&seq_ids, &sampled, &input_counts);
+        // Multi-token scheduler input tracking (Plan 17.1-E): fold the
+        // emitted tokens into the scheduler **per sequence**. `results`
+        // carries one entry per emitted token (accepted drafts + the
+        // bonus/rejection token), and the scheduler must record every one of
+        // them; `num_computed_tokens` must advance by the number of tokens
+        // whose KV the target model actually computed during verification
+        // (`input_len + accepted`).
+        //
+        // RIL ISS-025: the old code flattened `results` into per-token
+        // `seq_ids`/`sampled` vectors but passed a per-sequence
+        // `input_counts` vector. `scheduler.update` zips the two together,
+        // so the fold truncated to one token per sequence — tokens after the
+        // first were streamed to the client but never recorded in
+        // `seq.tokens` — and `num_computed_tokens` advanced by `accepted+1`
+        // (only correct for decode batches with input_len == 1). Long
+        // prompts in speculative mode never completed prefill in one step
+        // and re-fed already-generated draft tokens back into subsequent
+        // prefill batches.
+        let mut per_seq: Vec<(SeqId, Vec<SampledToken>)> = Vec::new();
+        let mut seq_index: std::collections::HashMap<SeqId, usize> =
+            std::collections::HashMap::new();
+        for (seq_id, sampled) in &results {
+            if let Some(&i) = seq_index.get(seq_id) {
+                per_seq[i].1.push(sampled.clone());
+            } else {
+                seq_index.insert(*seq_id, per_seq.len());
+                per_seq.push((*seq_id, vec![sampled.clone()]));
+            }
+        }
+
+        for (seq_id, tokens) in &per_seq {
+            let Some(i) = batch.seq_ids.iter().position(|sid| sid == seq_id) else {
+                continue;
+            };
+            let input_count =
+                batch.input_tokens.get(i).map_or(1, std::vec::Vec::len) + accepted_counts[i];
+            self.scheduler.update_speculative(
+                std::slice::from_ref(seq_id),
+                std::slice::from_ref(tokens),
+                std::slice::from_ref(&input_count),
+            );
+        }
 
         // P38 v0.3 wire-type engine wire-through: stop-sequence
         // finalization. Must run after `scheduler.update` (so

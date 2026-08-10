@@ -528,6 +528,91 @@ fn test_speculative_step_produces_output() {
     assert_eq!(received.map(|s| s.token), Some(42));
 }
 
+/// Regression: a long prompt in speculative mode must complete prefill in a
+/// single step (`num_computed_tokens >= prompt_len` and status `Decoding`).
+///
+/// The speculative step's `input_counts` must reflect the number of input
+/// tokens the target model actually processed (`input_len + accepted`), not
+/// just `accepted + 1`. With `accepted + 1 < prompt_len` the old arithmetic
+/// left the sequence stuck in `Prefilling` and re-fed already-generated
+/// draft tokens back into subsequent prefill batches — re-processing the
+/// whole prompt every step until `num_computed_tokens` slowly crossed
+/// `prompt_len` (RIL hypothesis HYP-006).
+#[test]
+fn test_speculative_prefill_long_prompt_advances_to_decode() {
+    let target = FakeModel::new(42);
+    let draft = FakeModel::new(42);
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 4;
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio_mpsc::channel(64);
+    // 20-token prompt, max_tokens large enough that the 5 emitted tokens
+    // (4 accepted drafts + bonus) do not finish the sequence: accepted + 1
+    // (<= 5) is well below prompt_len, so the prefill would not complete in
+    // one step under the old arithmetic.
+    let prompt: Vec<TokenId> = (0..20).map(|t| t + 10).collect();
+    let seq_id = engine.add_request(Request::new(1, prompt, 20), tx);
+
+    let result = engine.step().unwrap();
+    assert!(!result.is_empty());
+
+    let seq = engine
+        .scheduler
+        .get_sequence(seq_id)
+        .expect("sequence should be running after the speculative step");
+    assert!(
+        seq.num_computed_tokens >= seq.prompt_len,
+        "speculative prefill must complete in one step: num_computed_tokens={} prompt_len={}",
+        seq.num_computed_tokens,
+        seq.prompt_len
+    );
+    assert_eq!(
+        seq.status,
+        crate::types::Status::Decoding,
+        "sequence must transition to Decoding after a completed speculative prefill"
+    );
+}
+
+/// Regression: a speculative step that accepts every draft must fold ALL
+/// emitted tokens into the scheduler sequence state (`seq.tokens`), not just
+/// the first one.
+///
+/// `step_speculative_inner` flattens the per-sequence emitted tokens into a
+/// single `seq_ids`/`sampled` vector but passes per-sequence `input_counts` —
+/// `scheduler.update` zips the three together, so the count vector truncates
+/// the loop to one iteration per sequence and every token after the first is
+/// streamed to the client without ever being recorded in the sequence (RIL
+/// hypothesis HYP-006).
+#[test]
+fn test_speculative_all_accepted_folds_every_token_into_sequence() {
+    let target = FakeModel::new(42);
+    let draft = FakeModel::new(42);
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 4;
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio_mpsc::channel(64);
+    // 2-token prompt: after prefill the sequence advances to Decoding, and
+    // the step emits max_draft accepted drafts + 1 bonus token (5 total).
+    let seq_id = engine.add_request(Request::new(1, vec![10, 20], 20), tx);
+
+    let result = engine.step().unwrap();
+    let emitted = result.iter().filter(|(id, _)| *id == seq_id).count();
+    assert_eq!(emitted, 5, "all 4 drafts + bonus must be emitted");
+
+    let seq = engine
+        .scheduler
+        .get_sequence(seq_id)
+        .expect("sequence should be running after the speculative step");
+    assert_eq!(
+        seq.tokens.len(),
+        2 + emitted,
+        "every emitted token must be folded into seq.tokens (prompt 2 + {} emitted)",
+        emitted
+    );
+}
+
 /// Integration test: speculative vs non-speculative equivalence
 #[test]
 fn test_speculative_vs_non_speculative_equivalence() {

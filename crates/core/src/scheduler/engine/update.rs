@@ -59,25 +59,79 @@ impl SchedulerEngine {
                     .entered();
 
             if let Some(idx) = self.running.iter().position(|s| s.id == seq_id) {
-                self.update_running_sequence(idx, seq_id, token, input_count);
+                self.update_running_sequence(idx, token, input_count);
             }
         }
 
         self.finalize_finished_sequences();
     }
 
-    /// Per-sequence update: status transition, token recording, observer
-    /// dispatch, block allocation, and completion check.
-    fn update_running_sequence(
+    /// Speculative-variant update: fold **multiple** emitted tokens per
+    /// sequence into the running state, then advance `num_computed_tokens`
+    /// once by the count of tokens whose KV the target model computed during
+    /// verification, then run the completion check.
+    ///
+    /// `token_groups[i]` is the ordered list of `SampledToken`s emitted for
+    /// `seq_ids[i]` in this step (accepted drafts + bonus/rejection token);
+    /// `input_token_counts[i]` is the number of tokens whose KV now exists
+    /// for that sequence (input tokens + accepted drafts).
+    ///
+    /// The regular [`Self::update`] signature assumes exactly one token per
+    /// sequence; the speculative path emits several, and zipping a flattened
+    /// token list against a per-sequence count vector silently truncates the
+    /// fold to one token per sequence (RIL ISS-025).
+    pub fn update_speculative(
         &mut self,
-        idx: usize,
-        seq_id: SeqId,
-        token: u32,
-        input_count: usize,
+        seq_ids: &[SeqId],
+        token_groups: &[Vec<SampledToken>],
+        input_token_counts: &[usize],
     ) {
+        let _span = tracing::info_span!("scheduler.update_speculative", seq_count = seq_ids.len())
+            .entered();
+
+        for ((&seq_id, tokens), &input_count) in seq_ids
+            .iter()
+            .zip(token_groups.iter())
+            .zip(input_token_counts)
+        {
+            let Some(idx) = self.running.iter().position(|s| s.id == seq_id) else {
+                continue;
+            };
+            for sampled in tokens {
+                self.push_token_and_allocate(idx, sampled.token);
+            }
+            self.advance_computed_tokens(idx, input_count);
+            self.check_completion(idx);
+        }
+
+        self.finalize_finished_sequences();
+    }
+
+    /// Advance a running sequence's computed-token count by `input_count`
+    /// and transition `Prefilling` → `Decoding` once the whole prompt's KV
+    /// exists.
+    fn advance_computed_tokens(&mut self, idx: usize, input_count: usize) {
         let Some(seq) = self.running.get_mut(idx) else {
             return;
         };
+        if seq.status == Status::Waiting || seq.status == Status::Prefilling {
+            seq.num_computed_tokens += input_count;
+            if seq.num_computed_tokens >= seq.prompt_len {
+                seq.status = Status::Decoding;
+                tracing::info!(seq_id = seq.id, "Sequence transitioned to Decode phase");
+            } else {
+                seq.status = Status::Prefilling;
+            }
+        }
+    }
+
+    /// Record one generated token, dispatch the observer event, and grow the
+    /// sequence's KV block table as the token count crosses block boundaries.
+    fn push_token_and_allocate(&mut self, idx: usize, token: u32) {
+        let Some(seq) = self.running.get_mut(idx) else {
+            return;
+        };
+        let seq_id = seq.id;
         tracing::debug!(
             seq_id = seq_id,
             tokens_len = seq.tokens.len(),
@@ -85,16 +139,6 @@ impl SchedulerEngine {
             max_tokens = seq.max_tokens,
             "Scheduler update: processing sequence"
         );
-        // Update status based on progress
-        if seq.status == Status::Waiting || seq.status == Status::Prefilling {
-            seq.num_computed_tokens += input_count;
-            if seq.num_computed_tokens >= seq.prompt_len {
-                seq.status = Status::Decoding;
-                tracing::info!(seq_id = seq_id, "Sequence transitioned to Decode phase");
-            } else {
-                seq.status = Status::Prefilling;
-            }
-        }
 
         seq.tokens.push(token);
         seq.consecutive_decode_rounds += 1;
@@ -146,7 +190,14 @@ impl SchedulerEngine {
                 break;
             }
         }
+    }
 
+    /// Run the max-tokens completion check and, on finish, hand the
+    /// prompt-covering blocks to the prefix cache.
+    fn check_completion(&mut self, idx: usize) {
+        let Some(seq) = self.running.get_mut(idx) else {
+            return;
+        };
         // Check completion — max_tokens is the upper bound on *generated*
         // tokens (prompt not included), per the Request documentation and
         // the OpenAI API spec. Subtract prompt_len so the sequence finishes
@@ -185,6 +236,15 @@ impl SchedulerEngine {
                 self.memory.release_blocks(stale.as_ref());
             }
         }
+    }
+
+    /// Per-sequence update: status transition, token recording, observer
+    /// dispatch, block allocation, and completion check.
+    fn update_running_sequence(&mut self, idx: usize, token: u32, input_count: usize) {
+        // Update status based on progress
+        self.advance_computed_tokens(idx, input_count);
+        self.push_token_and_allocate(idx, token);
+        self.check_completion(idx);
     }
 
     /// Move finished sequences out of `running` into `finished`,
