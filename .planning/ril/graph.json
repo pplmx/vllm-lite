@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 41,
+  "round": 42,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T15:20:00+00:00",
+  "updated_at": "2026-08-10T16:10:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3218,6 +3218,66 @@
       "source": "crates/server/src/openai/chat.rs check_context_length + crates/server/tests/context_length.rs + crates/server/src/openai/chat/tests.rs + commit 424355b5",
       "confidence": 1.0,
       "title": "Pre-fix: chat request max_tokens=10_000_000 with max_model_len=None reached the engine (only 503 from a closed channel, never 400); post-fix it is rejected 400 context_length_exceeded while max_tokens=100 still passes fail-open. Unit + integration regression tests red->green; full server suite green."
+    },
+    "ISS-045": {
+      "id": "ISS-045",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T16:10:00+00:00",
+      "updated_at": "2026-08-10T16:10:00+00:00",
+      "touched_round": 42,
+      "title": "Forward-error orphaning: build_batch moves freshly-admitted prefills into running before the forward; a model-forward error propagates with ? before update() runs, stranding them in running as Prefilling/Waiting (KV pinned) — build_batch never re-includes non-Decoding, so the scheduler spins forever with has_pending() true, KV blocks leak, and the client finish channel never fires (request hangs). Speculative path leaks its verification-span blocks too (ensure_verification_blocks growth)."
+    },
+    "TASK-049": {
+      "id": "TASK-049",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T16:10:00+00:00",
+      "updated_at": "2026-08-10T16:10:00+00:00",
+      "touched_round": 42,
+      "category": "stability",
+      "severity": 4,
+      "confidence": 0.97,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "priority_score": 21.9,
+      "title": "On step error, roll back sequences stranded in running (requeue_stuck_prefills) and requeue them as Prefill so transient forward failures retry instead of wedging the engine + regression tests"
+    },
+    "CHG-048": {
+      "id": "CHG-048",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T16:10:00+00:00",
+      "updated_at": "2026-08-10T16:10:00+00:00",
+      "touched_round": 42,
+      "commit": "77f5183a",
+      "title": "fix(core): recover sequences orphaned in running by a forward error"
+    },
+    "DEC-032": {
+      "id": "DEC-032",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T16:10:00+00:00",
+      "updated_at": "2026-08-10T16:10:00+00:00",
+      "touched_round": 42,
+      "rationale": "模型 forward 出错时，build_batch 已把新 admit 的 prefill 移入 running（Prefilling），错误经 ? 在 update 前返回，这些序列将永远滞留（build_batch 只重取 Decoding）。引擎侧不掌握\"哪些是本步新 admit\"，但可以通过不变式恢复：健康运行下 running 跨越 step 时只应含 Decoding；任何遗留的 Prefilling/Waiting 就是孤儿集。决策：Engine::step / step_with_graph 出错时调用 scheduler.requeue_stuck_prefills()，释放 KV 块并重新入队为 Prefill 重试。这同时覆盖 regular/speculative/graph 三条路径，并顺带释放在错误路径上 ensure_verification_blocks 预分配的多余块。",
+      "alternatives_rejected": "① 在 step 内部逐路径捕获错误并回滚：三条 forward 路径各自维护回滚，重复且易漏（正是当前被修的缺口）；② 对滞留序列直接记为失败并通知客户端：丢失请求、且与\"可重试的瞬时模型错误\"语义不符；③ 让 build_batch 重新包含 Prefilling：改变 running 的既有语义（decode-only 重取），影响 preemption/eviction 面。"
+    },
+    "EV-061": {
+      "id": "EV-061",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T16:10:00+00:00",
+      "updated_at": "2026-08-10T16:10:00+00:00",
+      "touched_round": 42,
+      "source": "crates/core/tests/forward_error_recovery.rs (persistent_forward_error_recovers_orphaned_prefill, transient_forward_error_retries_and_succeeds) + commit 77f5183a",
+      "confidence": 1.0,
+      "title": "TDD: with pre-fix step() the persistent backend strands the seq in running (running=1) and the transient backend loses the request (waiting=0); with recovery both tests green — transient retries and completes the prefill (num_computed=prompt_len, status Decoding); full vllm-core suite green."
     }
   },
   "edges": [
@@ -4636,6 +4696,30 @@
       "to": "TASK-048",
       "type": "governs",
       "created_at": "2026-08-10T15:20:00+00:00"
+    },
+    {
+      "from": "TASK-049",
+      "to": "ISS-045",
+      "type": "addresses",
+      "created_at": "2026-08-10T16:10:00+00:00"
+    },
+    {
+      "from": "CHG-048",
+      "to": "TASK-049",
+      "type": "implements",
+      "created_at": "2026-08-10T16:10:00+00:00"
+    },
+    {
+      "from": "CHG-048",
+      "to": "ISS-045",
+      "type": "resolves",
+      "created_at": "2026-08-10T16:10:00+00:00"
+    },
+    {
+      "from": "DEC-032",
+      "to": "TASK-049",
+      "type": "governs",
+      "created_at": "2026-08-10T16:10:00+00:00"
     }
   ]
 }
