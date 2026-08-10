@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 28,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T11:33:46+00:00",
+  "updated_at": "2026-08-10T11:36:46+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2482,6 +2482,29 @@
       "touched_round": 28,
       "rationale": "在 ModelBackend 加默认 no-op 的 on_sequence_finished 钩子（无破坏性），HybridLm 实现删除 gdn_states 条目；引擎 finalize_finished 统一调用（覆盖 max_tokens/stop/cancel）",
       "alternatives_rejected": "在模型内按容量 LRU 淘汰（无法区分运行中与已完成序列，会破坏活跃序列状态）；在引擎侧暴露 registry 遍历所有 draft 后端（改动面大，先修 target）"
+    },
+    "CHG-034": {
+      "id": "CHG-034",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:36:46+00:00",
+      "updated_at": "2026-08-10T11:36:46+00:00",
+      "touched_round": 28,
+      "commit": "adc57fdb",
+      "title": "fix(core): notify draft models too when sequences finish"
+    },
+    "EV-049": {
+      "id": "EV-049",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:36:46+00:00",
+      "updated_at": "2026-08-10T11:36:46+00:00",
+      "touched_round": 28,
+      "source": "crates/core/src/speculative/registry/tests.rs::test_notify_sequence_finished_reaches_loaded_backends",
+      "title": "注册表单测：loaded draft 收到 on_sequence_finished(42)，unloaded spec 被跳过",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -3546,6 +3569,18 @@
       "to": "TASK-037",
       "type": "governs",
       "created_at": "2026-08-10T11:33:46+00:00"
+    },
+    {
+      "from": "CHG-034",
+      "to": "TASK-037",
+      "type": "implements",
+      "created_at": "2026-08-10T11:36:46+00:00"
+    },
+    {
+      "from": "EV-049",
+      "to": "HYP-015",
+      "type": "validates",
+      "created_at": "2026-08-10T11:36:46+00:00"
     }
   ]
 }
