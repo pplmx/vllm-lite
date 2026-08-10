@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 39,
+  "round": 40,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T13:40:00+00:00",
+  "updated_at": "2026-08-10T14:10:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3076,6 +3076,77 @@
       "source": "crates/core/tests/scheduler_batch_requeue.rs (prefill_overflow_is_requeued_not_stranded_in_running, under_allocated_prefill_is_requeued_not_admitted) + commit f7205aff",
       "confidence": 1.0,
       "title": "TDD verified: both regression tests fail on pre-fix batch.rs (overflow stranded in running: waiting=0/running=5; under-allocated prefill admitted with 2-block table), and pass on f7205aff; full vllm-core suite 702+466 tests green"
+    },
+    "ISS-043": {
+      "id": "ISS-043",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T14:10:00+00:00",
+      "updated_at": "2026-08-10T14:10:00+00:00",
+      "touched_round": 40,
+      "title": "SchedulerConfig knobs enable_priority_scheduling / enable_dynamic_batching / prefill_chunk_size / decode_preference_ratio / enable_pd_separation are never read by the scheduler (verified 0 production reads): the engine hardcodes FcfsPolicy and always builds pure-phase batches, so documented flags silently do nothing — priority-tier users got FCFS, and README claimed mixed-batch behavior that does not exist"
+    },
+    "TASK-047": {
+      "id": "TASK-047",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T14:10:00+00:00",
+      "updated_at": "2026-08-10T14:10:00+00:00",
+      "touched_round": 40,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 0.97,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "priority_score": 29.1,
+      "title": "Honor enable_priority_scheduling at SchedulerEngine::new (install PriorityPolicy) and add a config-flag-only regression test; honestly document the remaining inert knobs"
+    },
+    "CHG-044": {
+      "id": "CHG-044",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T14:10:00+00:00",
+      "updated_at": "2026-08-10T14:10:00+00:00",
+      "touched_round": 40,
+      "commit": "ef2e5363",
+      "title": "fix(core): honor enable_priority_scheduling config flag"
+    },
+    "CHG-045": {
+      "id": "CHG-045",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T14:10:00+00:00",
+      "updated_at": "2026-08-10T14:10:00+00:00",
+      "touched_round": 40,
+      "commit": "64148518",
+      "title": "docs(core,readme): mark not-yet-effective SchedulerConfig knobs"
+    },
+    "DEC-030": {
+      "id": "DEC-030",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T14:10:00+00:00",
+      "updated_at": "2026-08-10T14:10:00+00:00",
+      "touched_round": 40,
+      "rationale": "发现一批文档承诺但未实现的调度配置旋钮（5 个字段 0 生产读取）。处理策略：① enable_priority_scheduling 用户影响最大（SLA 分级静默失效）且接线成本最低（构造时选 Policy），本轮直接修复；另 4 个（enable_dynamic_batching / prefill_chunk_size / decode_preference_ratio / enable_pd_separation）对应混合批次、动态打包、分块 prefill 等大特性，贸然在单一轮次补全会回归当前已稳定的纯相位 FCFS 路径，选择在字段文档与 README 中如实标注\"未生效\"，见 RIL ISS-043，后续按特性逐个实现。",
+      "alternatives_rejected": "① 本轮实现全部 5 个旋钮（混合 Mixed 批次需改动 Phase 枚举/phase_scheduler/composer/模型分派 11+ 文件，风险高，且刚改过 build_batch 入学重排逻辑，不宜叠加）；② 对 enable_pd_separation=false 等直接报错拒绝（会破坏大量使用该值的既有测试，非破坏式 API 变更）；③ 静默不改（正是被本 issue 的状态，用户被误导）。"
+    },
+    "EV-059": {
+      "id": "EV-059",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T14:10:00+00:00",
+      "updated_at": "2026-08-10T14:10:00+00:00",
+      "touched_round": 40,
+      "source": "grep 跨 crates/core|crates/server 生产代码；crates/core/tests/scheduler.rs test_priority_scheduling_via_config_flag_only + commit ef2e5363",
+      "confidence": 1.0,
+      "title": "5 个 SchedulerConfig 字段 production read = 0（enable_priority_scheduling, enable_dynamic_batching, prefill_chunk_size, decode_preference_ratio, enable_pd_separation）；新回归测试在 pre-fix 下失败（FCFS 选 seq1，期望 priority 选 seq2），fix 后全绿（703 集成 + 466 lib）"
     }
   },
   "edges": [
@@ -4434,6 +4505,36 @@
       "to": "TASK-046",
       "type": "governs",
       "created_at": "2026-08-10T13:40:00+00:00"
+    },
+    {
+      "from": "TASK-047",
+      "to": "ISS-043",
+      "type": "addresses",
+      "created_at": "2026-08-10T14:10:00+00:00"
+    },
+    {
+      "from": "CHG-044",
+      "to": "TASK-047",
+      "type": "implements",
+      "created_at": "2026-08-10T14:10:00+00:00"
+    },
+    {
+      "from": "CHG-044",
+      "to": "ISS-043",
+      "type": "resolves",
+      "created_at": "2026-08-10T14:10:00+00:00"
+    },
+    {
+      "from": "CHG-045",
+      "to": "ISS-043",
+      "type": "resolves",
+      "created_at": "2026-08-10T14:10:00+00:00"
+    },
+    {
+      "from": "DEC-030",
+      "to": "TASK-047",
+      "type": "governs",
+      "created_at": "2026-08-10T14:10:00+00:00"
     }
   ]
 }
