@@ -750,6 +750,23 @@ pub fn validate_chat_tool_choice(
 pub fn validate_chat_request_fields(
     req: &ChatRequest,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    // RIL ISS-033: `max_tokens` must be >= 1. The engine's completion check
+    // is `generated >= max_tokens`; with `max_tokens = 0` a request would
+    // emit one token anyway (the prefill samples one), and a negative value
+    // was silently coerced to 100 by `usize::try_from(...).unwrap_or(100)` —
+    // both violate the request's stated budget. Reject with 400 (matches
+    // OpenAI / vLLM).
+    if let Some(max_tokens) = req.max_tokens
+        && max_tokens < 1
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "max_tokens must be a positive integer (max_tokens >= 1)",
+                "invalid_request_error",
+            )),
+        ));
+    }
     validate_top_p(req.top_p)?;
     validate_chat_response_format(req.response_format.as_ref())?;
     validate_penalty(req.frequency_penalty, "frequency_penalty")?;
@@ -807,6 +824,19 @@ pub fn validate_chat_request_fields(
 pub fn validate_completion_request_fields(
     req: &CompletionRequest,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    // RIL ISS-033: same max_tokens >= 1 contract as the chat endpoint (see
+    // `validate_chat_request_fields`).
+    if let Some(max_tokens) = req.max_tokens
+        && max_tokens < 1
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "max_tokens must be a positive integer (max_tokens >= 1)",
+                "invalid_request_error",
+            )),
+        ));
+    }
     validate_top_p(req.top_p)?;
     validate_penalty(req.frequency_penalty, "frequency_penalty")?;
     validate_penalty(req.presence_penalty, "presence_penalty")?;
@@ -2961,9 +2991,63 @@ mod tests {
     }
 
     #[test]
+    fn test_chat_max_tokens_zero_rejected() {
+        let mut req = chat_request_with_n(None);
+        req.max_tokens = Some(0);
+        let err = validate_chat_request_fields(&req).unwrap_err();
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(
+            err.1.0.error.message.contains("max_tokens"),
+            "error must name max_tokens; got: {}",
+            err.1.0.error.message
+        );
+    }
+
+    #[test]
+    fn test_chat_max_tokens_negative_rejected() {
+        let mut req = chat_request_with_n(None);
+        req.max_tokens = Some(-5);
+        assert!(validate_chat_request_fields(&req).is_err());
+    }
+
+    #[test]
+    fn test_chat_max_tokens_positive_passes() {
+        let mut req = chat_request_with_n(None);
+        req.max_tokens = Some(1);
+        validate_chat_request_fields(&req).expect("max_tokens = 1 must pass");
+    }
+
+    #[test]
     fn test_completions_n_at_upper_bound_passes() {
         let req = sample_completion_request_with_n(MAX_N);
         validate_completion_request_fields(&req).expect("n = MAX_N must pass");
+    }
+
+    #[test]
+    fn test_completions_max_tokens_zero_rejected() {
+        let mut req = completion_request_with_n(None);
+        req.max_tokens = Some(0);
+        let err = validate_completion_request_fields(&req).unwrap_err();
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(
+            err.1.0.error.message.contains("max_tokens"),
+            "error must name max_tokens; got: {}",
+            err.1.0.error.message
+        );
+    }
+
+    #[test]
+    fn test_completions_max_tokens_negative_rejected() {
+        let mut req = completion_request_with_n(None);
+        req.max_tokens = Some(-1);
+        assert!(validate_completion_request_fields(&req).is_err());
+    }
+
+    #[test]
+    fn test_completions_max_tokens_positive_passes() {
+        let mut req = completion_request_with_n(None);
+        req.max_tokens = Some(1);
+        validate_completion_request_fields(&req).expect("max_tokens = 1 must pass");
     }
 
     #[test]
