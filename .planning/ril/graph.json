@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 30,
+  "round": 31,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T11:50:20+00:00",
+  "updated_at": "2026-08-10T11:55:36+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1821,7 +1821,7 @@
       "version": 1,
       "created_at": "2026-08-10T10:39:57+00:00",
       "updated_at": "2026-08-10T10:39:57+00:00",
-      "touched_round": 30,
+      "touched_round": 31,
       "title": "vllm-core engine/speculative dispatch + scheduler update",
       "role": "speculative decoding step orchestration and scheduler state fold"
     },
@@ -2658,6 +2658,77 @@
       "touched_round": 30,
       "rationale": "验证器用与常规路径相同的 seen 集合（tokens[prompt_len..]），并在接受 draft 时增量增长，保证每位置惩罚上下文与常规解码一致（lossless 契约）",
       "alternatives_rejected": "让 draft 生成也带惩罚（draft 只是提案，验证才是最终分布）；在验证后重采样（多余前向）"
+    },
+    "ISS-037": {
+      "id": "ISS-037",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:55:28+00:00",
+      "updated_at": "2026-08-10T11:55:36+00:00",
+      "touched_round": 31,
+      "title": "multi-node 特性下 ensure_blocks_for_tokens 的 chain-cursor 喂入切片越界（tokens[start..end] start > len），speculative span 预分配触发 panic",
+      "severity": 8
+    },
+    "HYP-018": {
+      "id": "HYP-018",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:55:28+00:00",
+      "updated_at": "2026-08-10T11:55:36+00:00",
+      "touched_round": 31,
+      "confidence": 0.95,
+      "title": "ISS-026 的验证 span 预分配可超过当前 token 数，multi-node 分支对超出块 slice tokens[start..end] 未保护"
+    },
+    "EV-052": {
+      "id": "EV-052",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:55:29+00:00",
+      "updated_at": "2026-08-10T11:55:29+00:00",
+      "touched_round": 31,
+      "source": "crates/core/tests/real_model_engine.rs::real_model_speculative_decode_boundary_does_not_corrupt_first_block under --features multi-node (before: slice index starts at 32 but ends at 29)",
+      "title": "特性门控回归：multi-node 构建下 decode-boundary 测试 panic；修复后 9/9 通过",
+      "confidence": 1.0
+    },
+    "TASK-040": {
+      "id": "TASK-040",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:55:29+00:00",
+      "updated_at": "2026-08-10T11:55:35+00:00",
+      "touched_round": 31,
+      "category": "stability",
+      "severity": 8,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "title": "ensure_blocks_for_tokens 的 multi-node 喂入在 start >= tokens.len() 时跳过（chain cursor 为 best-effort）"
+    },
+    "CHG-037": {
+      "id": "CHG-037",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:55:35+00:00",
+      "updated_at": "2026-08-10T11:55:35+00:00",
+      "touched_round": 31,
+      "commit": "18e526b0",
+      "title": "fix(core): speculative span pre-allocation must not slice beyond tokens under multi-node"
+    },
+    "DEC-024": {
+      "id": "DEC-024",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:55:35+00:00",
+      "updated_at": "2026-08-10T11:55:35+00:00",
+      "touched_round": 31,
+      "rationale": "超出当前 token 数的预分配块不喂 chain-cursor（token 尚未写入，cursor 是 best-effort 占位，写入时会刷新），避免切片 panic",
+      "alternatives_rejected": "在 ensure_verification_blocks 限制预分配不超过 tokens.len()（破坏 ISS-026 的 span 覆盖）；把切片改成空 vec 喂入（无意义 hash）"
     }
   },
   "edges": [
@@ -3806,6 +3877,42 @@
       "to": "TASK-039",
       "type": "governs",
       "created_at": "2026-08-10T11:50:20+00:00"
+    },
+    {
+      "from": "EV-052",
+      "to": "HYP-018",
+      "type": "validates",
+      "created_at": "2026-08-10T11:55:35+00:00"
+    },
+    {
+      "from": "TASK-040",
+      "to": "ISS-037",
+      "type": "addresses",
+      "created_at": "2026-08-10T11:55:35+00:00"
+    },
+    {
+      "from": "ISS-037",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-10T11:55:35+00:00"
+    },
+    {
+      "from": "CHG-037",
+      "to": "TASK-040",
+      "type": "implements",
+      "created_at": "2026-08-10T11:55:35+00:00"
+    },
+    {
+      "from": "CHG-037",
+      "to": "ISS-037",
+      "type": "resolves",
+      "created_at": "2026-08-10T11:55:35+00:00"
+    },
+    {
+      "from": "DEC-024",
+      "to": "TASK-040",
+      "type": "governs",
+      "created_at": "2026-08-10T11:55:35+00:00"
     }
   ]
 }
