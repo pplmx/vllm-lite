@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 26,
+  "round": 27,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T11:21:32+00:00",
+  "updated_at": "2026-08-10T11:26:44+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2318,6 +2318,88 @@
       "touched_round": 26,
       "rationale": "在 select_sequences_for_phase 复用 build_batch 的准入门（blocks_needed > available 时 execute_preemption），保证两条批构建路径行为一致",
       "alternatives_rejected": "在 preallocate 后再次检查并回滚（已分配的 block 需要释放、复杂度高）；只修 preallocate 的 OOM 分支返回错误（不解决运行序列占用问题）"
+    },
+    "ISS-033": {
+      "id": "ISS-033",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:26:32+00:00",
+      "updated_at": "2026-08-10T11:26:43+00:00",
+      "touched_round": 27,
+      "title": "max_tokens 未校验：0 会发出 1 个 token，负数被静默转成 100，违反请求的输出预算",
+      "severity": 7
+    },
+    "HYP-014": {
+      "id": "HYP-014",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:26:32+00:00",
+      "updated_at": "2026-08-10T11:26:44+00:00",
+      "touched_round": 27,
+      "confidence": 0.95,
+      "title": "chat/completions 校验器没有 max_tokens 下界检查，usize::try_from(...).unwrap_or(100) 把负数静默变为 100，0 则通过且 prefill 必产 1 token"
+    },
+    "EV-047": {
+      "id": "EV-047",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:26:32+00:00",
+      "updated_at": "2026-08-10T11:26:32+00:00",
+      "touched_round": 27,
+      "source": "crates/core/tests/max_tokens_zero_tmp.rs (probe: max_tokens=0 emitted 1 token) + sampling_validation tests",
+      "title": "探测：max_tokens=0 的请求发出 1 个 token；新增 6 个校验单测（0/负数拒绝、正数通过）",
+      "confidence": 1.0
+    },
+    "TASK-036": {
+      "id": "TASK-036",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:26:32+00:00",
+      "updated_at": "2026-08-10T11:26:43+00:00",
+      "touched_round": 27,
+      "category": "correctness",
+      "severity": 7,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "title": "在 chat/completions 两个校验器加 max_tokens >= 1 检查（含单测）"
+    },
+    "COMP-012": {
+      "id": "COMP-012",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:26:38+00:00",
+      "updated_at": "2026-08-10T11:26:38+00:00",
+      "touched_round": 27,
+      "title": "vllm-server openai sampling validation",
+      "role": "HTTP 层采样参数校验"
+    },
+    "CHG-032": {
+      "id": "CHG-032",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:26:38+00:00",
+      "updated_at": "2026-08-10T11:26:38+00:00",
+      "touched_round": 27,
+      "commit": "cc4f35e4",
+      "title": "fix(server): reject max_tokens < 1 on chat and completions endpoints"
+    },
+    "DEC-020": {
+      "id": "DEC-020",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:26:38+00:00",
+      "updated_at": "2026-08-10T11:26:38+00:00",
+      "touched_round": 27,
+      "rationale": "在 HTTP 层拒绝 max_tokens < 1（与 OpenAI/vLLM 一致），而不是改引擎 prefill 采样路径；负数静默转 100 的问题随之消除",
+      "alternatives_rejected": "引擎层让 max_tokens=0 不产出 token（prefill 已采样并推送，改动大且收益低）；保留静默转换（违反用户预算）"
     }
   },
   "edges": [
@@ -3310,6 +3392,42 @@
       "to": "TASK-035",
       "type": "governs",
       "created_at": "2026-08-10T11:21:32+00:00"
+    },
+    {
+      "from": "EV-047",
+      "to": "HYP-014",
+      "type": "validates",
+      "created_at": "2026-08-10T11:26:38+00:00"
+    },
+    {
+      "from": "TASK-036",
+      "to": "ISS-033",
+      "type": "addresses",
+      "created_at": "2026-08-10T11:26:38+00:00"
+    },
+    {
+      "from": "ISS-033",
+      "to": "COMP-012",
+      "type": "located_in",
+      "created_at": "2026-08-10T11:26:38+00:00"
+    },
+    {
+      "from": "CHG-032",
+      "to": "TASK-036",
+      "type": "implements",
+      "created_at": "2026-08-10T11:26:43+00:00"
+    },
+    {
+      "from": "CHG-032",
+      "to": "ISS-033",
+      "type": "resolves",
+      "created_at": "2026-08-10T11:26:43+00:00"
+    },
+    {
+      "from": "DEC-020",
+      "to": "TASK-036",
+      "type": "governs",
+      "created_at": "2026-08-10T11:26:43+00:00"
     }
   ]
 }
