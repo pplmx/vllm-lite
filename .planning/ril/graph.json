@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 44,
+  "round": 45,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T17:55:00+00:00",
+  "updated_at": "2026-08-10T18:45:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3398,6 +3398,66 @@
       "source": "crates/server/src/openai/completions/tests.rs + crates/server/tests/chat_integration_test.rs test_completions_n_two_streaming_wire_shape + commit f2f63fa6",
       "confidence": 1.0,
       "title": "TDD: the helper unit test fails against the pre-fix choice (no text) and passes post-fix; the n=2 streaming integration test (which pinned the old malformed contract and failed) is updated to assert empty text on every finish choice and passes. Full server suite 0 failures."
+    },
+    "ISS-048": {
+      "id": "ISS-048",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T18:45:00+00:00",
+      "updated_at": "2026-08-10T18:45:00+00:00",
+      "touched_round": 45,
+      "title": "temperature was the only sampling float never validated at the HTTP boundary: negative values flip the logits (sampling the least-likely token), NaN disables the greedy shortcut and NaNs every logit, +/-inf flattens or inverts the distribution — silently returning a plausible 200 with garbage output, unlike every other float field which is finite/range-checked"
+    },
+    "TASK-052": {
+      "id": "TASK-052",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T18:45:00+00:00",
+      "updated_at": "2026-08-10T18:45:00+00:00",
+      "touched_round": 45,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 0.97,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "priority_score": 29.1,
+      "title": "Add validate_temperature (finite, [0,2] per OpenAI) and wire into both request-field validators + tests"
+    },
+    "CHG-051": {
+      "id": "CHG-051",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T18:45:00+00:00",
+      "updated_at": "2026-08-10T18:45:00+00:00",
+      "touched_round": 45,
+      "commit": "4e103c8b",
+      "title": "fix(server): validate temperature at the boundary"
+    },
+    "DEC-035": {
+      "id": "DEC-035",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T18:45:00+00:00",
+      "updated_at": "2026-08-10T18:45:00+00:00",
+      "touched_round": 45,
+      "rationale": "所有其它采样浮点字段（top_p、presence/frequency penalty、logit_bias）都在边界做了有限性与区间校验，唯独 temperature 漏了：负值会把 logits 反转从而采样到最不可能的 token，NaN 使采样器短路失败、±inf 压平/反转分布，全部静默返回 200 的垃圾输出。决策：新增 validate_temperature 按 OpenAI 规范拒绝非有限值与 [0,2] 之外的值，接入 chat 与 completions 两个入口的字段校验。引擎采样器自身的防御性回退（<=0 视为 greedy、非有限 max 回退 argmax）保留，边界负责把垃圾输入挡在门外。",
+      "alternatives_rejected": "① 只修引擎采样器（把 NaN/负值 clamp 成 greedy）：让垃圾语义合法化，且与大输出面比边界校验复杂；② 只拒绝 NaN/负值、允许 >2：OpenAI 规范是 [0,2]，此处其它校验一律按规范严格实施，保持一致。"
+    },
+    "EV-064": {
+      "id": "EV-064",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T18:45:00+00:00",
+      "updated_at": "2026-08-10T18:45:00+00:00",
+      "touched_round": 45,
+      "source": "crates/server/src/openai/sampling_validation.rs + crates/server/src/openai/completions/tests.rs test_completions_rejects_invalid_temperature + commit 4e103c8b",
+      "confidence": 1.0,
+      "title": "TDD: handler-level test passes temperature -1 / NaN / +inf and asserts 400; red-check with the validator unwired fails (the bad temperature reaches the engine). 6 unit tests + handler test green; full server suite 0 failures."
     }
   },
   "edges": [
@@ -4888,6 +4948,30 @@
       "to": "TASK-051",
       "type": "governs",
       "created_at": "2026-08-10T17:55:00+00:00"
+    },
+    {
+      "from": "TASK-052",
+      "to": "ISS-048",
+      "type": "addresses",
+      "created_at": "2026-08-10T18:45:00+00:00"
+    },
+    {
+      "from": "CHG-051",
+      "to": "TASK-052",
+      "type": "implements",
+      "created_at": "2026-08-10T18:45:00+00:00"
+    },
+    {
+      "from": "CHG-051",
+      "to": "ISS-048",
+      "type": "resolves",
+      "created_at": "2026-08-10T18:45:00+00:00"
+    },
+    {
+      "from": "DEC-035",
+      "to": "TASK-052",
+      "type": "governs",
+      "created_at": "2026-08-10T18:45:00+00:00"
     }
   ]
 }
