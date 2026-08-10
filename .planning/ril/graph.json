@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 43,
+  "round": 44,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T17:05:00+00:00",
+  "updated_at": "2026-08-10T17:55:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3338,6 +3338,66 @@
       "source": "crates/core/tests/engine_panic_recovery.rs (model_forward_panic_does_not_kill_the_engine_loop) + commit 4f18c922",
       "confidence": 1.0,
       "title": "TDD: pre-fix the panicking forward unwinds the spawned engine thread (test fails on join); post-fix the loop survives (thread not finished), error_count backoff prevents a hot loop, and Shutdown + join succeed. Full vllm-core suite green; cargo check --release passes with unwind. Debug trace confirmed catch -> LockPoisoned on retry (model mutex poisoned by the panic) — recovery keeps the server alive, not a broken model serving."
+    },
+    "ISS-047": {
+      "id": "ISS-047",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T17:55:00+00:00",
+      "updated_at": "2026-08-10T17:55:00+00:00",
+      "touched_round": 44,
+      "title": "OpenAI streaming-completions contract: the n>1 parallel-stream consolidated final event and the intermediate per-candidate finish events emitted choices as {index, finish_reason} WITHOUT the text field, while every token chunk carries it — a client concatenating chunk texts hits a missing key and strict OpenAI-SDK parsers reject the malformed choice"
+    },
+    "TASK-051": {
+      "id": "TASK-051",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T17:55:00+00:00",
+      "updated_at": "2026-08-10T17:55:00+00:00",
+      "touched_round": 44,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 0.97,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "priority_score": 29.1,
+      "title": "Emit an empty text field on every n>1 streaming finish choice (extract parallel_finish_choice) + update the wire-shape test"
+    },
+    "CHG-050": {
+      "id": "CHG-050",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T17:55:00+00:00",
+      "updated_at": "2026-08-10T17:55:00+00:00",
+      "touched_round": 44,
+      "commit": "f2f63fa6",
+      "title": "fix(server): streaming n>1 finish events always carry the text field"
+    },
+    "DEC-034": {
+      "id": "DEC-034",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T17:55:00+00:00",
+      "updated_at": "2026-08-10T17:55:00+00:00",
+      "touched_round": 44,
+      "rationale": "OpenAI 流式 completions 契约要求每个 choices[] 项都携带 text（可空串），客户端拼接 chunk 文本时不应遇到缺失键。n>1 并行流里 token chunk 一直带 text，但合并终态事件与中间 finish 事件只发 {index, finish_reason}——线形不一致，严格的 OpenAI-SDK 解析器会拒绝该 choice。决策：把 finish choice 构造提取为 parallel_finish_choice（恒带空 text），两个站点统一使用，并把断言旧缺陷形态的集成测试更新到新契约。",
+      "alternatives_rejected": "① 保持终态事件不带 text、只修 parser 不修服务端：把错误契约推给客户端，违背 \"服务器遵循 OpenAI 规范\" 定位；② 终态事件带非空 text：终态无 token 可承载，空串是唯一诚实值。"
+    },
+    "EV-063": {
+      "id": "EV-063",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T17:55:00+00:00",
+      "updated_at": "2026-08-10T17:55:00+00:00",
+      "touched_round": 44,
+      "source": "crates/server/src/openai/completions/tests.rs + crates/server/tests/chat_integration_test.rs test_completions_n_two_streaming_wire_shape + commit f2f63fa6",
+      "confidence": 1.0,
+      "title": "TDD: the helper unit test fails against the pre-fix choice (no text) and passes post-fix; the n=2 streaming integration test (which pinned the old malformed contract and failed) is updated to assert empty text on every finish choice and passes. Full server suite 0 failures."
     }
   },
   "edges": [
@@ -4804,6 +4864,30 @@
       "to": "TASK-050",
       "type": "governs",
       "created_at": "2026-08-10T17:05:00+00:00"
+    },
+    {
+      "from": "TASK-051",
+      "to": "ISS-047",
+      "type": "addresses",
+      "created_at": "2026-08-10T17:55:00+00:00"
+    },
+    {
+      "from": "CHG-050",
+      "to": "TASK-051",
+      "type": "implements",
+      "created_at": "2026-08-10T17:55:00+00:00"
+    },
+    {
+      "from": "CHG-050",
+      "to": "ISS-047",
+      "type": "resolves",
+      "created_at": "2026-08-10T17:55:00+00:00"
+    },
+    {
+      "from": "DEC-034",
+      "to": "TASK-051",
+      "type": "governs",
+      "created_at": "2026-08-10T17:55:00+00:00"
     }
   ]
 }
