@@ -241,6 +241,14 @@ where
         self.config.num_kv_heads()
     }
 
+    fn on_sequence_finished(&mut self, seq_id: SeqId) {
+        // RIL ISS-034: drop the recurrent GDN state for a finished sequence.
+        // `gdn_states` is keyed by engine-assigned SeqId (monotonic), so
+        // entries were never removed and every completed request leaked its
+        // per-layer recurrent/conv tensors for the engine's lifetime.
+        self.gdn_states.remove(&seq_id);
+    }
+
     fn forward_to_layer(
         &mut self,
         seq_ids: &[SeqId],
@@ -307,4 +315,61 @@ fn forward_lm_head(
         },
         |head| map_candle(head.forward(hidden)),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::qwen3::config::Qwen3Config;
+    use crate::qwen3_5::Qwen35HybridModel;
+
+    fn tiny_config() -> Qwen3Config {
+        Qwen3Config {
+            text_config: Some(crate::qwen3::config::TextConfig {
+                num_hidden_layers: Some(2),
+                num_attention_heads: Some(2),
+                num_key_value_heads: Some(2),
+                hidden_size: Some(64),
+                intermediate_size: Some(128),
+                layer_types: Some(vec![
+                    "linear_attention".to_string(),
+                    "full_attention".to_string(),
+                ]),
+                ..Default::default()
+            }),
+            head_dim: Some(32),
+            vocab_size: Some(128),
+            ..Default::default()
+        }
+    }
+
+    /// Regression (RIL ISS-034): `on_sequence_finished` must remove the
+    /// sequence's GDN recurrent-state entry. Without it, `gdn_states` grows
+    /// one entry per finished request for the engine's lifetime (SeqIds are
+    /// monotonic, so every completed sequence leaked its per-layer
+    /// recurrent/conv tensors).
+    #[test]
+    fn on_sequence_finished_removes_gdn_state() {
+        let device = Device::Cpu;
+        let mut model = Qwen35HybridModel::new(tiny_config(), device, 16, false).unwrap();
+        let seq_id = 42u64;
+        let tokens = vec![1u32, 2, 3, 4];
+        let positions: Vec<usize> = (0..tokens.len()).collect();
+        let block_ids = vec![0usize; tokens.len()];
+
+        // A forward pass populates the per-sequence GDN state.
+        model
+            .forward_with_cache(seq_id, &tokens, 0, &block_ids, &positions, true)
+            .unwrap();
+        assert!(
+            model.gdn_states.contains_key(&seq_id),
+            "forward must populate the GDN state for the sequence"
+        );
+
+        model.on_sequence_finished(seq_id);
+        assert!(
+            !model.gdn_states.contains_key(&seq_id),
+            "on_sequence_finished must release the sequence's GDN state"
+        );
+    }
 }

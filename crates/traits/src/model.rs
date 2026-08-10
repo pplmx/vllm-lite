@@ -115,6 +115,15 @@ pub trait ModelBackend: Send + Sync {
     /// Number of query attention heads.
     fn num_heads(&self) -> usize;
 
+    /// Called by the engine when a sequence finishes (`max_tokens`, stop
+    /// sequence, or cancel) so the backend can release per-sequence state.
+    ///
+    /// Default no-op. Stateful backends (e.g. the Qwen3.5 hybrid GDN
+    /// recurrent-state map) MUST drop the sequence's entry here — without
+    /// it, every finished request leaks its per-sequence state for the
+    /// engine's lifetime (RIL ISS-034).
+    fn on_sequence_finished(&mut self, _seq_id: SeqId) {}
+
     /// Forward pass stopped after `upto_layer` layers.
     /// Default impl ignores `upto_layer` and calls `self.forward()`.
     ///

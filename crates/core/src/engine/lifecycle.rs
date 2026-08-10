@@ -101,6 +101,12 @@ impl Engine {
             let _ = tx.send(reason);
         }
         self.response_txs.remove(&seq_id);
+        // RIL ISS-034: tell the target model the sequence is done so it can
+        // drop per-sequence state (e.g. the Qwen3.5 hybrid GDN recurrent
+        // map). Best-effort: a poisoned lock just skips the cleanup.
+        if let Ok(mut model) = crate::sync::lock_mutex(&self.target_model) {
+            model.on_sequence_finished(seq_id);
+        }
     }
 
     /// Cancel an in-flight or queued request identified by `seq_id`.
