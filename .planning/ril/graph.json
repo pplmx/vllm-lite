@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 23,
+  "round": 24,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-03T03:15:10+00:00",
+  "updated_at": "2026-08-10T10:40:35+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -11,7 +11,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 0,
+      "touched_round": 24,
       "title": "vllm-traits",
       "role": "interface definitions (ModelBackend, kernel traits)"
     },
@@ -1752,6 +1752,100 @@
       "touched_round": 23,
       "commit": "253a151a",
       "title": "docs(agents): dedupe RIL docs; make graph-engineering commands executable"
+    },
+    "ISS-025": {
+      "id": "ISS-025",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:39:42+00:00",
+      "updated_at": "2026-08-10T10:40:35+00:00",
+      "touched_round": 24,
+      "title": "speculative step 状态跟踪错误：prefill 批次 num_computed_tokens 低估 + 多 token 结果 zip 截断只入账每序列第一个 token",
+      "severity": 8
+    },
+    "HYP-006": {
+      "id": "HYP-006",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:39:44+00:00",
+      "updated_at": "2026-08-10T10:40:35+00:00",
+      "touched_round": 24,
+      "confidence": 0.9,
+      "title": "step_speculative_inner 以 accepted+1 作为每序列 input_count（prefill 时应为 input_len+accepted），且把多 token 结果扁平化后与每序列计数 zip 导致 scheduler.update 只处理每序列第一个 token"
+    },
+    "TASK-029": {
+      "id": "TASK-029",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:39:45+00:00",
+      "updated_at": "2026-08-10T10:40:35+00:00",
+      "touched_round": 24,
+      "category": "correctness",
+      "severity": 8,
+      "confidence": 0.9,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "title": "修复 speculative 步骤的 scheduler 状态跟踪：按序列折叠全部发出 token，input_count = input_len + accepted（含回归测试）"
+    },
+    "EV-037": {
+      "id": "EV-037",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:39:48+00:00",
+      "updated_at": "2026-08-10T10:39:48+00:00",
+      "touched_round": 24,
+      "source": "crates/core/src/engine/spec_dispatch/tests.rs::test_speculative_prefill_long_prompt_advances_to_decode (before fix: num_computed_tokens=5 for 20-token prompt, failed)",
+      "title": "回归测试复现：20 token prompt + max_draft=4 的 speculative prefill 一步后 num_computed_tokens=5（<20），序列卡在 Prefilling",
+      "confidence": 1.0
+    },
+    "EV-038": {
+      "id": "EV-038",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:39:49+00:00",
+      "updated_at": "2026-08-10T10:39:49+00:00",
+      "touched_round": 24,
+      "source": "crates/core/src/engine/spec_dispatch/tests.rs::test_speculative_all_accepted_folds_every_token_into_sequence (before fix: seq.tokens.len()=3, expected 7)",
+      "title": "回归测试复现：2 token prompt 全部 draft 接受后只入账 1/5 个发出 token（zip 截断）",
+      "confidence": 1.0
+    },
+    "COMP-011": {
+      "id": "COMP-011",
+      "type": "component",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:39:57+00:00",
+      "updated_at": "2026-08-10T10:39:57+00:00",
+      "touched_round": 24,
+      "title": "vllm-core engine/speculative dispatch + scheduler update",
+      "role": "speculative decoding step orchestration and scheduler state fold"
+    },
+    "CHG-025": {
+      "id": "CHG-025",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:40:26+00:00",
+      "updated_at": "2026-08-10T10:40:26+00:00",
+      "touched_round": 24,
+      "commit": "4a9898da",
+      "title": "fix(core): speculative step folds every token and correct prefill input_counts"
+    },
+    "DEC-013": {
+      "id": "DEC-013",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:40:26+00:00",
+      "updated_at": "2026-08-10T10:40:26+00:00",
+      "touched_round": 24,
+      "rationale": "把 speculative 结果按序列分组后经新的 update_speculative 入账：每序列 input_count = input_len + accepted，确保 prefill 一步完成且所有发出 token 都记录进 seq.tokens",
+      "alternatives_rejected": "保留扁平 seq_ids/sampled + 每序列 input_counts 的调用方式（zip 截断导致状态丢失）；在 update 内猜测分组（无法从扁平向量恢复每组边界）"
     }
   },
   "edges": [
@@ -2456,6 +2550,48 @@
       "to": "COMP-010",
       "type": "located_in",
       "created_at": "2026-08-03T03:15:10+00:00"
+    },
+    {
+      "from": "EV-037",
+      "to": "HYP-006",
+      "type": "validates",
+      "created_at": "2026-08-10T10:39:52+00:00"
+    },
+    {
+      "from": "EV-038",
+      "to": "HYP-006",
+      "type": "validates",
+      "created_at": "2026-08-10T10:39:52+00:00"
+    },
+    {
+      "from": "TASK-029",
+      "to": "ISS-025",
+      "type": "addresses",
+      "created_at": "2026-08-10T10:39:52+00:00"
+    },
+    {
+      "from": "ISS-025",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-10T10:40:00+00:00"
+    },
+    {
+      "from": "CHG-025",
+      "to": "TASK-029",
+      "type": "implements",
+      "created_at": "2026-08-10T10:40:29+00:00"
+    },
+    {
+      "from": "CHG-025",
+      "to": "ISS-025",
+      "type": "resolves",
+      "created_at": "2026-08-10T10:40:29+00:00"
+    },
+    {
+      "from": "DEC-013",
+      "to": "TASK-029",
+      "type": "governs",
+      "created_at": "2026-08-10T10:40:29+00:00"
     }
   ]
 }
