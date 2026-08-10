@@ -283,3 +283,79 @@ fn test_finish_sequence_excludes_from_future_batches() {
     assert_eq!(finished.len(), 1);
     assert_eq!(finished[0].id, 1);
 }
+
+// RIL ISS-052: a decode sequence must never be composed with a short KV
+// table. When a boundary-crossing growth allocation fails (pool exhausted
+// mid-update), the table is one block short; if the pool recovers (other
+// sequences finish) before the next round, the preemption gate sees
+// blocks_needed <= available and does NOT fire — without this fix the
+// sequence would be composed with a short table and the paged-KV writer
+// would fall back to block 0, corrupting the prompt's first block.
+#[test]
+fn decode_growth_failure_composes_only_complete_tables() {
+    // 3 KV blocks: A (1) + D1 (1) + D2 (1) fill the pool exactly.
+    let config = SchedulerConfig::builder().build();
+    let mut engine = create_test_engine(config, 3);
+
+    // A: long-running decode that will cross the 16-token boundary.
+    engine.add_request(Request::new(1, vec![1; 16], 50));
+    // D1/D2: finish during the prefill update (max_tokens = 1 already
+    // generated), freeing their blocks afterwards.
+    engine.add_request(Request::new(2, vec![2; 8], 1));
+    engine.add_request(Request::new(3, vec![3; 8], 1));
+
+    // Prefill round: all three admitted (pool -> 0). After the forward,
+    // update pushes one predicted token per sequence: A crosses to 17
+    // tokens and its growth to block 2 FAILS (pool empty) while D1/D2 hit
+    // max_tokens and release their blocks -> pool = 2, A's table still
+    // holds only block 0 (short for its 17 tokens).
+    let batch = engine.build_batch();
+    assert_eq!(
+        batch.seq_ids.len(),
+        3,
+        "all three must be admitted at prefill"
+    );
+    step(&mut engine, &batch);
+    assert_eq!(engine.waiting_count(), 0);
+    let a = engine.get_sequence(1).expect("A must still be in running");
+    assert_eq!(a.tokens.len(), 17, "A must have crossed the block boundary");
+    assert_eq!(
+        a.kv_blocks.len(),
+        1,
+        "A's boundary-crossing growth must have failed (pool was empty)"
+    );
+
+    // Decode round: A's blocks_needed (2) is exactly `available` (2), so
+    // the preemption gate does NOT fire. The scheduler must grow A's table
+    // to its full 2 blocks before composing (ISS-052) — never compose it
+    // short (block-0 fallback) or silently drop it.
+    let batch = engine.build_batch();
+    assert_eq!(batch.seq_ids, vec![1], "A must be composed (and only A)");
+    assert_eq!(
+        batch.kv_block_ids[0].len(),
+        2,
+        "A must carry a complete KV table (17 tokens -> 2 blocks), not a short one"
+    );
+    let a = engine.get_sequence(1).expect("A stays in running");
+    assert_eq!(
+        a.kv_blocks.len(),
+        2,
+        "A's persisted table must also be complete for the next update"
+    );
+}
+
+/// Feed one sampled token per composed sequence and advance the scheduler,
+/// mirroring `Engine::step_regular`'s post-forward update.
+fn step(engine: &mut SchedulerEngine, batch: &vllm_traits::Batch) {
+    let input_counts: Vec<usize> = batch.input_tokens.iter().map(std::vec::Vec::len).collect();
+    let next_tokens: Vec<SampledToken> = batch
+        .seq_ids
+        .iter()
+        .map(|_| SampledToken {
+            token: 3,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        })
+        .collect();
+    engine.update(&batch.seq_ids, &next_tokens, &input_counts);
+}

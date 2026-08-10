@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use vllm_traits::{Batch, SeqId};
+use vllm_traits::{Batch, BlockId, SeqId};
 
 use super::SchedulerEngine;
 use crate::scheduler::SchedulerState;
@@ -86,6 +86,17 @@ impl SchedulerEngine {
         // ISS-042: do not admit a sequence whose KV block table could not be
         // fully pre-allocated (see the helper for the full rationale).
         new_sequences = self.filter_fully_allocated_prefills(new_sequences, phase);
+
+        // RIL ISS-052: for a Decode round, grow each running `Decoding`
+        // sequence's KV table to cover its current tokens — the preemption
+        // gate above freed blocks, but freeing alone doesn't extend the
+        // sequence's OWN table (growth in `update()` runs only AFTER a
+        // successful forward, so a freed block is never assigned to the
+        // short table in time). Defer any sequence that still cannot obtain
+        // its growth block so it is never forwarded with a short table.
+        if phase == Phase::Decode {
+            sequences = self.admit_decode_sequences();
+        }
 
         // Add new sequences to the batch (now with allocated KV blocks)
         sequences.extend(new_sequences.iter().cloned());
@@ -286,6 +297,83 @@ impl SchedulerEngine {
                 i += 1;
             }
         }
+    }
+
+    /// RIL ISS-052: select the `Decoding` sequences for this round's batch,
+    /// ensuring each one's KV table covers its current `tokens` first.
+    ///
+    /// A decode sequence's table grows in `update()` *after* a successful
+    /// forward, so when a boundary-crossing allocation fails (pool
+    /// exhausted) it is left one block short exactly when the next forward
+    /// writes the new token's KV — the paged-KV fallback would write into
+    /// block 0 and corrupt the prompt's first block. The preemption gate in
+    /// `build_batch` freed blocks but never assigns them to the sequence's
+    /// own table. This grows the originals (in place, so `update()` keeps
+    /// progressing) using the freed pool, then clones them; a sequence that
+    /// still cannot obtain its growth block is deferred — it stays
+    /// `Decoding` in `running` and is re-included on a later round — rather
+    /// than being forwarded with a short table.
+    fn admit_decode_sequences(&mut self) -> Vec<Sequence> {
+        let mut admitted = Vec::with_capacity(self.running.len());
+        let mut i = 0;
+        while i < self.running.len() {
+            if self.running[i].status != Status::Decoding {
+                i += 1;
+                continue;
+            }
+            let needed = self.running[i]
+                .tokens
+                .len()
+                .div_ceil(vllm_traits::BLOCK_SIZE);
+            if self.running[i].kv_blocks.len() < needed {
+                let have = self.running[i].kv_blocks.len();
+                self.grow_running_table(i, have, needed);
+            }
+            if self.running[i].kv_blocks.len() >= needed {
+                admitted.push(self.running[i].clone());
+            }
+            i += 1;
+        }
+        admitted
+    }
+
+    /// Grow `self.running[idx]`'s KV table from `have` to `needed` blocks,
+    /// allocating from the pool the preemption gate just tried to free up.
+    /// Partial success leaves the table short — the caller decides whether
+    /// to defer the sequence. Mirrors `preallocate_kv_blocks`'s
+    /// allocate + `record_blocks` + extend pattern (and its multi-node
+    /// token-hash recording) for the running-decode case.
+    fn grow_running_table(&mut self, idx: usize, have: usize, needed: usize) {
+        let mut additions: Vec<BlockId> = Vec::with_capacity(needed - have);
+        while additions.len() < needed - have {
+            match self.memory.allocate(1) {
+                Some(new_blocks) => additions.extend(new_blocks),
+                None => break,
+            }
+        }
+        if additions.is_empty() {
+            return;
+        }
+        self.memory.record_blocks(&additions);
+        #[cfg(feature = "multi-node")]
+        {
+            let seq_id = self.running[idx].id;
+            for (offset, &block_id) in additions.iter().enumerate() {
+                let block_idx = have + offset;
+                let start = block_idx * vllm_traits::BLOCK_SIZE;
+                let end = (start + vllm_traits::BLOCK_SIZE).min(self.running[idx].tokens.len());
+                let parent_hash = self.chain_cursors.get(&seq_id).copied().unwrap_or(0);
+                let hash = self.memory.record_block_tokens(
+                    block_id,
+                    parent_hash,
+                    &self.running[idx].tokens[start..end],
+                );
+                self.chain_cursors.insert(seq_id, hash);
+            }
+        }
+        let mut blocks = (*self.running[idx].kv_blocks).clone();
+        blocks.extend(additions);
+        self.running[idx].kv_blocks = Arc::new(blocks);
     }
 
     /// Release a freshly-admitted (never-forwarded) sequence's pre-allocated KV

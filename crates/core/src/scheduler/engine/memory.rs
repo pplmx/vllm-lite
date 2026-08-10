@@ -53,10 +53,29 @@ impl SchedulerEngine {
         // Under memory pressure, clear the cache (dropping its refs) so
         // the allocator can reuse the blocks. Sequences still running on
         // a shared prefix keep their own refcount and are unaffected.
-        if self.memory.available_blocks() < blocks_needed {
+        let drained = if self.memory.available_blocks() < blocks_needed {
             for blocks in self.prefix_cache.drain_blocks() {
                 self.memory.release_blocks(&blocks);
             }
+            true
+        } else {
+            false
+        };
+        // RIL ISS-052: when the cache drain itself made the pool whole
+        // again, stop here — the old code fell through to phase 1/2 with
+        // the phase-0 frees absent from the accounting (`blocks_freed` is
+        // re-seeded to `victim_set.len()` in phase 2), so it needlessly
+        // preempted sequences holding blocks that were actually freed. That
+        // over-preemption rolled a sequence back to full re-prefill even
+        // when its table could have kept its KV — and, critically, a decode
+        // sequence awaiting a growth block was removed instead of growing in
+        // place, which is the path to the block-0 write (see
+        // `SchedulerEngine::admit_decode_sequences`). This only short-
+        // circuits when a drain actually ran: direct callers with a
+        // well-provisioned pool still reach phase 1 (victim selection is an
+        // independent policy action, pinned by the block-hole test).
+        if drained && self.memory.available_blocks() >= blocks_needed {
+            return;
         }
         // Phase 1: priority-weighted victim selection, applied at
         // sequence granularity (see the function docs: a positional
