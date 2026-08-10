@@ -73,6 +73,18 @@ impl SchedulerEngine {
             .collect();
 
         let mut new_sequences = self.request_queue.drain_by_phase(phase);
+        // RIL ISS-032: same memory-pressure admission gate as `build_batch`
+        // — preempt running sequences before admitting new ones when the new
+        // sequences' KV blocks exceed available memory. Without it the
+        // CUDA-Graph path admitted sequences that then failed block
+        // allocation silently, leaving `write_prefill_kv` to fall back to
+        // block 0 under pressure.
+        for seq in sequences.iter().chain(new_sequences.iter()) {
+            let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
+            if blocks_needed > self.memory.available_blocks() {
+                self.execute_preemption(blocks_needed);
+            }
+        }
         // RIL ISS-028: pre-allocate the newly-admitted sequences' KV blocks
         // before the forward writes their KV — same contract as
         // `build_batch` (RIL ISS-022). The CUDA-Graph builder previously

@@ -441,6 +441,65 @@ fn test_build_batch_preallocates_prefill_kv_blocks() {
     );
 }
 
+/// Regression (RIL ISS-032): the CUDA-Graph admission path must run the
+/// same memory-pressure preemption gate as `build_batch` before admitting
+/// new sequences. Pre-fix, `select_sequences_for_phase` admitted a prefill
+/// sequence whose blocks exceeded available memory without preempting a
+/// running sequence, so allocation failed silently and `write_prefill_kv`
+/// fell back to block 0.
+#[test]
+fn test_build_batch_with_graph_preempts_before_admitting_under_pressure() {
+    use crate::types::{Priority, SamplingParams, Sequence, Status};
+
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    let mut engine = create_test_engine(config, 16);
+
+    // Running decode sequence holding 14 of 16 blocks -> 2 available.
+    let blocks = engine.memory.allocate(14).expect("pool has 16 blocks");
+    engine.memory.record_blocks(&blocks);
+    engine.running.push(Sequence {
+        id: 1,
+        tokens: vec![0; 224],
+        kv_blocks: Arc::new(blocks),
+        num_computed_tokens: 224,
+        prompt_len: 16,
+        status: Status::Decoding,
+        max_tokens: 100,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    });
+
+    // New 40-token prefill request needs 3 blocks > 2 available.
+    engine.add_request(Request::new(2, vec![0; 40], 5));
+
+    let graph_batch = engine.build_batch_with_graph();
+    let batch = graph_batch.into_regular();
+    assert_eq!(batch.len(), 1);
+    assert_eq!(
+        batch.seq_ids[0], 2,
+        "the new prefill sequence must be admitted"
+    );
+    assert_eq!(
+        batch.kv_block_ids[0].len(),
+        3,
+        "admitted sequence must hold all 3 required blocks after preemption"
+    );
+    // The admitted sequence is running; the victim must have been preempted
+    // back to the queue.
+    assert_eq!(engine.running.len(), 1);
+    assert_eq!(engine.running[0].id, 2, "admitted sequence is running");
+    assert_eq!(engine.waiting_count(), 1, "victim must be re-queued");
+}
+
 /// Regression (RIL ISS-028): the CUDA-Graph batch builder
 /// (`build_batch_with_graph`) must pre-allocate prefill KV blocks exactly
 /// like `build_batch` (RIL ISS-022). Pre-fix, `select_sequences_for_phase`
