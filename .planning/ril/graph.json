@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 37,
+  "round": 39,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T12:29:46+00:00",
+  "updated_at": "2026-08-10T13:40:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -77,7 +77,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 2,
+      "touched_round": 38,
       "title": "core/scheduler",
       "role": "queue, preemption, eviction, batch composition"
     },
@@ -2982,6 +2982,100 @@
       "touched_round": 36,
       "commit": "455973cc",
       "title": "fix(server,core): kv_cache_dump reports real prefix-cache node count"
+    },
+    "ISS-041": {
+      "id": "ISS-041",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T13:12:40+00:00",
+      "updated_at": "2026-08-10T13:40:00+00:00",
+      "touched_round": 38,
+      "title": "Prefill overflow: build_batch drains every waiting prefill into running, but compose only takes max_batch_size / breaks on token budget; stranded Status::Prefilling sequences are never re-scheduled from running (only Decoding are re-included), so they stall forever while holding preallocated KV blocks"
+    },
+    "ISS-042": {
+      "id": "ISS-042",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T13:12:40+00:00",
+      "updated_at": "2026-08-10T13:40:00+00:00",
+      "touched_round": 38,
+      "title": "Silent OOM admission: preallocate_kv_blocks breaks when allocate() returns None; the under-allocated prefill sequence is still admitted to running+batch, so write_prefill_kv hits the block-0 fallback and corrupts the cache (same failure ISS-026/028 fixed elsewhere but open in the regular build_batch admission loop)"
+    },
+    "EV-056": {
+      "id": "EV-056",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T13:12:57+00:00",
+      "updated_at": "2026-08-10T13:12:57+00:00",
+      "touched_round": 38,
+      "source": "crates/core/src/scheduler/engine/state/batch.rs build_batch",
+      "confidence": 1.0,
+      "title": "Prefill overflow stall: drained sequences admitted to running as Prefilling but not composed are never re-included"
+    },
+    "EV-057": {
+      "id": "EV-057",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T13:13:02+00:00",
+      "updated_at": "2026-08-10T13:13:02+00:00",
+      "touched_round": 38,
+      "source": "crates/core/src/scheduler/engine/state/batch.rs preallocate_kv_blocks + block-0 fallback in write_kv per ISS-026",
+      "confidence": 1.0,
+      "title": "Silent OOM admission: allocate returns None breaks early, under-allocated prefill still admitted => block-0 KV corruption"
+    },
+    "TASK-046": {
+      "id": "TASK-046",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T13:13:02+00:00",
+      "updated_at": "2026-08-10T13:40:00+00:00",
+      "touched_round": 38,
+      "category": "correctness",
+      "severity": 4,
+      "confidence": 0.97,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "title": "Defer and re-queue (release KV blocks, reset to Waiting-Prefill) any admitted prefill sequence that compose could not fit or whose KV blocks could not be fully pre-allocated, so it is retried later instead of stalling in running or corrupting block 0; add build_batch regression test for overflow",
+      "priority_score": 27.4
+    },
+    "CHG-043": {
+      "id": "CHG-043",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T13:40:00+00:00",
+      "updated_at": "2026-08-10T13:40:00+00:00",
+      "touched_round": 39,
+      "commit": "f7205aff",
+      "title": "fix(core): defer and re-queue prefill admission that compose cannot fit or fully allocate"
+    },
+    "DEC-029": {
+      "id": "DEC-029",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T13:40:00+00:00",
+      "updated_at": "2026-08-10T13:40:00+00:00",
+      "touched_round": 39,
+      "rationale": "prefill admission 上 build_batch 会 drain 全部 waiting prefill，但 compose 只容纳 max_batch_size / 受 token 预算约束：未被 compose 的序列若留在 running（Status::Prefilling）将永不重新调度，且钉住已预分配的 KV 块；KV 块无法完整预分配时若仍 admit，write_prefill_kv 会落到 block 0 破坏缓存。决策：对这两类\"本轮新 admit 且从未 forward\"的 prefill 序列执行 释放部分/全部 KV 块 + 重置 Waiting-Prefill + 重新入队，宁可延迟重试也不带不完整状态进入 forward 或滞留在 running。",
+      "alternatives_rejected": "① 让 compose 在放不下时停止 drain：虽避免 admit，但需重写 prefill 采样/预算逻辑，改动面大；② 允许 running 中的 Prefilling 序列被重新调度：改变 running 语义，影响面广（含 preemption/eviction）；③ 带部分 KV 分配 admit：正是 ISS-042 掩盖的原始缺陷，写 KV 落到 block 0 破坏缓存。选\"释放块+重置 Waiting-Prefill+重新入队\"，复用既有 enqueue/release 基础，改动最小且正确。"
+    },
+    "EV-058": {
+      "id": "EV-058",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T13:40:00+00:00",
+      "updated_at": "2026-08-10T13:40:00+00:00",
+      "touched_round": 39,
+      "source": "crates/core/tests/scheduler_batch_requeue.rs (prefill_overflow_is_requeued_not_stranded_in_running, under_allocated_prefill_is_requeued_not_admitted) + commit f7205aff",
+      "confidence": 1.0,
+      "title": "TDD verified: both regression tests fail on pre-fix batch.rs (overflow stranded in running: waiting=0/running=5; under-allocated prefill admitted with 2-block table), and pass on f7205aff; full vllm-core suite 702+466 tests green"
     }
   },
   "edges": [
@@ -4292,6 +4386,54 @@
       "to": "TASK-045",
       "type": "governs",
       "created_at": "2026-08-10T12:29:41+00:00"
+    },
+    {
+      "from": "ISS-041",
+      "to": "COMP-007",
+      "type": "located_in",
+      "created_at": "2026-08-10T13:13:11+00:00"
+    },
+    {
+      "from": "ISS-042",
+      "to": "COMP-007",
+      "type": "located_in",
+      "created_at": "2026-08-10T13:13:12+00:00"
+    },
+    {
+      "from": "TASK-046",
+      "to": "ISS-041",
+      "type": "addresses",
+      "created_at": "2026-08-10T13:13:12+00:00"
+    },
+    {
+      "from": "TASK-046",
+      "to": "ISS-042",
+      "type": "addresses",
+      "created_at": "2026-08-10T13:13:12+00:00"
+    },
+    {
+      "from": "CHG-043",
+      "to": "TASK-046",
+      "type": "implements",
+      "created_at": "2026-08-10T13:40:00+00:00"
+    },
+    {
+      "from": "CHG-043",
+      "to": "ISS-041",
+      "type": "resolves",
+      "created_at": "2026-08-10T13:40:00+00:00"
+    },
+    {
+      "from": "CHG-043",
+      "to": "ISS-042",
+      "type": "resolves",
+      "created_at": "2026-08-10T13:40:00+00:00"
+    },
+    {
+      "from": "DEC-029",
+      "to": "TASK-046",
+      "type": "governs",
+      "created_at": "2026-08-10T13:40:00+00:00"
     }
   ]
 }
