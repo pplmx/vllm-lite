@@ -613,6 +613,59 @@ fn test_speculative_all_accepted_folds_every_token_into_sequence() {
     );
 }
 
+/// Regression: a speculative prefill resumed after a partial prefix-cache
+/// hit must NOT let the rejected-draft rollback release the matched prefix
+/// blocks or rewind `num_computed_tokens`.
+///
+/// The verifier writes the draft KV into blocks pre-allocated for the
+/// verification span (RIL ISS-026 fix); the rejected drafts' KV simply sits
+/// beyond `num_computed_tokens` and is never read. Calling `memory_rollback`
+/// on a prefill batch instead runs its block math against the pre-step
+/// `num_computed_tokens` — for a resumed prefill (start > 0) that frees the
+/// last computed-prefix block (possibly the prefix-cache matched block) and
+/// rewinds the count, so the next chunk never recomputes the freed region
+/// and the sequence reads garbage KV (RIL hypothesis HYP-008).
+#[test]
+fn test_speculative_resumed_prefill_rollback_does_not_release_prefix_blocks() {
+    let target = FakeModel::new(42);
+    let draft = FakeModel::new(99); // never matches the target -> all drafts rejected
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 4;
+    engine.enable_speculative();
+
+    // Populate the prefix cache with a 4-token prefix (one block).
+    let (tx1, _rx1) = tokio_mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10, 20, 30, 40], 2), tx1);
+    engine.step().unwrap();
+    engine.step().unwrap();
+
+    // 20-token prompt sharing the cached 4-token prefix [10, 20, 30, 40]:
+    // the sequence is admitted with num_computed_tokens = 4 and a prefill
+    // resume of 16 tokens. All 4 drafts are rejected.
+    let (tx2, _rx2) = tokio_mpsc::channel(64);
+    let mut prompt: Vec<TokenId> = vec![10, 20, 30, 40];
+    prompt.extend((0..16).map(|t| t + 50));
+    let seq_id = engine.add_request(Request::new(2, prompt, 20), tx2);
+    engine.step().unwrap();
+
+    let seq = engine
+        .scheduler
+        .get_sequence(seq_id)
+        .expect("sequence should be running after the resumed speculative prefill");
+    assert!(
+        seq.num_computed_tokens >= seq.prompt_len,
+        "resumed prefill must complete in one step: num_computed_tokens={} prompt_len={} (rollback \
+         must not rewind the prefix-cache match)",
+        seq.num_computed_tokens,
+        seq.prompt_len
+    );
+    assert_eq!(
+        seq.status,
+        crate::types::Status::Decoding,
+        "sequence must transition to Decoding after the resumed speculative prefill"
+    );
+}
+
 /// Integration test: speculative vs non-speculative equivalence
 #[test]
 fn test_speculative_vs_non_speculative_equivalence() {

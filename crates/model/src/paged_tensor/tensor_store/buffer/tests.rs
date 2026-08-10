@@ -102,6 +102,33 @@ fn test_read_kv_multiple_blocks() -> Result<()> {
     Ok(())
 }
 
+/// A block table may hold headroom blocks beyond the sequence's computed
+/// length (the speculative verifier pre-allocates
+/// `num_computed + input_len + max_draft` blocks, RIL ISS-026). `read_kv`
+/// must read only up to `seq_len` instead of underflowing on the trailing
+/// blocks (RIL ISS-026 decode-side regression).
+#[test]
+fn test_read_kv_with_headroom_blocks_beyond_seq_len() -> Result<()> {
+    let device = Device::Cpu;
+    let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
+
+    // Fill block 0 with 4 tokens.
+    let k = Tensor::ones((1, 4, 2, 4), DType::F32, &device)?;
+    let v = Tensor::ones((1, 4, 2, 4), DType::F32, &device)?;
+    cache.write_kv_batch(0, 0, 0, &k, &v)?;
+
+    // seq_len covers only block 0's 4 tokens, but the table lists two
+    // blocks — the second is pure headroom and must be ignored.
+    let (k_out, v_out) = cache.read_kv(0, &[0, 1], 4)?;
+    assert_eq!(k_out.dims(), &[4, 2, 4]);
+    assert_eq!(v_out.dims(), &[4, 2, 4]);
+
+    let k_vec: Vec<f32> = k_out.flatten_all()?.to_vec1()?;
+    assert!(k_vec.iter().all(|x| (*x - 1.0).abs() < 1e-6));
+
+    Ok(())
+}
+
 #[test]
 fn test_write_kv_invalid_layer_idx() -> Result<()> {
     let device = Device::Cpu;

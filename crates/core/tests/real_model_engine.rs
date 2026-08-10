@@ -207,6 +207,96 @@ fn real_model_speculative_prefill_does_not_corrupt_first_block() {
     );
 }
 
+/// Regression (RIL ISS-026 decode side): a speculative DECODE step whose
+/// draft span crosses a block boundary must not fall back into block 0
+/// either.
+///
+/// With a 29-token prompt the first decode step sits at position 29
+/// (29 % 16 == 13); with max_draft=4 the draft KV spans positions 29..32,
+/// requiring a third block. The sequence's table must be grown before the
+/// verifier writes, otherwise positions 32..32+ land in block 0.
+#[test]
+fn real_model_speculative_decode_boundary_does_not_corrupt_first_block() {
+    let cfg = ModelConfig::test_tiny();
+    let weights = tiny_weights(&cfg);
+    let target = LlamaModel::from_weights(
+        ModelConfig::test_tiny(),
+        &Device::Cpu,
+        weights.clone(),
+        64,
+        false,
+    )
+    .unwrap();
+    let draft =
+        LlamaModel::from_weights(ModelConfig::test_tiny(), &Device::Cpu, weights, 64, false)
+            .unwrap();
+    let target_cache = target.paged_kv_cache();
+
+    let mut engine = Engine::with_config_boxed(
+        Box::new(target),
+        Some(Box::new(draft)),
+        scheduler_config(),
+        4,
+        64,
+    );
+    engine.enable_speculative();
+
+    let (tx, _rx) = mpsc::channel(64);
+    let prompt: Vec<TokenId> = (0..29).collect();
+    engine.add_request(Request::new(1, prompt.clone(), 3), tx);
+    engine.step().unwrap(); // speculative prefill
+    engine.step().unwrap(); // speculative decode at position 29 (13 % 16)
+
+    let ref_model = build_model();
+    let ref_cache = ref_model.paged_kv_cache();
+    let mut ref_engine = Engine::with_config_boxed(
+        Box::new(ref_model),
+        None::<Box<dyn ModelBackend>>,
+        scheduler_config(),
+        4,
+        64,
+    );
+    let (tx2, _rx2) = mpsc::channel(64);
+    ref_engine.add_request(Request::new(1, prompt, 3), tx2);
+    ref_engine.step().unwrap();
+    ref_engine.step().unwrap();
+
+    // The speculative engine has legitimately MORE KV than the reference
+    // (accepted drafts at positions 29..32); compare only the region both
+    // engines computed: positions 0..29 (block 0 fully, block 1 up to 14).
+    let compare = |block: usize, len: usize| {
+        let (k_spec, v_spec) = {
+            let cache = target_cache.lock();
+            cache.read_kv(0, &[block], len).unwrap()
+        };
+        let (k_ref, v_ref) = {
+            let cache = ref_cache.lock();
+            cache.read_kv(0, &[block], len).unwrap()
+        };
+        let k_spec_v: Vec<f32> = k_spec.flatten_all().unwrap().to_vec1().unwrap();
+        let k_ref_v: Vec<f32> = k_ref.flatten_all().unwrap().to_vec1().unwrap();
+        let k_max_diff = k_spec_v
+            .iter()
+            .zip(k_ref_v.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f32, f32::max);
+        let v_spec_v: Vec<f32> = v_spec.flatten_all().unwrap().to_vec1().unwrap();
+        let v_ref_v: Vec<f32> = v_ref.flatten_all().unwrap().to_vec1().unwrap();
+        let v_max_diff = v_spec_v
+            .iter()
+            .zip(v_ref_v.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f32, f32::max);
+        assert!(
+            k_max_diff < 1e-5 && v_max_diff < 1e-5,
+            "speculative decode corrupted block {block} KV (k max diff {k_max_diff}, v max diff \
+             {v_max_diff}); draft KV must not fall back into an earlier block"
+        );
+    };
+    compare(0, 16);
+    compare(1, 14);
+}
+
 #[test]
 fn real_model_engine_multiblock_prefill_then_decode() {
     // 20-token prompt => ceil(20/16) = 2 blocks; generate 3 tokens (greedy).

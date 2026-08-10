@@ -158,6 +158,15 @@ impl SchedulerEngine {
     }
 
     /// Rollback KV cache for rejected draft tokens (Plan 17.1-D).
+    ///
+    /// **Superseded for the speculative step (RIL ISS-027):** the verifier's
+    /// block table is pre-allocated for the full verification span, so
+    /// rejected-draft KV is unused capacity beyond `num_computed_tokens`
+    /// rather than blocks that must be freed. Calling this from the
+    /// speculative step rewinds `num_computed_tokens` against the pre-step
+    /// count and can release blocks holding real prefix KV (resumed prefill
+    /// / boundary-crossing decode). Kept as public API for tests and
+    /// non-speculative callers.
     pub fn memory_rollback(&mut self, seq_id: SeqId, num_tokens: usize) {
         if let Some(seq) = self.running.iter_mut().find(|s| s.id == seq_id) {
             self.memory.rollback(seq, num_tokens);

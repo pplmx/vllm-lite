@@ -295,6 +295,13 @@ impl PagedKvCache {
 
         for (block_idx, &block_id) in block_ids.iter().enumerate() {
             let start_token = block_idx * self.block_size;
+            // The table may legitimately hold headroom blocks beyond the
+            // sequence's computed length (speculative verification
+            // pre-allocates `num_computed + input_len + max_draft` blocks,
+            // RIL ISS-026); there is nothing to read past `seq_len`.
+            if start_token >= seq_len {
+                break;
+            }
             let end_token = std::cmp::min(start_token + self.block_size, seq_len);
             let block_len = end_token - start_token;
 

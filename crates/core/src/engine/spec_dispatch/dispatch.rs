@@ -66,15 +66,17 @@ impl crate::engine::Engine {
         let (verified, accepted_counts) =
             self.verify_draft_tokens_logits(&batch, &draft_outputs)?;
 
-        // Roll back KV cache for rejected drafts
-        for (i, seq_id) in batch.seq_ids.iter().enumerate() {
-            let drafts = &draft_outputs[i];
-            let accepted = accepted_counts[i];
-            let rejected = drafts.len().saturating_sub(accepted);
-            if rejected > 0 {
-                self.scheduler.memory_rollback(*seq_id, rejected);
-            }
-        }
+        // RIL ISS-027: rejected-draft KV blocks are NOT rolled back here.
+        // The verification span's blocks are pre-allocated
+        // (`ensure_verification_blocks`, RIL ISS-026) and the rejected
+        // drafts' KV simply sits beyond `num_computed_tokens` — it is never
+        // read and gets overwritten as the sequence grows. The old
+        // `memory_rollback(rejected)` ran its block math against the
+        // pre-step `num_computed_tokens`: for a resumed prefill (partial
+        // prefix-cache hit) it rewound the count and released the matched
+        // prefix block (the freed region is never recomputed → garbage KV),
+        // and for decode it could free a block holding real prefix KV when
+        // the rewind crossed a block boundary.
 
         // H-16 (PERF-05): pre-size `results` to the verified-sequence
         // count so the per-iteration push below does not reallocate.
@@ -198,8 +200,8 @@ impl crate::engine::Engine {
     }
 
     /// Grow each batch sequence's block table to cover the full speculative
-    /// verification span (`input_len + max_draft` tokens) BEFORE the
-    /// draft/target forward writes KV (RIL ISS-026).
+    /// verification span (`num_computed + input_len + max_draft` tokens)
+    /// BEFORE the draft/target forward writes KV (RIL ISS-026).
     ///
     /// The batch composer pre-allocates blocks for `input_len` only; the
     /// verifier then processes `input_len + drafts` tokens, and
@@ -209,11 +211,14 @@ impl crate::engine::Engine {
     /// whenever the draft span crossed a block boundary (verified by a
     /// real-model regression test). The extra blocks stay owned by the
     /// sequence (released on finish); rejected-draft blocks are simply
-    /// unused capacity, matching the rollback contract.
+    /// unused capacity beyond `num_computed_tokens` (RIL ISS-027 — the old
+    /// post-verification `memory_rollback` is no longer needed and was
+    /// actively harmful for resumed prefill / boundary-crossing decode).
     fn ensure_verification_blocks(&mut self, batch: &mut vllm_traits::Batch, max_draft: usize) {
         for (i, seq_id) in batch.seq_ids.iter().copied().enumerate() {
+            let base = batch.num_computed_tokens.get(i).copied().unwrap_or(0);
             let span = batch.input_tokens.get(i).map_or(0, std::vec::Vec::len) + max_draft;
-            let blocks_needed = span.div_ceil(vllm_traits::BLOCK_SIZE);
+            let blocks_needed = (base + span).div_ceil(vllm_traits::BLOCK_SIZE);
             if batch.kv_block_ids[i].len() < blocks_needed {
                 self.scheduler
                     .ensure_blocks_for_tokens(seq_id, blocks_needed);
