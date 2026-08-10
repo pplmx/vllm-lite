@@ -48,6 +48,54 @@ async fn test_completions_empty_prompt() {
 }
 
 #[tokio::test]
+async fn test_completions_rejects_invalid_temperature() {
+    // RIL ISS-048: a negative / non-finite temperature silently produces
+    // garbage sampling (negative flips the logits to the least-likely
+    // token; NaN disables the greedy shortcut). The handler must reject
+    // it with 400 before the engine is touched — not return a plausible
+    // 200 with wrong output.
+    let state = create_test_state();
+
+    for temperature in [-1.0_f32, f32::NAN, f32::INFINITY] {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "Hello".to_string(),
+            temperature: Some(temperature),
+            top_p: None,
+            max_tokens: Some(10),
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
+        };
+        let result = completions(
+            State(state.clone()),
+            Extension(CorrelationId("test-correlation-id".into())),
+            Json(req),
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "temperature {temperature} must be rejected"
+        );
+        let (status, _) = result.unwrap_err();
+        assert_eq!(
+            status,
+            axum::http::StatusCode::BAD_REQUEST,
+            "temperature {temperature} must surface 400"
+        );
+    }
+}
+
+#[tokio::test]
 async fn test_completions_with_valid_max_tokens() {
     let state = create_test_state();
     let req = CompletionRequest {

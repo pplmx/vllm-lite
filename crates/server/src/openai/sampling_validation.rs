@@ -93,6 +93,49 @@ pub fn validate_top_p(top_p: Option<f32>) -> Result<(), (StatusCode, Json<ErrorR
     Ok(())
 }
 
+/// Validate the `temperature` field on a sampling request.
+///
+/// Per `OpenAI`'s spec `temperature` lies in `[0, 2]`. `NaN` and
+/// `±infinity` silently produce wrong output in the engine sampler (a
+/// `NaN` temperature makes `temperature <= 0.0` false, so sampling
+/// proceeds and every logit becomes `NaN`; `±inf` flattens or inverts
+/// the distribution to garbage; a negative value flips the logits and
+/// samples the *least* likely token) — reject them with `400` instead
+/// (RIL ISS-048). A negative temperature is also out of contract.
+///
+/// # Errors
+///
+/// Returns `Err((StatusCode::BAD_REQUEST, …))` when `temperature` is
+/// non-finite or outside `[0, 2]`.
+pub fn validate_temperature(
+    temperature: Option<f32>,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    const TEMPERATURE_MAX: f32 = 2.0;
+    if let Some(t) = temperature {
+        if !t.is_finite() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    format!("temperature must be a finite number in the [0, 2] interval (got {t})")
+                        .as_str(),
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if !(0.0..=TEMPERATURE_MAX).contains(&t) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    format!("temperature must be in the [0, 2] interval per OpenAI spec (got {t})")
+                        .as_str(),
+                    "invalid_request_error",
+                )),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Reject sampling parameters the engine cannot honour.
 ///
 /// # Errors
@@ -767,6 +810,7 @@ pub fn validate_chat_request_fields(
             )),
         ));
     }
+    validate_temperature(req.temperature)?;
     validate_top_p(req.top_p)?;
     validate_chat_response_format(req.response_format.as_ref())?;
     validate_penalty(req.frequency_penalty, "frequency_penalty")?;
@@ -837,6 +881,7 @@ pub fn validate_completion_request_fields(
             )),
         ));
     }
+    validate_temperature(req.temperature)?;
     validate_top_p(req.top_p)?;
     validate_penalty(req.frequency_penalty, "frequency_penalty")?;
     validate_penalty(req.presence_penalty, "presence_penalty")?;
@@ -1521,6 +1566,61 @@ mod tests {
         // math; the validator must reject it.
         let err = validate_penalty(Some(f32::NEG_INFINITY), "frequency_penalty")
             .expect_err("penalty = -inf must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    // `validate_temperature` tests (RIL ISS-048). Per OpenAI spec
+    // `temperature` lies in `[0, 2]`; non-finite or out-of-range values
+    // must be rejected with 400 because they silently corrupt the
+    // engine's sampling (NaN temperature disables the greedy shortcut,
+    // ±inf flattens the distribution, negative values sample the *least*
+    // likely token).
+
+    #[test]
+    fn validate_temperature_none_passes() {
+        validate_temperature(None).expect("None must pass");
+    }
+
+    #[test]
+    fn validate_temperature_valid_range_passes() {
+        for t in [0.0_f32, 0.7, 1.0, 2.0] {
+            validate_temperature(Some(t))
+                .unwrap_or_else(|_| panic!("temperature {t} must pass (within [0, 2])"));
+        }
+    }
+
+    #[test]
+    fn validate_temperature_nan_is_rejected() {
+        // NaN would make `temperature <= 0.0` false in the sampler and
+        // NaN every logit — reject at the boundary.
+        let err =
+            validate_temperature(Some(f32::NAN)).expect_err("temperature = NaN must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("NaN"));
+    }
+
+    #[test]
+    fn validate_temperature_infinity_is_rejected() {
+        let err = validate_temperature(Some(f32::INFINITY))
+            .expect_err("temperature = +inf must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        let err = validate_temperature(Some(f32::NEG_INFINITY))
+            .expect_err("temperature = -inf must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_temperature_negative_is_rejected() {
+        // A negative temperature flips the logits and samples the least
+        // likely token — silently garbage output. Reject with 400.
+        let err = validate_temperature(Some(-1.0)).expect_err("temperature < 0 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_temperature_above_two_is_rejected() {
+        let err = validate_temperature(Some(2.5))
+            .expect_err("temperature > 2 must be rejected per OpenAI spec");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
