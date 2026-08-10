@@ -1938,8 +1938,31 @@ async fn stream_chat_completion(
                         if let Some(sampled) = rx.recv().await {
                             let text = tokenizer.decode(&[sampled.token]);
                             if should_skip_token_text(&tokenizer, &text) {
+                                // RIL ISS-035: emit a well-formed chunk with
+                                // empty content instead of a bare `data: `
+                                // SSE event. The n>1 parallel path already
+                                // emits `{"delta": {"content": ""}}`; a raw
+                                // empty data line is not valid OpenAI JSON
+                                // streaming and strict clients reject it.
+                                let chunk = ChatChunk::new(
+                                    "chatcmpl-stream".to_string(),
+                                    model.clone(),
+                                    ChatChunkChoice {
+                                        index: 0,
+                                        delta: ChatMessage {
+                                            role: "assistant".to_string(),
+                                            content: String::new(),
+                                            name: None,
+                                        },
+                                        finish_reason: None,
+                                        logprobs: None,
+                                    },
+                                );
+                                let sse_payload = serde_json::to_string(&chunk)
+                                    // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                                    .expect("Failed to serialize chat chunk");
                                 return Some((
-                                    Ok::<Event, Infallible>(Event::default().data("")),
+                                    Ok::<Event, Infallible>(Event::default().data(sse_payload)),
                                     (rx, cancel_guard, reason_rx_opt, terminal),
                                 ));
                             }

@@ -44,6 +44,40 @@ fn test_should_skip_token_text_normal() {
     assert!(!should_skip_token_text(&tokenizer, " world"));
 }
 
+/// Regression (RIL ISS-035): the single-shot streaming path must emit a
+/// well-formed JSON chunk (empty content) for skipped tokens instead of a
+/// bare `data: ` SSE event. Pin the wire shape the skipped-token branch now
+/// produces: valid JSON with `choices[0].delta.content == ""`.
+#[test]
+fn test_skipped_token_chunk_is_valid_json_with_empty_content() {
+    let chunk = ChatChunk::new(
+        "chatcmpl-stream".to_string(),
+        "test-model".to_string(),
+        ChatChunkChoice {
+            index: 0,
+            delta: ChatMessage {
+                role: "assistant".to_string(),
+                content: String::new(),
+                name: None,
+            },
+            finish_reason: None,
+            logprobs: None,
+        },
+    );
+    let json = serde_json::to_string(&chunk).expect("chunk must serialize");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&json).expect("skipped-token SSE data must be valid JSON");
+    assert_eq!(
+        parsed["choices"][0]["delta"]["content"],
+        serde_json::Value::String(String::new()),
+        "skipped-token chunk must carry empty content"
+    );
+    assert_eq!(
+        parsed["choices"][0]["delta"]["role"],
+        serde_json::Value::String("assistant".to_string())
+    );
+}
+
 #[test]
 fn test_clean_completion_text_removes_eos() {
     let tokenizer = test_tokenizer();

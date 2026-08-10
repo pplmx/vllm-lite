@@ -1632,8 +1632,23 @@ pub async fn completions(
                             if let Some(sampled) = rx.recv().await {
                                 let text = tokenizer.decode(&[sampled.token]);
                                 if should_skip_token_text(&tokenizer, &text) {
+                                    // RIL ISS-035: emit a well-formed chunk
+                                    // with empty text instead of a bare
+                                    // `data: ` SSE event (the n>1 path emits
+                                    // `{"text": ""}`; strict OpenAI clients
+                                    // reject empty data lines).
+                                    let chunk = serde_json::json!({
+                                        "id": "cmpl-stream",
+                                        "object": "text_completion",
+                                        "choices": [{
+                                            "text": "",
+                                            "index": 0,
+                                        }]
+                                    });
                                     return Some((
-                                        Ok::<Event, Infallible>(Event::default().data("")),
+                                        Ok::<Event, Infallible>(
+                                            Event::default().data(chunk.to_string()),
+                                        ),
                                         (
                                             rx,
                                             cancel_guard,
