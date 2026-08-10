@@ -200,18 +200,26 @@ impl SchedulerEngine {
             {
                 // Feed the tokens for each newly-allocated block back to the
                 // MemoryManager so the chain hash advances with real
-                // content (same contract as build_batch / update).
+                // content (same contract as build_batch / update). The
+                // speculative verification span can pre-allocate blocks
+                // BEYOND the sequence's current token count (RIL ISS-026),
+                // so `tokens[start..]` may be empty — skip the feed (the
+                // cursor is a best-effort placeholder until the tokens are
+                // actually written, per the MemoryManager doc).
                 let block_idx = self.running[idx].kv_blocks.len();
                 let start = block_idx * vllm_traits::BLOCK_SIZE;
-                let end = (start + vllm_traits::BLOCK_SIZE).min(self.running[idx].tokens.len());
+                let tokens = &self.running[idx].tokens;
+                let end = (start + vllm_traits::BLOCK_SIZE).min(tokens.len());
                 let parent_hash = self.chain_cursors.get(&seq_id).copied().unwrap_or(0);
-                for &block_id in &new_blocks {
-                    let hash = self.memory.record_block_tokens(
-                        block_id,
-                        parent_hash,
-                        &self.running[idx].tokens[start..end],
-                    );
-                    self.chain_cursors.insert(seq_id, hash);
+                if start < tokens.len() {
+                    for &block_id in &new_blocks {
+                        let hash = self.memory.record_block_tokens(
+                            block_id,
+                            parent_hash,
+                            &tokens[start..end],
+                        );
+                        self.chain_cursors.insert(seq_id, hash);
+                    }
                 }
             }
             let mut blocks = (*self.running[idx].kv_blocks).clone();
