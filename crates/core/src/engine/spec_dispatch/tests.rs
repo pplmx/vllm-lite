@@ -846,7 +846,7 @@ fn verifier_accepts_high_prob_drafts_under_sampling() {
     // `0..4` (the high-prob set) regardless of which RNG draw lands.
     let pos_logits = &logits[0][0..vocab];
     let target_token =
-        crate::engine::spec_dispatch::verify::test_only_sample_or_argmax(pos_logits, &params);
+        crate::engine::spec_dispatch::verify::test_only_sample_or_argmax(pos_logits, &params, &[]);
     assert!(
         target_token.token < 4,
         "sampled target token {} fell outside the \
@@ -901,7 +901,7 @@ fn verifier_rejects_low_prob_drafts_under_sampling() {
     let offset = 0;
     let pos_logits = &logits[0][offset..offset + vocab];
     let target_token =
-        crate::engine::spec_dispatch::verify::test_only_sample_or_argmax(pos_logits, &params);
+        crate::engine::spec_dispatch::verify::test_only_sample_or_argmax(pos_logits, &params, &[]);
     assert!(
         target_token.token < 2,
         "sampled target token {} fell outside the high-prob \
@@ -952,7 +952,7 @@ fn verifier_uses_argmax_when_temperature_is_zero() {
     let offset = 0;
     let pos_logits = &logits[0][offset..offset + vocab];
     let target_token =
-        crate::engine::spec_dispatch::verify::test_only_sample_or_argmax(pos_logits, &params);
+        crate::engine::spec_dispatch::verify::test_only_sample_or_argmax(pos_logits, &params, &[]);
     // argmax of `vec![-10.0; 64]` with first 4 entries set to 5.0 is 0
     // (first max wins). Draft token 1 is *also* argmax-tied, but the
     // argmax implementation picks the first one — so this test pins the

@@ -80,6 +80,20 @@ impl crate::engine::Engine {
                 });
             let draft_cap = remaining.saturating_sub(1);
 
+            // The seen set for repeat/presence penalties: the tokens the
+            // sequence has generated BEFORE this step — the same set the
+            // regular (non-speculative) path passes to
+            // `sample_batch_with_params` (RIL ISS-036). The verifier must
+            // apply the same penalties as the regular sampler, otherwise the
+            // accepted/emitted tokens come from the un-penalized
+            // distribution and speculative output diverges from regular
+            // decoding whenever `repeat_penalty != 1.0`.
+            let base_seen: Vec<TokenId> = self
+                .scheduler
+                .get_sequence(*seq_id)
+                .map(|s| s.tokens[s.prompt_len..].to_vec())
+                .unwrap_or_default();
+
             // Pick the per-sequence sampling params carried on the Batch
             // (populated by BatchComposer from Sequence::sampling_params —
             // see ARCH-02 fix in CHANGELOG). Fall back to default
@@ -100,7 +114,7 @@ impl crate::engine::Engine {
                 )?;
                 let sampled = logits.first().map_or_else(
                     || placeholder_sampled(0),
-                    |pos_logits| sample_or_argmax(pos_logits, &params),
+                    |pos_logits| sample_or_argmax(pos_logits, &params, &base_seen),
                 );
                 results.push((*seq_id, sampled));
                 accepted_counts.push(0);
@@ -156,6 +170,10 @@ impl crate::engine::Engine {
             // predictions, silently corrupting the accepted set.
             let input_len = batch.input_tokens[i].len();
             let loop_limit = draft_cap.min(drafts.len());
+            // Grow the seen set as drafts are accepted so each position is
+            // penalized by the tokens generated before it — exactly what
+            // regular decoding would have seen.
+            let mut seen = base_seen.clone();
             for (j, &draft_token) in drafts.iter().take(loop_limit).enumerate() {
                 let offset = (input_len - 1 + j) * vocab_size;
                 if offset + vocab_size > logits.len() {
@@ -163,7 +181,7 @@ impl crate::engine::Engine {
                 }
                 let pos_logits = &logits[offset..offset + vocab_size];
                 // Sample or argmax from target, then check draft match.
-                let target_token = sample_or_argmax(pos_logits, &params).token;
+                let target_token = sample_or_argmax(pos_logits, &params, &seen).token;
 
                 if target_token == draft_token {
                     // Accepted draft — placeholder SampledToken (no
@@ -171,11 +189,12 @@ impl crate::engine::Engine {
                     // forward at this position; see function doc).
                     results.push((*seq_id, placeholder_sampled(draft_token)));
                     accepted += 1;
+                    seen.push(draft_token);
                 } else {
                     // Rejection — emit the sampled target token with
                     // its full SampledToken (this position's logits
                     // are available).
-                    results.push((*seq_id, sample_or_argmax(pos_logits, &params)));
+                    results.push((*seq_id, sample_or_argmax(pos_logits, &params, &seen)));
                     break;
                 }
             }
@@ -189,7 +208,7 @@ impl crate::engine::Engine {
                 let offset = (input_len - 1 + accepted) * vocab_size;
                 if offset + vocab_size <= logits.len() {
                     let pos_logits = &logits[offset..offset + vocab_size];
-                    results.push((*seq_id, sample_or_argmax(pos_logits, &params)));
+                    results.push((*seq_id, sample_or_argmax(pos_logits, &params, &seen)));
                 }
             }
 
@@ -201,7 +220,7 @@ impl crate::engine::Engine {
                 let bonus_offset = (input_len - 1 + accepted) * vocab_size;
                 if bonus_offset + vocab_size <= logits.len() {
                     let bonus_logits = &logits[bonus_offset..bonus_offset + vocab_size];
-                    let bonus_sampled = sample_or_argmax(bonus_logits, &params);
+                    let bonus_sampled = sample_or_argmax(bonus_logits, &params, &seen);
                     results.push((*seq_id, bonus_sampled));
                 }
             }
@@ -223,8 +242,8 @@ impl crate::engine::Engine {
 ///   on greedy; logprobs are surfaced by the regular non-speculative path.
 /// - Sampling (`T > 0.0`): short-circuits on `repeat_penalty == 1.0` (the
 ///   default), so an empty seen-token list is fine.
-fn sample_or_argmax(logits: &[f32], params: &SamplingParams) -> SampledToken {
-    sample_one_with_params(logits, params, &[])
+fn sample_or_argmax(logits: &[f32], params: &SamplingParams, seen: &[TokenId]) -> SampledToken {
+    sample_one_with_params(logits, params, seen)
 }
 
 /// Placeholder [`SampledToken`] for speculative-accepted draft tokens
@@ -246,6 +265,10 @@ const fn placeholder_sampled(token: TokenId) -> SampledToken {
 /// step to keep the assertions deterministic.
 #[doc(hidden)]
 #[cfg(test)]
-pub fn test_only_sample_or_argmax(logits: &[f32], params: &SamplingParams) -> SampledToken {
-    sample_or_argmax(logits, params)
+pub fn test_only_sample_or_argmax(
+    logits: &[f32],
+    params: &SamplingParams,
+    seen: &[TokenId],
+) -> SampledToken {
+    sample_or_argmax(logits, params, seen)
 }

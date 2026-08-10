@@ -446,6 +446,87 @@ fn real_model_speculative_output_matches_regular() {
     );
 }
 
+/// Regression (RIL ISS-036): speculative verification must apply the same
+/// repeat-penalty seen set as the regular path, so the emitted distribution
+/// matches non-speculative decoding exactly.
+///
+/// The verifier called `sample_or_argmax(logits, params)` with an EMPTY seen
+/// set, so `apply_repeat_penalty` was skipped even when
+/// `params.repeat_penalty != 1.0` — the accept/reject decision and the
+/// emitted bonus/rejection token came from the UN-penalized distribution,
+/// diverging from regular decoding.
+#[test]
+fn real_model_speculative_output_matches_regular_with_repeat_penalty() {
+    let prompt: Vec<TokenId> = (0..20).collect();
+
+    // Regular engine with repeat penalty.
+    let mut regular = Engine::with_config_boxed(
+        Box::new(build_model()),
+        None::<Box<dyn ModelBackend>>,
+        scheduler_config(),
+        4,
+        64,
+    );
+    let (tx_r, mut rx_r) = mpsc::channel(64);
+    let mut req_r = Request::new(1, prompt.clone(), 6);
+    req_r.sampling_params.repeat_penalty = 1.2;
+    regular.add_request(req_r, tx_r);
+    let mut regular_tokens = Vec::new();
+    for _ in 0..40 {
+        regular.step().unwrap();
+        while let Ok(s) = rx_r.try_recv() {
+            regular_tokens.push(s.token);
+        }
+        if regular_tokens.len() >= 6 {
+            break;
+        }
+    }
+
+    // Speculative engine with identical weights + repeat penalty.
+    let cfg = ModelConfig::test_tiny();
+    let weights = tiny_weights(&cfg);
+    let target = LlamaModel::from_weights(
+        ModelConfig::test_tiny(),
+        &Device::Cpu,
+        weights.clone(),
+        64,
+        false,
+    )
+    .unwrap();
+    let draft =
+        LlamaModel::from_weights(ModelConfig::test_tiny(), &Device::Cpu, weights, 64, false)
+            .unwrap();
+    let mut spec = Engine::with_config_boxed(
+        Box::new(target),
+        Some(Box::new(draft)),
+        scheduler_config(),
+        4,
+        64,
+    );
+    spec.enable_speculative();
+    let (tx_s, mut rx_s) = mpsc::channel(64);
+    let mut req_s = Request::new(1, prompt, 6);
+    req_s.sampling_params.repeat_penalty = 1.2;
+    spec.add_request(req_s, tx_s);
+    let mut spec_tokens = Vec::new();
+    for _ in 0..40 {
+        spec.step().unwrap();
+        while let Ok(s) = rx_s.try_recv() {
+            spec_tokens.push(s.token);
+        }
+        if spec_tokens.len() >= 6 {
+            break;
+        }
+    }
+
+    assert_eq!(
+        spec_tokens, regular_tokens,
+        "speculative decoding must match regular decoding under repeat_penalty \
+         (verifier must apply the seen set; RIL ISS-036); spec={spec_tokens:?} \
+         regular={regular_tokens:?}"
+    );
+}
+
 #[test]
 fn real_model_engine_multiblock_prefill_then_decode() {
     // 20-token prompt => ceil(20/16) = 2 blocks; generate 3 tokens (greedy).
