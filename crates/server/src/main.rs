@@ -256,15 +256,19 @@ async fn main() -> Result<()> {
     // blocks on an over-budget prompt. The field name follows
     // the HuggingFace convention (`max_position_embeddings`),
     // which the Qwen3 / Llama / Mistral checkpoints all carry.
-    // For architectures that don't declare it (stub models,
-    // GGUF variants, etc.) we leave the value as `None` and
-    // skip the validation entirely — better to admit
-    // uncertainty than to crash on a missing key.
-    let max_model_len = loader
-        .config_json()
-        .get("max_position_embeddings")
-        .and_then(serde_json::value::Value::as_u64)
-        .and_then(|n| usize::try_from(n).ok());
+    // An explicit `--max-model-len` (RIL ISS-044) overrides the
+    // checkpoint value. For architectures that declare neither
+    // (stub models, GGUF variants, etc.) the value stays `None`
+    // and request validation falls back to a hard `max_tokens`
+    // ceiling (see `openai::chat::check_context_length`) so an
+    // unknown-context model cannot drive an unbounded generation.
+    let max_model_len = app_config.engine.max_model_len.or_else(|| {
+        loader
+            .config_json()
+            .get("max_position_embeddings")
+            .and_then(serde_json::value::Value::as_u64)
+            .and_then(|n| usize::try_from(n).ok())
+    });
 
     // Production-readiness §10: read capability flags so
     // capability-gated endpoints (e.g. `/v1/embeddings`) can

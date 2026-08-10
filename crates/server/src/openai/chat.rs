@@ -381,12 +381,39 @@ pub(crate) fn tokenize_chat_stop_sequences(
 ///
 /// Shared by all chat spawn paths to guarantee identical context-length
 /// enforcement. Also usable from `completions` (same gate, same error code).
+/// Hard ceiling on `max_tokens` when no context length is known — the model
+/// declares no `max_position_embeddings` and no `--max-model-len` was given.
+///
+/// Without any bound, a request like `max_tokens = i64::MAX` against such a
+/// model passes every validator (`max_tokens >= 1`, and the context gate is
+/// skipped) and the engine then grows the sequence's token list by one entry
+/// per decode step forever with no stop/EOS — holding the single scheduler
+/// thread and pinning RAM until the process OOMs (RIL ISS-044). This ceiling
+/// bounds the worst-case scheduler burn and `seq.tokens` growth per request.
+/// Operators who genuinely need longer generations set `--max-model-len`.
+const DEFAULT_MAX_GENERATION_TOKENS: usize = 8192;
+
 pub(crate) fn check_context_length(
     prompt_tokens_len: usize,
     max_tokens: usize,
     max_model_len: Option<usize>,
 ) -> Result<(), (axum::http::StatusCode, Json<ErrorResponse>)> {
     let Some(max_model_len) = max_model_len else {
+        if max_tokens > DEFAULT_MAX_GENERATION_TOKENS {
+            let message = format!(
+                "max_tokens ({max_tokens}) exceeds the server's default generation \
+                 ceiling ({DEFAULT_MAX_GENERATION_TOKENS}); no model context length is \
+                 configured (set --max-model-len to raise it)"
+            );
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::with_code(
+                    &message,
+                    "invalid_request_error",
+                    "context_length_exceeded",
+                )),
+            ));
+        }
         return Ok(());
     };
     let total_max = prompt_tokens_len + max_tokens;

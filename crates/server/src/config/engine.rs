@@ -36,6 +36,18 @@ const fn default_draft_layers() -> usize {
 #[allow(clippy::derivable_impls)]
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct EngineConfig {
+    /// Explicit model context length (tokens), vLLM `--max-model-len`
+    /// equivalent. Sets the `max_model_len` used by the request handlers'
+    /// context-length validation.
+    ///
+    /// When `None`, the server falls back to the checkpoint's
+    /// `max_position_embeddings` (if declared). When neither this field nor
+    /// the checkpoint provides a length, request validation rejects
+    /// `max_tokens` above a documented hard ceiling (see
+    /// `openai::chat::check_context_length`) instead of admitting an
+    /// unbounded generation (RIL ISS-044).
+    #[serde(default)]
+    pub max_model_len: Option<usize>,
     /// Maximum draft tokens per speculative step (capped at 64).
     #[serde(default = "default_max_draft_tokens")]
     pub max_draft_tokens: usize,
@@ -82,6 +94,7 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
+            max_model_len: None,
             max_draft_tokens: default_max_draft_tokens(),
             num_kv_blocks: default_num_kv_blocks(),
             max_batch_size: default_max_batch_size(),

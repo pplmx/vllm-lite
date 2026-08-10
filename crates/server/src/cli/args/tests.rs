@@ -178,6 +178,28 @@ fn test_to_app_config_all_fields() {
     assert_eq!(config.server.log_level, "debug");
 }
 
+/// RIL ISS-044: `--max-model-len` must flow from CLI into
+/// `EngineConfig.max_model_len` (absent the flag, it stays `None`).
+#[test]
+fn test_to_app_config_max_model_len() {
+    let cli = CliArgs::parse_from([
+        "vllm-server",
+        "-m",
+        "/test/model",
+        "--max-model-len",
+        "32768",
+    ]);
+    let config = cli.to_app_config();
+    assert_eq!(config.engine.max_model_len, Some(32768usize));
+
+    let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
+    let config = cli.to_app_config();
+    assert_eq!(
+        config.engine.max_model_len, None,
+        "max_model_len must default to None so the checkpoint value is used"
+    );
+}
+
 #[test]
 fn test_to_app_config_with_api_keys() {
     let cli = CliArgs::parse_from([

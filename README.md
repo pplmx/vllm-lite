@@ -325,26 +325,27 @@ export VLLM_API_KEY=your-secret-key
 
 <div align="center">
 
-| 变量                                 | 描述               | 默认值    | 说明                                                     |
-| ------------------------------------ | ------------------ | --------- | -------------------------------------------------------- |
-| `VLLM_MODEL`                         | 模型目录路径       | -（必需） | 含 tokenizer.json 与权重；等价 `--model`                 |
-| `VLLM_HOST`                          | 服务 host          | `0.0.0.0` | 监听地址                                                 |
-| `VLLM_PORT`                          | 服务端口           | `8000`    | API 端口                                                 |
-| `VLLM_LOG_LEVEL`                     | 日志级别           | `info`    | trace/debug/info/warn/error                              |
-| `VLLM_LOG_DIR`                       | 日志输出目录       | -         | 设置后启用 JSON 文件日志                                 |
-| `VLLM_KV_BLOCKS`                     | KV Block 数量      | `1024`    | 1-65536，显存相关                                        |
-| `VLLM_KV_QUANTIZATION`               | KV Cache 量化开关  | `false`   | 启用 KV Cache 量化                                       |
-| `VLLM_MAX_DRAFT_TOKENS`              | 最大投机 Token     | `8`       | 0-64，投机解码                                           |
-| `VLLM_ADAPTIVE_SPECULATIVE`          | 自适应投机解码     | `false`   | 动态调整 draft 长度                                      |
-| `VLLM_TENSOR_PARALLEL_SIZE`          | 张量并行度         | `1`       | 1-64，GPU 数量                                           |
-| `VLLM_MAX_BATCH_SIZE`                | 最大批大小         | `256`     | 1-8192                                                   |
-| `VLLM_MAX_WAITING_BATCHES`           | 最大等待批次       | `10`      | 1-100                                                    |
-| `VLLM_ALLOW_STUB`                    | 允许加载 Stub 架构 | `false`   | 仅供开发/测试（StubArchitecture 不推理）                 |
-| `VLLM_API_KEY`                       | API 密钥           | -         | 可重复指定；认证必填                                     |
-| `VLLM_API_KEYS_FILE`                 | API 密钥文件       | -         | 从文件加载密钥（与 `VLLM_API_KEY` 并用）                 |
-| `VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH` | 允许无认证公开访问 | `false`   | 仅限可信内网；否则启动时给出安全警告                     |
-| `VLLM_CONFIG_PATH`                   | YAML 配置路径      | -         | 覆盖 `--config`；加载优先级最高                          |
-| `VLLM_OTLP_ENDPOINT`                 | OTLP 收集器端点    | -         | 需 `opentelemetry` feature（如 `http://localhost:4317`） |
+| 变量                                 | 描述               | 默认值    | 说明                                                                                                  |
+| ------------------------------------ | ------------------ | --------- | ----------------------------------------------------------------------------------------------------- |
+| `VLLM_MODEL`                         | 模型目录路径       | -（必需） | 含 tokenizer.json 与权重；等价 `--model`                                                              |
+| `VLLM_HOST`                          | 服务 host          | `0.0.0.0` | 监听地址                                                                                              |
+| `VLLM_PORT`                          | 服务端口           | `8000`    | API 端口                                                                                              |
+| `VLLM_LOG_LEVEL`                     | 日志级别           | `info`    | trace/debug/info/warn/error                                                                           |
+| `VLLM_LOG_DIR`                       | 日志输出目录       | -         | 设置后启用 JSON 文件日志                                                                              |
+| `VLLM_KV_BLOCKS`                     | KV Block 数量      | `1024`    | 1-65536，显存相关                                                                                     |
+| `VLLM_KV_QUANTIZATION`               | KV Cache 量化开关  | `false`   | 启用 KV Cache 量化                                                                                    |
+| `VLLM_MAX_DRAFT_TOKENS`              | 最大投机 Token     | `8`       | 0-64，投机解码                                                                                        |
+| `VLLM_ADAPTIVE_SPECULATIVE`          | 自适应投机解码     | `false`   | 动态调整 draft 长度                                                                                   |
+| `VLLM_TENSOR_PARALLEL_SIZE`          | 张量并行度         | `1`       | 1-64，GPU 数量                                                                                        |
+| `VLLM_MAX_BATCH_SIZE`                | 最大批大小         | `256`     | 1-8192                                                                                                |
+| `VLLM_MAX_WAITING_BATCHES`           | 最大等待批次       | `10`      | 1-100                                                                                                 |
+| `VLLM_MAX_MODEL_LEN`                 | 模型上下文长度     | -         | 覆盖 checkpoint 的 `max_position_embeddings`；模型无该字段时用于限制 `max_tokens` 上界（RIL ISS-044） |
+| `VLLM_ALLOW_STUB`                    | 允许加载 Stub 架构 | `false`   | 仅供开发/测试（StubArchitecture 不推理）                                                              |
+| `VLLM_API_KEY`                       | API 密钥           | -         | 可重复指定；认证必填                                                                                  |
+| `VLLM_API_KEYS_FILE`                 | API 密钥文件       | -         | 从文件加载密钥（与 `VLLM_API_KEY` 并用）                                                              |
+| `VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH` | 允许无认证公开访问 | `false`   | 仅限可信内网；否则启动时给出安全警告                                                                  |
+| `VLLM_CONFIG_PATH`                   | YAML 配置路径      | -         | 覆盖 `--config`；加载优先级最高                                                                       |
+| `VLLM_OTLP_ENDPOINT`                 | OTLP 收集器端点    | -         | 需 `opentelemetry` feature（如 `http://localhost:4317`）                                              |
 
 </div>
 

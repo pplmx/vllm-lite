@@ -19,11 +19,13 @@
 //! 3. **completions** rejects the same way.
 //! 4. **`/v1/models`** exposes `max_model_len` so OpenAI-style
 //!    clients can size their prompts before sending.
-//! 5. **No `max_model_len` configured** → the validation is
-//!    skipped (test fixtures set it to `None`). This is the
-//!    fail-open behaviour for stub models / GGUF without the
-//!    field — better to admit uncertainty than to crash on a
-//!    missing key.
+//! 5. **No `max_model_len` configured** → the handler stays
+//!    fail-open for bounded requests (stub models / GGUF
+//!    without the field still serve), but `max_tokens` above a
+//!    hard ceiling is rejected with `400 context_length_exceeded`
+//!    (RIL ISS-044) — previously such a request was admitted
+//!    unconditionally and drove the engine into an unbounded
+//!    generation that held the scheduler thread and OOM'd.
 //!
 //! We don't exercise the success path (request fits) because
 //! every other handler test already covers that — the gate
@@ -248,18 +250,16 @@ async fn models_endpoint_omits_max_model_len_when_unconfigured() {
 }
 
 // ---------------------------------------------------------------------------
-// max_model_len = None → validation skipped (fail-open)
+// max_model_len = None → fail-open for bounded, hard ceiling for unbounded
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn chat_with_unconfigured_max_model_len_skips_validation() {
-    // When the loader couldn't read max_position_embeddings
-    // (stub model, GGUF without the field), the handler must
-    // NOT crash and must NOT block the request. The chat
-    // handler still validates the basic fields (model
-    // non-empty, messages non-empty) and then proceeds to the
-    // engine — which is a stub channel here, so we expect 503
-    // (engine_unavailable) rather than 400 (context_length_exceeded).
+async fn chat_with_unconfigured_max_model_len_rejects_unbounded_max_tokens() {
+    // RIL ISS-044: with no max_position_embeddings and no --max-model-len,
+    // an unbounded max_tokens would drive the engine (single scheduler
+    // thread) into a generation that never terminates — growing the
+    // sequence's token list forever until OOM. It must now be rejected at
+    // the boundary with 400 context_length_exceeded instead of admitted.
     let state = build_state(None);
     let app = router(state);
 
@@ -271,14 +271,41 @@ async fn chat_with_unconfigured_max_model_len_skips_validation() {
         .unwrap();
     let resp = app.oneshot(req).await.expect("response");
 
-    // The handler accepted the request (no 400) — it tried to
-    // reach the engine. The engine_tx has no receiver here, so
-    // the engine closed error surfaces as 503 engine_unavailable.
+    assert_eq!(
+        resp.status(),
+        StatusCode::BAD_REQUEST,
+        "unbounded max_tokens with no configured context must be rejected"
+    );
+    let body = body_json(resp).await;
+    assert_eq!(
+        body["error"]["code"].as_str(),
+        Some("context_length_exceeded")
+    );
+}
+
+#[tokio::test]
+async fn chat_with_unconfigured_max_model_len_stays_fail_open_for_bounded() {
+    // Stub models / GGUF without the field must still serve *bounded*
+    // requests: a modest max_tokens below the ceiling is not blocked by
+    // the gate — it proceeds to the engine (a stub channel here, so the
+    // closed engine surface reports 503 engine_unavailable, not 400).
+    let state = build_state(None);
+    let app = router(state);
+
+    let req = HttpRequest::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .body(Body::from(chat_request("qwen3", 100, false)))
+        .unwrap();
+    let resp = app.oneshot(req).await.expect("response");
+
     assert_ne!(
         resp.status(),
         StatusCode::BAD_REQUEST,
-        "unconfigured max_model_len must NOT produce a 400 — \
-         the gate is fail-open so stub / GGUF-without-field \
-         models can still serve requests"
+        "a bounded request must still pass the gate when max_model_len is unconfigured"
     );
+    // Either the engine is unreachable (503) or the engine service is
+    // unavailable — never a context-length rejection.
+    assert_ne!(resp.status(), StatusCode::BAD_REQUEST);
 }

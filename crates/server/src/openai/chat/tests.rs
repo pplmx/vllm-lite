@@ -8,6 +8,37 @@ use super::*;
 use axum::http::StatusCode;
 use vllm_model::tokenizer::Tokenizer;
 
+/// RIL ISS-044: an unknown-context model (no `max_position_embeddings`, no
+/// `--max-model-len`) must NOT accept an unbounded `max_tokens`. Before the
+/// fix, `check_context_length` returned `Ok(())` when `max_model_len` was
+/// `None`, so `max_tokens = i64::MAX` passed every validator and the engine
+/// grew the sequence's token list forever — holding the scheduler thread and
+/// OOM-ing the process. The request is now rejected with a 400 and a
+/// `context_length_exceeded` code.
+#[test]
+fn test_check_context_length_rejects_unbounded_max_tokens_without_model_len() {
+    let err = check_context_length(10, i64::MAX as usize, None).unwrap_err();
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+
+    let err = check_context_length(10, 1_000_000, None).unwrap_err();
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+
+    // A bounded request is fine even with no known context...
+    assert!(check_context_length(10, 8192, None).is_ok());
+    assert!(check_context_length(10, 100, None).is_ok());
+
+    // ...and an explicit max_model_len restores the normal context gate
+    // (prompt + max_tokens must fit), applying whether or not a ceiling would
+    // otherwise apply.
+    assert!(check_context_length(10, 100, Some(8192)).is_ok());
+    let err = check_context_length(10, 9000, Some(8192)).unwrap_err();
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert!(
+        check_context_length(10, 900_000, Some(1_000_000)).is_ok(),
+        "an explicit max_model_len must win over the ceiling (900k fits a 1M context)"
+    );
+}
+
 fn test_tokenizer() -> Tokenizer {
     Tokenizer::new()
 }

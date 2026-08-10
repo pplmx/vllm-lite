@@ -90,6 +90,10 @@ fn validate_max_draft_tokens(s: &str) -> Result<usize, CliValidationError> {
     parse_usize_in_range(s, 0, 64)
 }
 
+fn validate_max_model_len(s: &str) -> Result<usize, CliValidationError> {
+    parse_usize_in_range(s, 1, 4_000_000)
+}
+
 /// `CliArgs`. See the type definition for fields and behavior.
 #[derive(Parser, Debug)]
 #[command(name = "vllm-server")]
@@ -171,6 +175,14 @@ struct EngineArgs {
 
     #[arg(long, default_value = "false", env = "VLLM_ADAPTIVE_SPECULATIVE")]
     pub enable_adaptive_speculative: bool,
+
+    /// Explicit model context length (tokens). Overrides the checkpoint's
+    /// `max_position_embeddings` (if declared) in request context-length
+    /// validation. When neither is set, request validation caps `max_tokens`
+    /// at a hard ceiling so an unknown-context model cannot be driven into an
+    /// unbounded generation (RIL ISS-044).
+    #[arg(long, env = "VLLM_MAX_MODEL_LEN", value_parser = validate_max_model_len)]
+    pub max_model_len: Option<usize>,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -238,6 +250,9 @@ impl CliArgs {
         config.engine.max_waiting_batches = self.engine.max_waiting_batches;
         config.engine.max_draft_tokens = self.engine.max_draft_tokens;
         config.engine.enable_adaptive_speculative = self.engine.enable_adaptive_speculative;
+        if let Some(max_model_len) = self.engine.max_model_len {
+            config.engine.max_model_len = Some(max_model_len);
+        }
 
         if !self.auth.api_key.is_empty() {
             config.auth.api_keys.clone_from(&self.auth.api_key);
