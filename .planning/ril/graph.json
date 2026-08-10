@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 24,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T10:45:26+00:00",
+  "updated_at": "2026-08-10T10:53:31+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1917,6 +1917,89 @@
       "touched_round": 24,
       "rationale": "在 step_speculative_inner 的 warmup/验证之前按 input_len+max_draft 预分配 block 表（ensure_blocks_for_tokens），并同步 batch.kv_block_ids 快照；多余 block 由序列持有、结束释放，拒绝 draft 的 block 只是未用容量",
       "alternatives_rejected": "修改 batch composer 感知 draft 预算（scheduler 不持有 draft 配置，API 侵入大）；在验证后补分配（KV 已写入错误 block，来不及）"
+    },
+    "ISS-027": {
+      "id": "ISS-027",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:53:14+00:00",
+      "updated_at": "2026-08-10T10:53:31+00:00",
+      "touched_round": 24,
+      "title": "speculative 的 memory_rollback 用 pre-step num_computed 做 block 数学：resumed prefill 会回卷计数并释放已匹配的 prefix block；decode 跨 block 边界会释放含真实 KV 的 block",
+      "severity": 9
+    },
+    "HYP-008": {
+      "id": "HYP-008",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:53:14+00:00",
+      "updated_at": "2026-08-10T10:53:31+00:00",
+      "touched_round": 24,
+      "confidence": 0.95,
+      "title": "验证 span 已按 TASK-030 预分配后，rejected draft 的 KV 只是 num_computed 之外的未用容量，rollback 调用既多余又有害；read_kv 遇到超出 seq_len 的 headroom block 会下溢"
+    },
+    "EV-040": {
+      "id": "EV-040",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:53:18+00:00",
+      "updated_at": "2026-08-10T10:53:18+00:00",
+      "touched_round": 24,
+      "source": "crates/core/src/engine/spec_dispatch/tests.rs::test_speculative_resumed_prefill_rollback_does_not_release_prefix_blocks (before fix: num_computed=16 < prompt_len=20, prefix block released)",
+      "title": "回归测试复现：4-token prefix hit + 16-token resume、全部 draft 被拒时 rollback 回卷 num_computed 并释放匹配 block",
+      "confidence": 1.0
+    },
+    "EV-041": {
+      "id": "EV-041",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:53:18+00:00",
+      "updated_at": "2026-08-10T10:53:18+00:00",
+      "touched_round": 24,
+      "source": "crates/core/tests/real_model_engine.rs::real_model_speculative_decode_boundary_does_not_corrupt_first_block + buffer/tests.rs::test_read_kv_with_headroom_blocks_beyond_seq_len",
+      "title": "真实模型回归：29-token prompt 首次 decode 在位置 29 跨 block 边界，修复后 block 0/1 KV 与非投机一致；read_kv headroom 单测通过",
+      "confidence": 1.0
+    },
+    "TASK-031": {
+      "id": "TASK-031",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T10:53:22+00:00",
+      "updated_at": "2026-08-10T10:53:31+00:00",
+      "touched_round": 24,
+      "category": "correctness",
+      "severity": 9,
+      "confidence": 0.95,
+      "effort": 3,
+      "unlock_factor": 1.0,
+      "title": "移除 speculative 步骤的 rejected-draft rollback；验证 span 按 num_computed+input_len+max_draft 预分配；read_kv 容忍 headroom block（含 resumed-prefill 与 decode 边界回归测试）"
+    },
+    "CHG-027": {
+      "id": "CHG-027",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:53:27+00:00",
+      "updated_at": "2026-08-10T10:53:27+00:00",
+      "touched_round": 24,
+      "commit": "664023d5",
+      "title": "fix(core,model): drop speculative rejected-draft rollback; grow verification span including num_computed"
+    },
+    "DEC-015": {
+      "id": "DEC-015",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T10:53:27+00:00",
+      "updated_at": "2026-08-10T10:53:27+00:00",
+      "touched_round": 24,
+      "rationale": "验证 span block 预分配后 rejected draft KV 处于 num_computed 之外（永不读取、随增长被覆盖），因此完全移除 rollback 调用；ensure_verification_blocks 用 num_computed+span 计算块数（覆盖 decode 边界）；read_kv 在 start_token>=seq_len 时 break 以容忍 headroom",
+      "alternatives_rejected": "保留 rollback 但改成按 prefill/decode 分阶段（其 block 数学仍无法从写入 span 正确还原）；在 update_speculative 后再补分配 block（KV 已写入错误位置）"
     }
   },
   "edges": [
@@ -2699,6 +2782,48 @@
       "to": "TASK-030",
       "type": "governs",
       "created_at": "2026-08-10T10:45:26+00:00"
+    },
+    {
+      "from": "EV-040",
+      "to": "HYP-008",
+      "type": "validates",
+      "created_at": "2026-08-10T10:53:27+00:00"
+    },
+    {
+      "from": "EV-041",
+      "to": "HYP-008",
+      "type": "validates",
+      "created_at": "2026-08-10T10:53:27+00:00"
+    },
+    {
+      "from": "TASK-031",
+      "to": "ISS-027",
+      "type": "addresses",
+      "created_at": "2026-08-10T10:53:27+00:00"
+    },
+    {
+      "from": "ISS-027",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-10T10:53:27+00:00"
+    },
+    {
+      "from": "CHG-027",
+      "to": "TASK-031",
+      "type": "implements",
+      "created_at": "2026-08-10T10:53:31+00:00"
+    },
+    {
+      "from": "CHG-027",
+      "to": "ISS-027",
+      "type": "resolves",
+      "created_at": "2026-08-10T10:53:31+00:00"
+    },
+    {
+      "from": "DEC-015",
+      "to": "TASK-031",
+      "type": "governs",
+      "created_at": "2026-08-10T10:53:31+00:00"
     }
   ]
 }
