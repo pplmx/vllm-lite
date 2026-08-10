@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 26,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T11:17:22+00:00",
+  "updated_at": "2026-08-10T11:21:32+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2247,6 +2247,77 @@
       "touched_round": 26,
       "rationale": "should_switch_to_prefill 在 prefill_queue_len==0 时返回 false：切到无工作的 phase 只会空转一步；保留其余启发式（max_consecutive_decode / prefill_priority_threshold）",
       "alternatives_rejected": "把 min_decode_batch_size 条件改为统计 running decode（SchedulerState 不携带该计数，改动面更大且收益等同）；在 build_batch 里对空 phase 返回当前 phase（改变 select_phase 契约）"
+    },
+    "ISS-032": {
+      "id": "ISS-032",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:21:25+00:00",
+      "updated_at": "2026-08-10T11:21:32+00:00",
+      "touched_round": 26,
+      "title": "CUDA-Graph 准入路径缺少 build_batch 的内存压力 preemption 门，压力下新序列块分配静默失败并回退 block 0",
+      "severity": 9
+    },
+    "HYP-013": {
+      "id": "HYP-013",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:21:26+00:00",
+      "updated_at": "2026-08-10T11:21:32+00:00",
+      "touched_round": 26,
+      "confidence": 0.95,
+      "title": "select_sequences_for_phase 只做 preallocate 不做 execute_preemption，运行序列占满内存时新 prefill 拿不到全部 block"
+    },
+    "EV-046": {
+      "id": "EV-046",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:21:26+00:00",
+      "updated_at": "2026-08-10T11:21:26+00:00",
+      "touched_round": 26,
+      "source": "crates/core/src/scheduler/engine/tests.rs::test_build_batch_with_graph_preempts_before_admitting_under_pressure (without gate: admitted seq only 2/3 blocks)",
+      "title": "回归测试：16-block 池、运行序列占 14 块，新 40-token prefill 无 gate 时只拿到 2/3 block；有 gate 时受害序列被抢占重排队、新序列拿满 3 块",
+      "confidence": 1.0
+    },
+    "TASK-035": {
+      "id": "TASK-035",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:21:26+00:00",
+      "updated_at": "2026-08-10T11:21:32+00:00",
+      "touched_round": 26,
+      "category": "correctness",
+      "severity": 9,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "title": "在 select_sequences_for_phase 加入与 build_batch 相同的内存压力 preemption 门（含回归测试）"
+    },
+    "CHG-031": {
+      "id": "CHG-031",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:21:32+00:00",
+      "updated_at": "2026-08-10T11:21:32+00:00",
+      "touched_round": 26,
+      "commit": "e3bda9a8",
+      "title": "fix(core): CUDA-Graph admission runs the memory-pressure preemption gate"
+    },
+    "DEC-019": {
+      "id": "DEC-019",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:21:32+00:00",
+      "updated_at": "2026-08-10T11:21:32+00:00",
+      "touched_round": 26,
+      "rationale": "在 select_sequences_for_phase 复用 build_batch 的准入门（blocks_needed > available 时 execute_preemption），保证两条批构建路径行为一致",
+      "alternatives_rejected": "在 preallocate 后再次检查并回滚（已分配的 block 需要释放、复杂度高）；只修 preallocate 的 OOM 分支返回错误（不解决运行序列占用问题）"
     }
   },
   "edges": [
@@ -3203,6 +3274,42 @@
       "to": "TASK-034",
       "type": "governs",
       "created_at": "2026-08-10T11:17:22+00:00"
+    },
+    {
+      "from": "EV-046",
+      "to": "HYP-013",
+      "type": "validates",
+      "created_at": "2026-08-10T11:21:31+00:00"
+    },
+    {
+      "from": "TASK-035",
+      "to": "ISS-032",
+      "type": "addresses",
+      "created_at": "2026-08-10T11:21:31+00:00"
+    },
+    {
+      "from": "ISS-032",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-10T11:21:32+00:00"
+    },
+    {
+      "from": "CHG-031",
+      "to": "TASK-035",
+      "type": "implements",
+      "created_at": "2026-08-10T11:21:32+00:00"
+    },
+    {
+      "from": "CHG-031",
+      "to": "ISS-032",
+      "type": "resolves",
+      "created_at": "2026-08-10T11:21:32+00:00"
+    },
+    {
+      "from": "DEC-019",
+      "to": "TASK-035",
+      "type": "governs",
+      "created_at": "2026-08-10T11:21:32+00:00"
     }
   ]
 }
