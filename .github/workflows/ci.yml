@@ -256,3 +256,35 @@ jobs:
           rustup toolchain install nightly --profile minimal
           cargo +nightly install cargo-public-api --locked
           RUSTUP_TOOLCHAIN=nightly bash .planning/phase-12e/check-public-api.sh
+
+  feature-gated-tests:
+    # Feature-gated code paths are NOT covered by the default-features
+    # `cargo nextest run` above. `vllm-core --features multi-node` exercises
+    # the distributed-KV chain-cursor wiring and the real-model speculative
+    # span pre-allocation (RIL ISS-037 was a multi-node-only panic that
+    # slipped past default CI); `--features cuda-graph` exercises the
+    # CUDA-Graph batch builder + executor fallback (ISS-028/032/034 guards).
+    # Both run on CPU (no GPU required) — the features compile the CUDA
+    # kernels with the pinned compute cap but never execute them.
+    name: Feature-gated tests (multi-node, cuda-graph)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protoc (vllm-dist build.rs)
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Cache cargo (Swatinem rust-cache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: "."
+
+      - name: Test multi-node
+        run: cargo test -p vllm-core --features multi-node --no-fail-fast
+
+      - name: Test cuda-graph
+        run: cargo test -p vllm-core --features cuda-graph --no-fail-fast
