@@ -376,6 +376,42 @@ fn test_priority_scheduling_selects_highest_priority_under_limit() {
     );
 }
 
+/// The `enable_priority_scheduling` config flag ALONE (no manual
+/// `set_policy`) must install `PriorityPolicy` (RIL ISS-043). The
+/// constructor previously hardcoded `FcfsPolicy` and never read the flag,
+/// so the documented knob silently did nothing — the sibling tests above
+/// masked this by calling `set_policy` explicitly.
+#[test]
+fn test_priority_scheduling_via_config_flag_only() {
+    let config = SchedulerConfig {
+        max_num_seqs: 1, // one slot — priority decides which prefill is picked
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: true,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+        ..Default::default()
+    };
+
+    let mut sched = create_test_engine(config, 1024);
+
+    sched.add_request(Request::new(1, vec![1], 5).with_priority(Priority(100))); // lowest
+    sched.add_request(Request::new(2, vec![2], 5).with_priority(Priority(0))); // highest
+    sched.add_request(Request::new(3, vec![3], 5).with_priority(Priority(50))); // middle
+
+    let batch = sched.build_batch();
+
+    assert_eq!(
+        batch.seq_ids,
+        vec![2],
+        "enable_priority_scheduling=true must install PriorityPolicy (lower Priority(n) wins)"
+    );
+}
+
 /// With `PriorityPolicy` installed and `max_num_seqs >= 3`, the batch's
 /// `seq_ids` must reflect priority ordering for decode-phase sequences.
 ///

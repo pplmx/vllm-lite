@@ -24,7 +24,7 @@ use vllm_traits::{Batch, SeqId};
 use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::cuda_graph::SchedulerCudaGraphConfig;
 use crate::scheduler::observer::{SchedulerObserver, SchedulerObserverError, SchedulerObservers};
-use crate::scheduler::policy::{FcfsPolicy, SchedulingPolicy};
+use crate::scheduler::policy::{FcfsPolicy, PriorityPolicy, SchedulingPolicy};
 use crate::scheduler::{
     BatchComposer, BatchCompositionConfig, MemoryManager, PhaseScheduler, PhaseSwitchPolicy,
     RadixTree, RequestQueue,
@@ -118,13 +118,24 @@ impl SchedulerEngine {
         metrics.set_active_sequences(0);
         metrics.set_queue_depth(0);
 
+        // Priority scheduling is opt-in via SchedulerConfig. The constructor
+        // used to hardcode FcfsPolicy and never read
+        // `enable_priority_scheduling`, so the documented flag silently did
+        // nothing and priority-tier users got FCFS (RIL ISS-043). Honor it
+        // here; `set_policy` can still override after construction.
+        let policy: Box<dyn SchedulingPolicy> = if config.enable_priority_scheduling {
+            Box::new(PriorityPolicy::default())
+        } else {
+            Box::new(FcfsPolicy::new())
+        };
+
         Self {
             request_queue: RequestQueue::new(),
             phase_scheduler: PhaseScheduler::new(phase_switch_policy),
             batch_composer: BatchComposer::with_packing(batch_config, config.packing.clone()),
             memory: MemoryManager::new(config, num_kv_blocks),
             prefix_cache: RadixTree::new(),
-            policy: Box::new(FcfsPolicy::new()),
+            policy,
             running: Vec::new(),
             finished: Vec::new(),
             next_seq_id: 1,
