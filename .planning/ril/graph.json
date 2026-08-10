@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 25,
+  "round": 26,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T11:11:27+00:00",
+  "updated_at": "2026-08-10T11:17:22+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1821,7 +1821,7 @@
       "version": 1,
       "created_at": "2026-08-10T10:39:57+00:00",
       "updated_at": "2026-08-10T10:39:57+00:00",
-      "touched_round": 25,
+      "touched_round": 26,
       "title": "vllm-core engine/speculative dispatch + scheduler update",
       "role": "speculative decoding step orchestration and scheduler state fold"
     },
@@ -2176,6 +2176,77 @@
       "touched_round": 25,
       "rationale": "draft 生成改为每步单 token 解码（真实位置 + num_computed 递增 + 额外迭代写入最后 draft KV），使 draft cache 与 target 上下文一致；验证器按 max_tokens 剩余预算限制 accepted drafts",
       "alternatives_rejected": "保留整列表喂入并修正 forward_decode 的 positions[0] 语义（会改变共享 decode 路径、影响面大）；验证后重跑 draft 刷新缓存（每步额外完整前向，成本高）"
+    },
+    "ISS-031": {
+      "id": "ISS-031",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:17:15+00:00",
+      "updated_at": "2026-08-10T11:17:22+00:00",
+      "touched_round": 26,
+      "title": "PhaseScheduler 在无 prefill 工作时切换到 Prefill 空批次，稳态 decode 每两步空转一步（~50% 吞吐损失）",
+      "severity": 9
+    },
+    "HYP-012": {
+      "id": "HYP-012",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:17:15+00:00",
+      "updated_at": "2026-08-10T11:17:22+00:00",
+      "touched_round": 26,
+      "confidence": 0.95,
+      "title": "should_switch_to_prefill 用 decode_queue_len < min_decode_batch_size 判断，但稳态 decode 的序列都在 running（不在队列），decode_queue_len 恒为 0，导致 Decode→Prefill(空)→Decode 振荡"
+    },
+    "EV-045": {
+      "id": "EV-045",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:17:15+00:00",
+      "updated_at": "2026-08-10T11:17:15+00:00",
+      "touched_round": 26,
+      "source": "crates/core/tests/phase_scheduler_steady_state.rs (pre-fix: 12 steps 中每两步一个 EMPTY；post-fix: 0 empty)",
+      "title": "回归测试：无修复时 12 步内出现多个空批次（step 级探测 STEP 2/4/6... EMPTY）；修复后 12 步全产出",
+      "confidence": 1.0
+    },
+    "TASK-034": {
+      "id": "TASK-034",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:17:15+00:00",
+      "updated_at": "2026-08-10T11:17:22+00:00",
+      "touched_round": 26,
+      "category": "performance",
+      "severity": 9,
+      "confidence": 0.95,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "title": "should_switch_to_prefill 在 prefill_queue_len==0 时直接返回 false（含稳态 decode 空转回归测试）"
+    },
+    "CHG-030": {
+      "id": "CHG-030",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:17:22+00:00",
+      "updated_at": "2026-08-10T11:17:22+00:00",
+      "touched_round": 26,
+      "commit": "405bcab6",
+      "title": "fix(core): phase scheduler must not switch to an empty prefill phase"
+    },
+    "DEC-018": {
+      "id": "DEC-018",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:17:22+00:00",
+      "updated_at": "2026-08-10T11:17:22+00:00",
+      "touched_round": 26,
+      "rationale": "should_switch_to_prefill 在 prefill_queue_len==0 时返回 false：切到无工作的 phase 只会空转一步；保留其余启发式（max_consecutive_decode / prefill_priority_threshold）",
+      "alternatives_rejected": "把 min_decode_batch_size 条件改为统计 running decode（SchedulerState 不携带该计数，改动面更大且收益等同）；在 build_batch 里对空 phase 返回当前 phase（改变 select_phase 契约）"
     }
   },
   "edges": [
@@ -3096,6 +3167,42 @@
       "to": "TASK-033",
       "type": "governs",
       "created_at": "2026-08-10T11:11:27+00:00"
+    },
+    {
+      "from": "EV-045",
+      "to": "HYP-012",
+      "type": "validates",
+      "created_at": "2026-08-10T11:17:22+00:00"
+    },
+    {
+      "from": "TASK-034",
+      "to": "ISS-031",
+      "type": "addresses",
+      "created_at": "2026-08-10T11:17:22+00:00"
+    },
+    {
+      "from": "ISS-031",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-10T11:17:22+00:00"
+    },
+    {
+      "from": "CHG-030",
+      "to": "TASK-034",
+      "type": "implements",
+      "created_at": "2026-08-10T11:17:22+00:00"
+    },
+    {
+      "from": "CHG-030",
+      "to": "ISS-031",
+      "type": "resolves",
+      "created_at": "2026-08-10T11:17:22+00:00"
+    },
+    {
+      "from": "DEC-018",
+      "to": "TASK-034",
+      "type": "governs",
+      "created_at": "2026-08-10T11:17:22+00:00"
     }
   ]
 }
