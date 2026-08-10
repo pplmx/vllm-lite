@@ -140,6 +140,14 @@ impl PhaseScheduler {
     }
 
     const fn should_switch_to_prefill(&self, state: &SchedulerState) -> bool {
+        // No prefill work: switching would produce an empty batch and idle
+        // the whole step (RIL ISS-031). In steady-state decode every
+        // sequence is running, not queued, so `decode_queue_len` reads 0 and
+        // the heuristic below would oscillate Decode -> Prefill(empty) ->
+        // Decode, wasting every other step (~50% throughput loss).
+        if state.prefill_queue_len == 0 {
+            return false;
+        }
         if self.consecutive_decode_rounds >= self.switch_policy.max_consecutive_decode {
             return true;
         }
