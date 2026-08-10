@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 25,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T10:59:50+00:00",
+  "updated_at": "2026-08-10T11:11:27+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2071,6 +2071,111 @@
       "touched_round": 25,
       "rationale": "把 ISS-022 的预分配循环抽成共享 helper preallocate_kv_blocks，两个批构建路径（regular + graph）都调用，避免同类 block-0 回退缺陷在 cuda-graph 构建上复现",
       "alternatives_rejected": "仅复制代码到 graph.rs（两份逻辑会漂移）；在 step_with_graph 里补预分配（batch 已组合，block_ids 快照已固化）"
+    },
+    "ISS-029": {
+      "id": "ISS-029",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:11:13+00:00",
+      "updated_at": "2026-08-10T11:11:27+00:00",
+      "touched_round": 25,
+      "title": "真实模型下 speculative draft 生成位置/缓存错误：draft 在恒定 num_computed 位置生成、缓存不累积，导致 draft 全部被拒（decode 每步只出 1 token）",
+      "severity": 9
+    },
+    "ISS-030": {
+      "id": "ISS-030",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:11:13+00:00",
+      "updated_at": "2026-08-10T11:11:27+00:00",
+      "touched_round": 25,
+      "title": "speculative 步骤临近 max_tokens 时超额发出 max_draft+1 个 token（实测 max_tokens=6 发出 10 个）",
+      "severity": 8
+    },
+    "HYP-010": {
+      "id": "HYP-010",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:11:13+00:00",
+      "updated_at": "2026-08-10T11:11:27+00:00",
+      "touched_round": 25,
+      "confidence": 0.95,
+      "title": "generate_batched/per_seq_drafts 把增长的 token 列表以恒定 num_computed + is_prefill=false 喂给 draft 模型；forward_decode 用 positions[0] 做 RoPE、KV 写恒定位置，draft 上下文与 target 不一致"
+    },
+    "HYP-011": {
+      "id": "HYP-011",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:11:13+00:00",
+      "updated_at": "2026-08-10T11:11:27+00:00",
+      "touched_round": 25,
+      "confidence": 0.9,
+      "title": "验证器不感知 max_tokens 剩余预算，整步发出 accepted drafts + bonus"
+    },
+    "EV-043": {
+      "id": "EV-043",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:11:17+00:00",
+      "updated_at": "2026-08-10T11:11:17+00:00",
+      "touched_round": 25,
+      "source": "crates/core/tests/real_model_engine.rs::real_model_speculative_decode_keeps_generating_drafts + real_model_speculative_output_matches_regular (before fix: 1 token/step, 10 vs 6 tokens; after: 5 tokens/step, exact match)",
+      "title": "真实模型回归：修复前同权重 target+draft 的 decode 每步只发 1 token（全拒）；修复后每步 5 token 且端到端输出与 regular 逐 token 一致",
+      "confidence": 1.0
+    },
+    "EV-044": {
+      "id": "EV-044",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:11:17+00:00",
+      "updated_at": "2026-08-10T11:11:17+00:00",
+      "touched_round": 25,
+      "source": "crates/core/tests/real_model_engine.rs::real_model_speculative_output_matches_regular (max_tokens=6; before: spec=[532,393,464,464,791,518,336,336,936,936])",
+      "title": "max_tokens 超发复现：speculative 发 10 个 token 而 regular 只发 6 个；修复后两者一致",
+      "confidence": 1.0
+    },
+    "TASK-033": {
+      "id": "TASK-033",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-10T11:11:17+00:00",
+      "updated_at": "2026-08-10T11:11:27+00:00",
+      "touched_round": 25,
+      "category": "correctness",
+      "severity": 9,
+      "confidence": 0.95,
+      "effort": 3,
+      "unlock_factor": 1.0,
+      "title": "draft 循环按真实位置逐 token 解码（base+j、num_computed 递增、额外一步写最后 draft KV）；验证器按剩余预算限制 accepted drafts（含真实模型回归）"
+    },
+    "CHG-029": {
+      "id": "CHG-029",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:11:23+00:00",
+      "updated_at": "2026-08-10T11:11:23+00:00",
+      "touched_round": 25,
+      "commit": "385881a6",
+      "title": "fix(core): real-model speculative drafts use true positions; cap max_tokens"
+    },
+    "DEC-017": {
+      "id": "DEC-017",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T11:11:23+00:00",
+      "updated_at": "2026-08-10T11:11:23+00:00",
+      "touched_round": 25,
+      "rationale": "draft 生成改为每步单 token 解码（真实位置 + num_computed 递增 + 额外迭代写入最后 draft KV），使 draft cache 与 target 上下文一致；验证器按 max_tokens 剩余预算限制 accepted drafts",
+      "alternatives_rejected": "保留整列表喂入并修正 forward_decode 的 positions[0] 语义（会改变共享 decode 路径、影响面大）；验证后重跑 draft 刷新缓存（每步额外完整前向，成本高）"
     }
   },
   "edges": [
@@ -2931,6 +3036,66 @@
       "to": "TASK-032",
       "type": "governs",
       "created_at": "2026-08-10T10:59:50+00:00"
+    },
+    {
+      "from": "EV-043",
+      "to": "HYP-010",
+      "type": "validates",
+      "created_at": "2026-08-10T11:11:22+00:00"
+    },
+    {
+      "from": "EV-044",
+      "to": "HYP-011",
+      "type": "validates",
+      "created_at": "2026-08-10T11:11:22+00:00"
+    },
+    {
+      "from": "TASK-033",
+      "to": "ISS-029",
+      "type": "addresses",
+      "created_at": "2026-08-10T11:11:23+00:00"
+    },
+    {
+      "from": "TASK-033",
+      "to": "ISS-030",
+      "type": "addresses",
+      "created_at": "2026-08-10T11:11:23+00:00"
+    },
+    {
+      "from": "ISS-029",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-10T11:11:23+00:00"
+    },
+    {
+      "from": "ISS-030",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-10T11:11:23+00:00"
+    },
+    {
+      "from": "CHG-029",
+      "to": "TASK-033",
+      "type": "implements",
+      "created_at": "2026-08-10T11:11:27+00:00"
+    },
+    {
+      "from": "CHG-029",
+      "to": "ISS-029",
+      "type": "resolves",
+      "created_at": "2026-08-10T11:11:27+00:00"
+    },
+    {
+      "from": "CHG-029",
+      "to": "ISS-030",
+      "type": "resolves",
+      "created_at": "2026-08-10T11:11:27+00:00"
+    },
+    {
+      "from": "DEC-017",
+      "to": "TASK-033",
+      "type": "governs",
+      "created_at": "2026-08-10T11:11:27+00:00"
     }
   ]
 }
