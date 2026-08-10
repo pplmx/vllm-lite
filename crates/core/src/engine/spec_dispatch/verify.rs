@@ -65,6 +65,21 @@ impl crate::engine::Engine {
         for (i, seq_id) in batch.seq_ids.iter().enumerate() {
             let drafts = &draft_outputs[i];
 
+            // Respect the sequence's `max_tokens` budget: a speculative step
+            // emits `accepted + 1` tokens (accepted drafts + the
+            // bonus/rejection token), so at most `remaining - 1` drafts may
+            // be accepted. Without the cap, a step near the end of its
+            // budget emitted up to `max_draft + 1` tokens past `max_tokens`
+            // (RIL ISS-030).
+            let remaining = self
+                .scheduler
+                .get_sequence(*seq_id)
+                .map_or(usize::MAX, |s| {
+                    s.max_tokens
+                        .saturating_sub(s.tokens.len().saturating_sub(s.prompt_len))
+                });
+            let draft_cap = remaining.saturating_sub(1);
+
             // Pick the per-sequence sampling params carried on the Batch
             // (populated by BatchComposer from Sequence::sampling_params —
             // see ARCH-02 fix in CHANGELOG). Fall back to default
@@ -140,7 +155,8 @@ impl crate::engine::Engine {
             // the old math compared drafts against input-token
             // predictions, silently corrupting the accepted set.
             let input_len = batch.input_tokens[i].len();
-            for (j, &draft_token) in drafts.iter().enumerate() {
+            let loop_limit = draft_cap.min(drafts.len());
+            for (j, &draft_token) in drafts.iter().take(loop_limit).enumerate() {
                 let offset = (input_len - 1 + j) * vocab_size;
                 if offset + vocab_size > logits.len() {
                     break;
@@ -161,6 +177,19 @@ impl crate::engine::Engine {
                     // are available).
                     results.push((*seq_id, sample_or_argmax(pos_logits, &params)));
                     break;
+                }
+            }
+
+            // Budget cap: every draft within the cap was accepted but the
+            // sequence's remaining budget is exactly one more token — emit
+            // the target-sampled token at the position after the accepted
+            // drafts (same position the bonus would use), so the step fills
+            // its budget without overshooting `max_tokens`.
+            if accepted == loop_limit && loop_limit < drafts.len() {
+                let offset = (input_len - 1 + accepted) * vocab_size;
+                if offset + vocab_size <= logits.len() {
+                    let pos_logits = &logits[offset..offset + vocab_size];
+                    results.push((*seq_id, sample_or_argmax(pos_logits, &params)));
                 }
             }
 

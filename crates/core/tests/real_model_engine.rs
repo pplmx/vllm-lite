@@ -297,6 +297,155 @@ fn real_model_speculative_decode_boundary_does_not_corrupt_first_block() {
     compare(1, 14);
 }
 
+/// Regression (RIL ISS-029): with a REAL draft model, speculative decode
+/// must generate drafts from the true accumulated context so they match the
+/// target model and get accepted.
+///
+/// The old draft loops fed the whole growing token list with a constant
+/// `num_computed` and `is_prefill=false`; `forward_decode` uses
+/// `positions[0]` for RoPE and writes KV at `num_computed`, so every draft
+/// was generated at the SAME position from a cache that never accumulated.
+/// With identical target/draft weights every draft diverged from the target
+/// and was rejected — a decode step emitted exactly 1 token (no speculative
+/// speedup). The fix feeds one token at its true position with advancing
+/// `num_computed`, so the same-model drafts are accepted and the step emits
+/// accepted drafts + bonus (> 1 token).
+#[test]
+fn real_model_speculative_decode_keeps_generating_drafts() {
+    let cfg = ModelConfig::test_tiny();
+    let weights = tiny_weights(&cfg);
+    let target = LlamaModel::from_weights(
+        ModelConfig::test_tiny(),
+        &Device::Cpu,
+        weights.clone(),
+        64,
+        false,
+    )
+    .unwrap();
+    let draft =
+        LlamaModel::from_weights(ModelConfig::test_tiny(), &Device::Cpu, weights, 64, false)
+            .unwrap();
+
+    let mut engine = Engine::with_config_boxed(
+        Box::new(target),
+        Some(Box::new(draft)),
+        scheduler_config(),
+        4,
+        64,
+    );
+    engine.enable_speculative();
+
+    let (tx, mut rx) = mpsc::channel(64);
+    let prompt: Vec<TokenId> = (0..20).collect();
+    let seq_id = engine.add_request(Request::new(1, prompt, 20), tx);
+
+    engine.step().unwrap(); // prefill (speculative)
+    while let Ok(s) = rx.try_recv() {
+        let _ = s;
+    }
+    engine.step().unwrap(); // decode (speculative)
+    let mut decode_tokens: Vec<TokenId> = Vec::new();
+    while let Ok(s) = rx.try_recv() {
+        decode_tokens.push(s.token);
+    }
+
+    let seq = engine
+        .scheduler
+        .get_sequence(seq_id)
+        .expect("sequence should be running");
+    assert!(
+        !seq.degraded_draft,
+        "real-model draft generation must not degrade the sequence"
+    );
+    assert!(
+        decode_tokens.len() > 1,
+        "speculative decode must accept drafts with a real model (emitted {:?}); \
+         pre-fix the step emitted exactly 1 token because every draft was \
+         generated at the wrong position/context and rejected (RIL ISS-029)",
+        decode_tokens
+    );
+    // Same weights for target and draft: with correct positions/cache all
+    // max_draft drafts are accepted plus the bonus token.
+    assert_eq!(
+        decode_tokens.len(),
+        5,
+        "same-model speculative decode should accept all 4 drafts + bonus (got {:?})",
+        decode_tokens
+    );
+}
+
+/// End-to-end equivalence (RIL ISS-029): a real-model speculative engine
+/// must produce the SAME generated tokens as a regular engine for the same
+/// prompt, because drafts are verified against the target model and only
+/// accepted tokens (plus the target-sampled bonus) are emitted.
+#[test]
+fn real_model_speculative_output_matches_regular() {
+    let prompt: Vec<TokenId> = (0..20).collect();
+
+    // Regular engine.
+    let mut regular = Engine::with_config_boxed(
+        Box::new(build_model()),
+        None::<Box<dyn ModelBackend>>,
+        scheduler_config(),
+        4,
+        64,
+    );
+    let (tx_r, mut rx_r) = mpsc::channel(64);
+    regular.add_request(Request::new(1, prompt.clone(), 6), tx_r);
+    let mut regular_tokens = Vec::new();
+    for _ in 0..40 {
+        regular.step().unwrap();
+        while let Ok(s) = rx_r.try_recv() {
+            regular_tokens.push(s.token);
+        }
+        if regular_tokens.len() >= 6 {
+            break;
+        }
+    }
+
+    // Speculative engine with an identical-weight draft model.
+    let cfg = ModelConfig::test_tiny();
+    let weights = tiny_weights(&cfg);
+    let target = LlamaModel::from_weights(
+        ModelConfig::test_tiny(),
+        &Device::Cpu,
+        weights.clone(),
+        64,
+        false,
+    )
+    .unwrap();
+    let draft =
+        LlamaModel::from_weights(ModelConfig::test_tiny(), &Device::Cpu, weights, 64, false)
+            .unwrap();
+    let mut spec = Engine::with_config_boxed(
+        Box::new(target),
+        Some(Box::new(draft)),
+        scheduler_config(),
+        4,
+        64,
+    );
+    spec.enable_speculative();
+    let (tx_s, mut rx_s) = mpsc::channel(64);
+    spec.add_request(Request::new(1, prompt, 6), tx_s);
+    let mut spec_tokens = Vec::new();
+    for _ in 0..40 {
+        spec.step().unwrap();
+        while let Ok(s) = rx_s.try_recv() {
+            spec_tokens.push(s.token);
+        }
+        if spec_tokens.len() >= 6 {
+            break;
+        }
+    }
+
+    assert_eq!(
+        spec_tokens, regular_tokens,
+        "speculative decoding must produce the same output as regular decoding \
+         with an identical-weight draft model (RIL ISS-029); spec={spec_tokens:?} \
+         regular={regular_tokens:?}"
+    );
+}
+
 #[test]
 fn real_model_engine_multiblock_prefill_then_decode() {
     // 20-token prompt => ceil(20/16) = 2 blocks; generate 3 tokens (greedy).
