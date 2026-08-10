@@ -164,6 +164,54 @@ impl SchedulerEngine {
         }
     }
 
+    /// Grow a running sequence's KV block table to hold at least
+    /// `min_blocks` blocks, allocating + refcounting each new block exactly
+    /// like the post-step growth in `update_running_sequence`.
+    ///
+    /// Used by the speculative step to cover the full verification span
+    /// (input tokens + drafts) BEFORE the target model writes draft KV:
+    /// without the extra blocks, `write_prefill_kv`'s
+    /// `block_ids.get(block_idx).unwrap_or(0)` fallback silently writes the
+    /// overflow into block 0, corrupting the prompt's first-block KV (RIL
+    /// ISS-026).
+    ///
+    /// Returns the number of blocks the sequence holds afterwards.
+    pub fn ensure_blocks_for_tokens(&mut self, seq_id: SeqId, min_blocks: usize) -> usize {
+        let Some(idx) = self.running.iter().position(|s| s.id == seq_id) else {
+            return 0;
+        };
+        while self.running[idx].kv_blocks.len() < min_blocks {
+            let Some(new_blocks) = self.memory.allocate(1) else {
+                break;
+            };
+            // ARCH-01: record the freshly allocated blocks so the refcount
+            // matches the number of live owners (this sequence = 1).
+            self.memory.record_blocks(&new_blocks);
+            #[cfg(feature = "multi-node")]
+            {
+                // Feed the tokens for each newly-allocated block back to the
+                // MemoryManager so the chain hash advances with real
+                // content (same contract as build_batch / update).
+                let block_idx = self.running[idx].kv_blocks.len();
+                let start = block_idx * vllm_traits::BLOCK_SIZE;
+                let end = (start + vllm_traits::BLOCK_SIZE).min(self.running[idx].tokens.len());
+                let parent_hash = self.chain_cursors.get(&seq_id).copied().unwrap_or(0);
+                for &block_id in &new_blocks {
+                    let hash = self.memory.record_block_tokens(
+                        block_id,
+                        parent_hash,
+                        &self.running[idx].tokens[start..end],
+                    );
+                    self.chain_cursors.insert(seq_id, hash);
+                }
+            }
+            let mut blocks = (*self.running[idx].kv_blocks).clone();
+            blocks.extend(new_blocks);
+            self.running[idx].kv_blocks = Arc::new(blocks);
+        }
+        self.running[idx].kv_blocks.len()
+    }
+
     /// Cancel a request by sequence ID
     pub fn cancel_request(&mut self, seq_id: SeqId) -> bool {
         if let Some(seq) = self.request_queue.remove(seq_id) {

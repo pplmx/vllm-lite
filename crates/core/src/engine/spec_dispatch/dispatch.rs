@@ -35,10 +35,12 @@ impl crate::engine::Engine {
         max_draft: usize,
     ) -> Result<Vec<(SeqId, SampledToken)>> {
         let start = std::time::Instant::now();
-        let batch = self.scheduler.build_batch();
+        let mut batch = self.scheduler.build_batch();
         if batch.is_empty() {
             return Ok(vec![]);
         }
+
+        self.ensure_verification_blocks(&mut batch, max_draft);
 
         // Warmup draft KV cache after prefill (Plans 17.4-A, 17.4-E)
         if batch.phase == BatchPhase::Prefill
@@ -193,5 +195,32 @@ impl crate::engine::Engine {
         }
 
         Ok(results)
+    }
+
+    /// Grow each batch sequence's block table to cover the full speculative
+    /// verification span (`input_len + max_draft` tokens) BEFORE the
+    /// draft/target forward writes KV (RIL ISS-026).
+    ///
+    /// The batch composer pre-allocates blocks for `input_len` only; the
+    /// verifier then processes `input_len + drafts` tokens, and
+    /// `write_prefill_kv`'s missing-block fallback
+    /// (`block_ids.get(block_idx).unwrap_or(0)`) silently wrote the overflow
+    /// draft KV into block 0 — corrupting the prompt's first-block KV
+    /// whenever the draft span crossed a block boundary (verified by a
+    /// real-model regression test). The extra blocks stay owned by the
+    /// sequence (released on finish); rejected-draft blocks are simply
+    /// unused capacity, matching the rollback contract.
+    fn ensure_verification_blocks(&mut self, batch: &mut vllm_traits::Batch, max_draft: usize) {
+        for (i, seq_id) in batch.seq_ids.iter().copied().enumerate() {
+            let span = batch.input_tokens.get(i).map_or(0, std::vec::Vec::len) + max_draft;
+            let blocks_needed = span.div_ceil(vllm_traits::BLOCK_SIZE);
+            if batch.kv_block_ids[i].len() < blocks_needed {
+                self.scheduler
+                    .ensure_blocks_for_tokens(seq_id, blocks_needed);
+                if let Some(seq) = self.scheduler.get_sequence(seq_id) {
+                    batch.kv_block_ids[i].clone_from(seq.kv_blocks.as_ref());
+                }
+            }
+        }
     }
 }

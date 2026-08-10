@@ -114,6 +114,99 @@ fn run_to_completion(prompt: Vec<TokenId>, max_tokens: usize) -> Vec<TokenId> {
     generated
 }
 
+/// Regression (RIL ISS-026): a speculative prefill whose prompt + drafts
+/// cross a block boundary must NOT silently fall back to writing the
+/// overflow KV into block 0.
+///
+/// The verifier runs the target over `input_len + drafts` tokens, but the
+/// sequence's block table is pre-allocated for `input_len` tokens only
+/// (`write_prefill_kv` falls back to `block_ids.get(block_idx).unwrap_or(0)`
+/// for a missing block). With a 16-token prompt (exactly one block) and
+/// max_draft=4, the draft KV for positions 16..19 lands in block 0 offsets
+/// 0..3, overwriting the prompt's KV. The first block must be byte-identical
+/// to a non-speculative prefill of the same prompt.
+#[test]
+fn real_model_speculative_prefill_does_not_corrupt_first_block() {
+    // `ModelConfig` is not `Clone`; two identical configurations are built
+    // from the same deterministic constructor so target and draft weights
+    // match exactly.
+    let cfg = ModelConfig::test_tiny();
+    let weights = tiny_weights(&cfg);
+    let target = LlamaModel::from_weights(
+        ModelConfig::test_tiny(),
+        &Device::Cpu,
+        weights.clone(),
+        64,
+        false,
+    )
+    .unwrap();
+    let draft =
+        LlamaModel::from_weights(ModelConfig::test_tiny(), &Device::Cpu, weights, 64, false)
+            .unwrap();
+    let target_cache = target.paged_kv_cache();
+
+    let mut engine = Engine::with_config_boxed(
+        Box::new(target),
+        Some(Box::new(draft)),
+        scheduler_config(),
+        4, // max_draft
+        64,
+    );
+    engine.enable_speculative();
+
+    let (tx, _rx) = mpsc::channel(64);
+    // Exactly one block of prompt: 16 tokens. Drafts (4) then overflow into
+    // the missing second block.
+    let prompt: Vec<TokenId> = (0..16).collect();
+    engine.add_request(Request::new(1, prompt.clone(), 20), tx);
+    engine.step().unwrap();
+
+    // Reference: non-speculative prefill of the same prompt writes the
+    // canonical KV into block 0.
+    let ref_model = build_model();
+    let ref_cache = ref_model.paged_kv_cache();
+    let mut ref_engine = Engine::with_config_boxed(
+        Box::new(ref_model),
+        None::<Box<dyn ModelBackend>>,
+        scheduler_config(),
+        4,
+        64,
+    );
+    let (tx2, _rx2) = mpsc::channel(64);
+    ref_engine.add_request(Request::new(1, prompt, 20), tx2);
+    ref_engine.step().unwrap();
+
+    let (k_spec, v_spec) = {
+        let cache = target_cache.lock();
+        cache.read_kv(0, &[0], 16).unwrap()
+    };
+    let (k_ref, v_ref) = {
+        let cache = ref_cache.lock();
+        cache.read_kv(0, &[0], 16).unwrap()
+    };
+
+    let k_spec_v: Vec<f32> = k_spec.flatten_all().unwrap().to_vec1().unwrap();
+    let k_ref_v: Vec<f32> = k_ref.flatten_all().unwrap().to_vec1().unwrap();
+    let k_max_diff = k_spec_v
+        .iter()
+        .zip(k_ref_v.iter())
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0f32, f32::max);
+    let v_spec_v: Vec<f32> = v_spec.flatten_all().unwrap().to_vec1().unwrap();
+    let v_ref_v: Vec<f32> = v_ref.flatten_all().unwrap().to_vec1().unwrap();
+    let v_max_diff = v_spec_v
+        .iter()
+        .zip(v_ref_v.iter())
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0f32, f32::max);
+
+    assert!(
+        k_max_diff < 1e-5 && v_max_diff < 1e-5,
+        "speculative prefill corrupted block 0 KV (k max diff {k_max_diff}, v max diff {v_max_diff}); \
+         draft KV must not fall back into block 0 when the block table is full"
+    );
+}
+
 #[test]
 fn real_model_engine_multiblock_prefill_then_decode() {
     // 20-token prompt => ceil(20/16) = 2 blocks; generate 3 tokens (greedy).
