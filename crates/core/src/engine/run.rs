@@ -7,8 +7,10 @@
 // See mod.rs for the Engine struct definition.
 
 use crate::engine::Engine;
+use crate::error::EngineError;
 use crate::sync::lock_mutex;
 use crate::types::EngineMessage;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -71,21 +73,62 @@ impl Engine {
 
             if self.scheduler.has_pending() {
                 step_count += 1;
-                let result = if self.cuda_graph_enabled() && !self.speculative_mode {
-                    self.step_with_graph()
-                } else {
-                    self.step()
-                };
+                // RIL ISS-046: the engine thread is single-threaded; a panic
+                // inside the target model's forward (a GPU kernel fault, an
+                // assert in an architecture impl, an aborted candle op) would
+                // otherwise unwind `run()` and kill the whole server. The
+                // speculative draft path already guards its forwards with
+                // catch_unwind; guard the canonical step the same way.
+                // `AssertUnwindSafe` is required because the closure captures
+                // `&mut self` (the standard `UnwindSafe` bound refuses it) —
+                // the deliberate contract is "panics in foreign backend code
+                // become step errors, never process death". catch_unwind
+                // cannot catch aborts/double-panics: a truly crashing backend
+                // still terminates the process.
+                let result = catch_unwind(AssertUnwindSafe(|| {
+                    if self.cuda_graph_enabled() && !self.speculative_mode {
+                        self.step_with_graph()
+                    } else {
+                        self.step()
+                    }
+                }))
+                .unwrap_or_else(|_| {
+                    Err(EngineError::ModelError(
+                        "engine step panicked inside the model forward; caught and recovered"
+                            .to_string(),
+                    ))
+                });
                 if let Err(e) = result {
                     self.error_count += 1;
                     self.last_error = Some(e.to_string());
                     error!(step = step_count, error = %e, "Engine step error");
+                    // ISS-045: a panic bypasses `step()`'s own recovery, so
+                    // the step may have stranded Prefilling/Waiting sequences
+                    // in `running` — release and re-queue them (idempotent —
+                    // a no-op when `step` already cleaned up).
+                    self.scheduler.requeue_stuck_prefills();
+                } else {
+                    // A successful step clears the error backoff marker so a
+                    // transient failure doesn't leave the loop sleeping at
+                    // the max interval forever (RIL ISS-046).
+                    self.last_error = None;
                 }
             }
 
-            let interval = self
-                .sleep_policy
-                .next_interval(self.scheduler.has_pending());
+            // RIL ISS-046: a step that errored (caught panic, or a model
+            // forward that now returns LockPoisoned after its mutex was
+            // poisoned by the panic) must not be re-attempted at the 1 ms
+            // busy interval forever — that would hot-loop a dead model.
+            // Sleep the max interval so the loop stays responsive to new
+            // work / shutdown but stops burning CPU on a broken forward.
+            // `SleepPolicy::next_interval` with `has_work = true` returns
+            // the 1 ms base; the error path overrides it.
+            let interval = if self.last_error.is_some() {
+                self.sleep_policy.max_interval
+            } else {
+                self.sleep_policy
+                    .next_interval(self.scheduler.has_pending())
+            };
             std::thread::sleep(std::time::Duration::from_millis(interval));
         }
     }

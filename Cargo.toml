@@ -140,5 +140,11 @@ debug = true
 opt-level = 3
 lto = "fat"
 codegen-units = 1
-panic = "abort"
+# RIL ISS-046: panics in the target/draft model forwards are caught by the
+# engine's catch_unwind guards and surfaced as step errors (the engine keeps
+# serving; the request is re-queued). panic = "abort" made those guards
+# no-ops in release builds — a single GPU-kernel fault would abort the whole
+# inference process. Recoverable unwinding keeps the server alive and lets
+# health checks report the degraded state instead of the box disappearing.
+# (cargo test / dev-profile builds already unwind; this makes release match.)
 strip = true
