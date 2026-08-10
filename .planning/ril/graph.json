@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 34,
+  "round": 36,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T12:10:40+00:00",
+  "updated_at": "2026-08-10T12:19:01+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 22,
+      "touched_round": 35,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 14,
+      "touched_round": 35,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -2863,6 +2863,66 @@
       "touched_round": 34,
       "rationale": "有状态后端（GDN 递归状态不在 KV cache）声明 supports_prefix_caching=false，引擎路由到 add_request_without_prefix_cache 走全 prefill；普通 transformer 保持前缀快路径",
       "alternatives_rejected": "把 GDN 状态纳入前缀缓存存储（需要序列化/校验递归张量，改动大且复杂）；在 decode 遇到 None 状态时用零状态继续（输出错误）"
+    },
+    "ISS-039": {
+      "id": "ISS-039",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T12:18:43+00:00",
+      "updated_at": "2026-08-10T12:18:43+00:00",
+      "touched_round": 35,
+      "title": "kv_cache_dump fabricates KV accounting: total_blocks hardcoded 1024 + available_blocks=current_batch_size (category error); raw block counts not exposed on MetricsSnapshot"
+    },
+    "TASK-044": {
+      "id": "TASK-044",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T12:18:45+00:00",
+      "updated_at": "2026-08-10T12:18:45+00:00",
+      "touched_round": 35,
+      "title": "Expose raw KV-block used/total counts on MetricsSnapshot and make kv_cache_dump report them instead of fabricating 1024 / current_batch_size",
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 0.97,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "priority_score": 30.0
+    },
+    "DEC-027": {
+      "id": "DEC-027",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T12:18:51+00:00",
+      "updated_at": "2026-08-10T12:18:51+00:00",
+      "touched_round": 35,
+      "rationale": "调试端点 kv_cache_dump 必须报告引擎真实的 KV block 计数，而不是硬编码 1024 / 用 current_batch_size 充当可用块。在 MetricsSnapshot 上直接暴露 kv_cache_blocks_used/total 原始 u64，端点在快照层取真实值",
+      "alternatives_rejected": "在 debug 端点用 engine 实时查询替换 metrics 快照（破坏 REL-01 不阻塞语义）；保持 1024 硬编码但仅用于测试（持续误导生产运维）"
+    },
+    "EV-054": {
+      "id": "EV-054",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T12:18:53+00:00",
+      "updated_at": "2026-08-10T12:18:53+00:00",
+      "touched_round": 35,
+      "source": "crates/server/src/debug.rs (pre-fix line 219): available_blocks = metrics.current_batch_size; total_blocks: 1024",
+      "confidence": 1.0,
+      "title": "debug dump fabricated KV accounting: total=1024 constant and available=current_batch_size（类别错误），与 block allocator 真实计数不符"
+    },
+    "CHG-041": {
+      "id": "CHG-041",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T12:18:55+00:00",
+      "updated_at": "2026-08-10T12:18:55+00:00",
+      "touched_round": 35,
+      "commit": "45bc96e4",
+      "title": "fix(server,core): kv_cache_dump reports real KV-block accounting"
     }
   },
   "edges": [
@@ -4101,6 +4161,42 @@
       "to": "TASK-043",
       "type": "governs",
       "created_at": "2026-08-10T12:10:40+00:00"
+    },
+    {
+      "from": "ISS-039",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-10T12:18:58+00:00"
+    },
+    {
+      "from": "ISS-039",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-10T12:18:58+00:00"
+    },
+    {
+      "from": "TASK-044",
+      "to": "ISS-039",
+      "type": "addresses",
+      "created_at": "2026-08-10T12:18:58+00:00"
+    },
+    {
+      "from": "CHG-041",
+      "to": "TASK-044",
+      "type": "implements",
+      "created_at": "2026-08-10T12:18:58+00:00"
+    },
+    {
+      "from": "CHG-041",
+      "to": "ISS-039",
+      "type": "resolves",
+      "created_at": "2026-08-10T12:18:59+00:00"
+    },
+    {
+      "from": "DEC-027",
+      "to": "TASK-044",
+      "type": "governs",
+      "created_at": "2026-08-10T12:18:59+00:00"
     }
   ]
 }
