@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 46,
+  "round": 47,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T19:20:00+00:00",
+  "updated_at": "2026-08-10T20:05:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3518,6 +3518,66 @@
       "source": "crates/server/src/security/timing.rs tests + crates/server/src/auth.rs / debug.rs / api.rs + commit e8df5c79",
       "confidence": 1.0,
       "title": "constant_time_eq unit tests pin equivalence (equal/diff/length-mismatch); the 60 existing auth tests confirm the middleware verify acceptance/rejection behavior is unchanged after switching to the constant-time comparator; full server suite 0 failures."
+    },
+    "ISS-050": {
+      "id": "ISS-050",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T20:05:00+00:00",
+      "updated_at": "2026-08-10T20:05:00+00:00",
+      "touched_round": 47,
+      "title": "Auth posture mismatch: auth.rs claimed the server performs a startup refusal to bind non-loopback without keys (main.rs), but main.rs only emits a structured warning (SEC-01); sensitive ops endpoints are the fail-closed layer. Also: verify_with_meta accepts any token when api_keys is empty (vestigial: the middleware is only mounted with keys, pinned by test_auth_middleware_no_keys_allow_all)"
+    },
+    "TASK-054": {
+      "id": "TASK-054",
+      "type": "task",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-08-10T20:05:00+00:00",
+      "updated_at": "2026-08-10T20:05:00+00:00",
+      "touched_round": 47,
+      "category": "security",
+      "severity": 2,
+      "confidence": 0.97,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "priority_score": 19.4,
+      "title": "Correct the SEC-01 auth-posture contract doc to match reality (warning + fail-closed sensitive endpoints, not a refusal)"
+    },
+    "CHG-053": {
+      "id": "CHG-053",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T20:05:00+00:00",
+      "updated_at": "2026-08-10T20:05:00+00:00",
+      "touched_round": 47,
+      "commit": "9476bc76",
+      "title": "docs(server): fix SEC-01 auth-posture contract"
+    },
+    "DEC-037": {
+      "id": "DEC-037",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T20:05:00+00:00",
+      "updated_at": "2026-08-10T20:05:00+00:00",
+      "touched_round": 47,
+      "rationale": "默认公网 open 推理是安全隐患，但硬化到非 loopback 无 key 拒绝启动属于对外行为变更（波及现有容器/helm 配置与 LAN 冒烟测试），且仓库有 --insecure-allow-public-no-auth 显式逃生门、本地 127.0.0.1 不受影响。本轮决策：保留 warn-based 姿势（有意的既有设计 + 显式 flag），修正 auth.rs 中 startup refusal 的错误契约表述为真实行为；敏感 ops 端点（/debug/*、/shutdown）已是 require_admin fail-closed；verify 空 key 时 accept-all 是死路径（中间件仅在有 key 时挂载），由 test_auth_middleware_no_keys_allow_all 显式钉住，不擅改行为。未来方向（记录不执行）：如要收紧默认，可改为非 loopback + 无 key + 无 flag 拒绝启动（对齐 vLLM 需 --api-key）。",
+      "alternatives_rejected": "① 改为非 loopback 无 key 拒绝启动：对外行为变更、影响面大，需单独决策；② 改 verify 空 key 为拒绝：无生产影响（死路径）且会破坏显式钉住该行为的测试；③ 静默不改文档：正是本 issue 的状态——契约误导。"
+    },
+    "EV-066": {
+      "id": "EV-066",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-10T20:05:00+00:00",
+      "updated_at": "2026-08-10T20:05:00+00:00",
+      "touched_round": 47,
+      "source": "crates/server/src/auth.rs SEC-01 comment + crates/server/src/app.rs mounting gate + crates/server/src/auth.rs tests::test_auth_middleware_no_keys_allow_all + commit 9476bc76",
+      "confidence": 1.0,
+      "title": "grep confirmed main.rs logs a warning (not a refusal) and the auth middleware is only mounted when api_keys is non-empty; a unit test explicitly pins the empty-keys accept-all path (unreachable in production). Doc corrected to state the true policy; full workspace suite green."
     }
   },
   "edges": [
@@ -5056,6 +5116,30 @@
       "to": "TASK-053",
       "type": "governs",
       "created_at": "2026-08-10T19:20:00+00:00"
+    },
+    {
+      "from": "TASK-054",
+      "to": "ISS-050",
+      "type": "addresses",
+      "created_at": "2026-08-10T20:05:00+00:00"
+    },
+    {
+      "from": "CHG-053",
+      "to": "TASK-054",
+      "type": "implements",
+      "created_at": "2026-08-10T20:05:00+00:00"
+    },
+    {
+      "from": "CHG-053",
+      "to": "ISS-050",
+      "type": "resolves",
+      "created_at": "2026-08-10T20:05:00+00:00"
+    },
+    {
+      "from": "DEC-037",
+      "to": "TASK-054",
+      "type": "governs",
+      "created_at": "2026-08-10T20:05:00+00:00"
     }
   ]
 }
