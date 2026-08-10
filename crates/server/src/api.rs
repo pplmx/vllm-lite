@@ -116,7 +116,12 @@ pub async fn shutdown(State(state): State<ApiState>, headers: axum::http::Header
         .and_then(|v| v.to_str().ok())
         .and_then(|h| h.strip_prefix("Bearer "));
     match api_key {
-        Some(key) if auth.api_keys().iter().any(|k| k == key) => {}
+        // RIL ISS-049: constant-time comparison (see security::timing).
+        Some(key)
+            if auth
+                .api_keys()
+                .iter()
+                .any(|k| crate::security::timing::constant_time_eq(k, key)) => {}
         _ => {
             return (
                 axum::http::StatusCode::UNAUTHORIZED,

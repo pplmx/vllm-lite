@@ -15,6 +15,7 @@ pub mod jwt;
 pub mod rbac;
 /// Request body size-limit enforcement.
 pub mod size_limit;
+pub mod timing;
 /// TLS configuration and certificate loading.
 pub mod tls;
 

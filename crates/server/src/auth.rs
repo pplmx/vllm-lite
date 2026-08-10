@@ -383,7 +383,17 @@ impl AuthMiddleware {
             .strip_prefix("Bearer ")
             .ok_or(AuthError::MissingHeader)?;
 
-        if !self.api_keys.is_empty() && !self.api_keys.contains(&api_key.to_string()) {
+        // RIL ISS-049: constant-time comparison. `Vec::contains` /
+        // `String == String` short-circuits on the first differing byte,
+        // so response time leaks how many key-prefix bytes matched — an
+        // attacker iterating candidate keys can recover the key
+        // byte-by-byte. `constant_time_eq` always sweeps every byte.
+        if !self.api_keys.is_empty()
+            && !self
+                .api_keys
+                .iter()
+                .any(|configured| crate::security::timing::constant_time_eq(configured, api_key))
+        {
             return Err(AuthError::InvalidKey);
         }
 

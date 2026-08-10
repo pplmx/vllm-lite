@@ -70,7 +70,15 @@ fn require_admin(state: &ApiState, headers: &HeaderMap) -> Result<(), Response> 
         .and_then(|v| v.to_str().ok())
         .and_then(|h| h.strip_prefix("Bearer "));
     match api_key {
-        Some(key) if auth.api_keys().iter().any(|k| k == key) => Ok(()),
+        // RIL ISS-049: constant-time comparison (see security::timing).
+        Some(key)
+            if auth
+                .api_keys()
+                .iter()
+                .any(|k| crate::security::timing::constant_time_eq(k, key)) =>
+        {
+            Ok(())
+        }
         _ => {
             let body = Json(serde_json::json!({
                 "error": "unauthorized",
