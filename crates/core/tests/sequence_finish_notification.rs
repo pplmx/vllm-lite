@@ -1,15 +1,15 @@
 //! Regression (RIL ISS-034): the engine must notify the target model when a
-//! sequence finishes (max_tokens / stop / cancel) so stateful backends (e.g.
+//! sequence finishes (`max_tokens` / stop / cancel) so stateful backends (e.g.
 //! the Qwen3.5 hybrid GDN recurrent-state map) can release per-sequence
 //! state. Pre-fix, `gdn_states` grew one entry per finished request for the
-//! engine's lifetime (SeqIds are monotonic) — an unbounded memory leak.
+//! engine's lifetime (`SeqId`s are monotonic) — an unbounded memory leak.
 
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::types::Request;
 use vllm_testing::StubModel;
-use vllm_traits::{BatchOutput, ModelBackend, ModelError, SampledToken, SeqId, TokenId};
+use vllm_traits::{BatchOutput, ModelBackend, ModelError, SeqId, TokenId};
 
 /// Delegating backend that records every `on_sequence_finished` call.
 #[derive(Clone)]
@@ -24,10 +24,6 @@ impl RecordingModel {
             inner: StubModel::returning(7),
             finished: Arc::new(Mutex::new(Vec::new())),
         }
-    }
-
-    fn finished_ids(&self) -> Vec<SeqId> {
-        self.finished.lock().unwrap().clone()
     }
 }
 

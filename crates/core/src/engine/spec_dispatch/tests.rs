@@ -608,8 +608,7 @@ fn test_speculative_all_accepted_folds_every_token_into_sequence() {
     assert_eq!(
         seq.tokens.len(),
         2 + emitted,
-        "every emitted token must be folded into seq.tokens (prompt 2 + {} emitted)",
-        emitted
+        "every emitted token must be folded into seq.tokens (prompt 2 + {emitted} emitted)"
     );
 }
 

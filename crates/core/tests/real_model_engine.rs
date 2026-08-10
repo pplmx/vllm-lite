@@ -122,7 +122,7 @@ fn run_to_completion(prompt: Vec<TokenId>, max_tokens: usize) -> Vec<TokenId> {
 /// sequence's block table is pre-allocated for `input_len` tokens only
 /// (`write_prefill_kv` falls back to `block_ids.get(block_idx).unwrap_or(0)`
 /// for a missing block). With a 16-token prompt (exactly one block) and
-/// max_draft=4, the draft KV for positions 16..19 lands in block 0 offsets
+/// `max_draft=4`, the draft KV for positions 16..19 lands in block 0 offsets
 /// 0..3, overwriting the prompt's KV. The first block must be byte-identical
 /// to a non-speculative prefill of the same prompt.
 #[test]
@@ -212,7 +212,7 @@ fn real_model_speculative_prefill_does_not_corrupt_first_block() {
 /// either.
 ///
 /// With a 29-token prompt the first decode step sits at position 29
-/// (29 % 16 == 13); with max_draft=4 the draft KV spans positions 29..32,
+/// (29 % 16 == 13); with `max_draft=4` the draft KV spans positions 29..32,
 /// requiring a third block. The sequence's table must be grown before the
 /// verifier writes, otherwise positions 32..32+ land in block 0.
 #[test]
@@ -303,7 +303,7 @@ fn real_model_speculative_decode_boundary_does_not_corrupt_first_block() {
 ///
 /// The old draft loops fed the whole growing token list with a constant
 /// `num_computed` and `is_prefill=false`; `forward_decode` uses
-/// `positions[0]` for RoPE and writes KV at `num_computed`, so every draft
+/// `positions[0]` for `RoPE` and writes KV at `num_computed`, so every draft
 /// was generated at the SAME position from a cache that never accumulated.
 /// With identical target/draft weights every draft diverged from the target
 /// and was rejected — a decode step emitted exactly 1 token (no speculative
@@ -359,18 +359,16 @@ fn real_model_speculative_decode_keeps_generating_drafts() {
     );
     assert!(
         decode_tokens.len() > 1,
-        "speculative decode must accept drafts with a real model (emitted {:?}); \
+        "speculative decode must accept drafts with a real model (emitted {decode_tokens:?}); \
          pre-fix the step emitted exactly 1 token because every draft was \
-         generated at the wrong position/context and rejected (RIL ISS-029)",
-        decode_tokens
+         generated at the wrong position/context and rejected (RIL ISS-029)"
     );
     // Same weights for target and draft: with correct positions/cache all
     // max_draft drafts are accepted plus the bonus token.
     assert_eq!(
         decode_tokens.len(),
         5,
-        "same-model speculative decode should accept all 4 drafts + bonus (got {:?})",
-        decode_tokens
+        "same-model speculative decode should accept all 4 drafts + bonus (got {decode_tokens:?})"
     );
 }
 

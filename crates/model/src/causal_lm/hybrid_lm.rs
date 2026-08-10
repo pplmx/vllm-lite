@@ -345,7 +345,7 @@ mod tests {
 
     /// Regression (RIL ISS-034): `on_sequence_finished` must remove the
     /// sequence's GDN recurrent-state entry. Without it, `gdn_states` grows
-    /// one entry per finished request for the engine's lifetime (SeqIds are
+    /// one entry per finished request for the engine's lifetime (`SeqId`s are
     /// monotonic, so every completed sequence leaked its per-layer
     /// recurrent/conv tensors).
     #[test]
