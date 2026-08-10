@@ -1,10 +1,11 @@
 //! `SchedulerEngine::build_batch` + `schedule` — phase selection, batch
 //! composition, preemption trigger, and CUDA Graph / observer hooks.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use vllm_traits::Batch;
+use vllm_traits::{Batch, SeqId};
 
 use super::SchedulerEngine;
 use crate::scheduler::SchedulerState;
@@ -82,6 +83,27 @@ impl SchedulerEngine {
         // grow incrementally in `update()` as they cross block boundaries.
         self.preallocate_kv_blocks(&mut new_sequences);
 
+        // ISS-042: do not admit a sequence whose KV block table could not be
+        // fully pre-allocated (the pool is exhausted even after the preemption
+        // gate above). Serving it would let `write_prefill_kv` fall back to
+        // block 0 and corrupt the cache (see ISS-026/028). Defer such
+        // sequences: release their partial blocks, reset to Waiting, and
+        // re-queue so they are retried once memory frees. Only prefill needs
+        // the whole table up front; decode sequences grow blocks incrementally
+        // in `update()`.
+        if phase == Phase::Prefill {
+            let mut admissible = Vec::with_capacity(new_sequences.len());
+            for seq in new_sequences {
+                let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
+                if seq.kv_blocks.len() < blocks_needed {
+                    self.requeue_seq(seq);
+                } else {
+                    admissible.push(seq);
+                }
+            }
+            new_sequences = admissible;
+        }
+
         // Add new sequences to the batch (now with allocated KV blocks)
         sequences.extend(new_sequences.iter().cloned());
 
@@ -99,6 +121,9 @@ impl SchedulerEngine {
             priority_a.cmp(&priority_b)
         });
 
+        // Track which freshly-admitted prefill sequences were moved to running,
+        // so we can re-queue any of them that `compose` below does not serve.
+        let admitted: HashSet<SeqId> = new_sequences.iter().map(|s| s.id).collect();
         // Move new sequences to running
         self.running.extend(new_sequences);
 
@@ -107,6 +132,29 @@ impl SchedulerEngine {
 
         // Build the batch
         let batch = self.batch_composer.compose(sequences.clone(), phase);
+
+        // ISS-041: `compose` includes at most `max_batch_size` sequences and
+        // breaks once the token budget is exceeded, but every drained prefill
+        // was already moved into `running` above. A freshly-admitted prefill
+        // that was NOT composed is left `Status::Prefilling` in `running`,
+        // where it is never re-scheduled (running is only re-included when
+        // `status == Decoding`; once the waiting queue empties the Prefill
+        // phase is never selected again) — a permanent stall that also pins
+        // its pre-allocated KV blocks. Release and re-queue the overflow so
+        // it is retried on a later round. Decode overflow is harmless because
+        // `Decoding` sequences are re-included on the next decode round.
+        if phase == Phase::Prefill {
+            let composed: HashSet<SeqId> = batch.seq_ids.iter().copied().collect();
+            for seq_id in admitted {
+                if composed.contains(&seq_id) {
+                    continue;
+                }
+                if let Some(pos) = self.running.iter().position(|s| s.id == seq_id) {
+                    let seq = self.running.remove(pos);
+                    self.requeue_seq(seq);
+                }
+            }
+        }
 
         // Record CUDA Graph metrics if applicable
         if phase == Phase::Decode && self.cuda_graph.enabled {
@@ -185,5 +233,25 @@ impl SchedulerEngine {
                 }
             }
         }
+    }
+
+    /// Release a freshly-admitted (never-forwarded) sequence's pre-allocated KV
+    /// blocks and return it to the waiting queue as `Waiting::Prefill` so it is
+    /// retried on a later round instead of stalling in `running` or serving a
+    /// corrupt KV table. Used for prefill overflow (ISS-041) and partial-block
+    /// OOM admission (ISS-042), both of which only ever requeue sequences that
+    /// were admitted this round and never forwarded.
+    fn requeue_seq(&mut self, mut seq: Sequence) {
+        self.memory.release_blocks(seq.kv_blocks.as_ref());
+        seq.kv_blocks = Arc::new(vec![]);
+        seq.status = Status::Waiting;
+        seq.num_computed_tokens = 0;
+        let ctx = SchedulingContext {
+            current_time: Instant::now(),
+            queue_length: self.request_queue.len(),
+            running_count: self.running.len(),
+            memory_pressure: self.get_memory_pressure(),
+        };
+        self.request_queue.enqueue(seq, self.policy.as_ref(), &ctx);
     }
 }
