@@ -100,11 +100,24 @@ impl SchedulerEngine {
             let Some(idx) = self.running.iter().position(|s| s.id == seq_id) else {
                 continue;
             };
-            for sampled in tokens {
-                self.push_token_and_allocate(idx, sampled.token);
-            }
+            // RIL ISS-057 (speculative counterpart of ISS-053): advance the
+            // computed frontier first, then only fold/emit tokens for a
+            // sequence that is NOT a mid-chunk prefill (one left `Prefilling`
+            // after the advance predicted a stale next-prompt-token that is
+            // re-derived on the final chunk). Its entries must not be pushed
+            // into `seq.tokens`, dispatched as decode events, or allocated
+            // blocks — only `num_computed_tokens` moves forward.
             self.advance_computed_tokens(idx, input_count);
-            self.check_completion(idx);
+            if self
+                .running
+                .get(idx)
+                .is_some_and(|s| s.status != Status::Prefilling)
+            {
+                for sampled in tokens {
+                    self.push_token_and_allocate(idx, sampled.token);
+                }
+                self.check_completion(idx);
+            }
         }
 
         self.finalize_finished_sequences();

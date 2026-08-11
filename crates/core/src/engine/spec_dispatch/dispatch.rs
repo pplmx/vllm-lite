@@ -80,11 +80,44 @@ impl crate::engine::Engine {
 
         // H-16 (PERF-05): pre-size `results` to the verified-sequence
         // count so the per-iteration push below does not reallocate.
+        // RIL ISS-057: a mid-chunk prefill's predicted token(s) are stale —
+        // the real next prompt token is re-fed on the next chunk, so nothing
+        // produced while the sequence is still mid-prompt may reach the
+        // client stream. `verified` is a flat token list (a sequence can
+        // contribute several entries: accepted drafts + bonus/rejection), so
+        // staleness is keyed by seq_id via its batch entry (start + chunk <
+        // prompt_len), read while the sequence is still in `running`
+        // (update_speculative requeues partial prefills afterwards). The
+        // final prefill chunk (transitions to Decoding) and decode sequences
+        // are NOT masked.
+        let stale_by_seq: std::collections::HashMap<SeqId, bool> = batch
+            .seq_ids
+            .iter()
+            .enumerate()
+            .map(|(i, sid)| {
+                let stale = batch.is_prefill[i]
+                    && self.scheduler.get_sequence(*sid).is_some_and(|s| {
+                        batch.num_computed_tokens[i] + batch.input_tokens[i].len() < s.prompt_len
+                    });
+                (*sid, stale)
+            })
+            .collect();
+
         let mut results = Vec::with_capacity(verified.len());
         for (seq_id, sampled) in &verified {
-            if let Some(tx) = self.response_txs.get(seq_id) {
+            let is_stale = stale_by_seq.get(seq_id).copied().unwrap_or(false);
+            if is_stale {
+                tracing::debug!(
+                    seq_id = %seq_id,
+                    token = %sampled.token,
+                    "Drawing stale mid-chunk prediction (not real output); not emitting"
+                );
+            } else if let Some(tx) = self.response_txs.get(seq_id) {
                 let _ = tx.try_send(sampled.clone());
             }
+            // `results` still carries every verified entry so the
+            // per-sequence `update_speculative` below can advance the
+            // mid-chunk prefill's frontier — only client emission is gated.
             results.push((*seq_id, sampled.clone()));
         }
 

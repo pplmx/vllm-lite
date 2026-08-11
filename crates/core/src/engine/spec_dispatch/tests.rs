@@ -1092,3 +1092,58 @@ fn verifier_prefill_accepts_drafts_at_position_after_prompt() {
         "bonus token must come from the post-draft position"
     );
 }
+
+// RIL ISS-057: a chunked prefill (prompt > max_num_batched_tokens) running
+// in SPECULATIVE mode must not stream its mid-chunk "predicted next prompt
+// token" to the client. `step_speculative_inner` processes prefill chunks
+// too, and because drafts are generated even for a prefill entry (from the
+// chunk's last token), every verified entry — drafts + bonus for mid-chunk
+// prefills — used to reach `dispatch.rs`'s send loop with no phase filter:
+// a 100-token prompt chunked by 16 streamed 24 tokens when only max_tokens=8
+// were real output (observed pre-fix). The client must see exactly the
+// decode tokens (the first generated token comes from the first decode/draft
+// step after prefill completes, so even the final prefill chunk emits
+// nothing).
+#[test]
+fn speculative_chunked_prefill_never_streams_stale_midchunk_predictions() {
+    let config = SchedulerConfig::builder()
+        .with_max_num_batched_tokens(32)
+        .with_prefill_chunk_size(16)
+        .build();
+    let mut engine = Engine::with_config_boxed(
+        Box::new(FakeModel::new(42)),
+        Some(Box::new(FakeModel::new(42))),
+        config,
+        3,
+        256,
+    );
+    engine.enable_speculative();
+
+    let (tx, mut rx) = tokio_mpsc::channel(256);
+    engine.add_request(Request::new(1, vec![7; 100], 8), tx);
+
+    let mut rounds = 0;
+    while engine.has_pending() {
+        engine.step().unwrap();
+        rounds += 1;
+        assert!(
+            rounds <= 40,
+            "must complete within prefill + decode rounds; got {rounds}"
+        );
+    }
+
+    let mut received = 0usize;
+    while rx.try_recv().is_ok() {
+        received += 1;
+    }
+
+    // Post-fix the client sees exactly max_tokens (8) real decode tokens:
+    // every prefill chunk (mid AND final) is suppressed, and decode emits
+    // all-accepted drafts (max_draft=3 -> 4 tokens/step) up to the cap.
+    // Pre-fix this was 24 (mid-chunk draft/bonus tokens leaked in).
+    assert_eq!(
+        received, 8,
+        "the speculative client stream must contain exactly max_tokens real output tokens, \
+         no stale mid-chunk prefill predictions (got {received})"
+    );
+}
