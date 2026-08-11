@@ -30,7 +30,7 @@ tower-http = { workspace = true, features = ["limit"] }
 futures = "0.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde-saphyr = "0.0.29"
+serde-saphyr = "1.0.1"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["json"] }
 tracing-appender = "0.2"
@@ -47,7 +47,7 @@ parking_lot = { workspace = true }
 [dev-dependencies]
 axum = { version = "0.8", features = ["tokio", "macros"] }
 tower = { version = "0.5", features = ["util"] }
-rcgen = "0.13"
+rcgen = "0.14"
 http-body-util = "0.1"
 hyper = "1"
 tempfile = "3"
