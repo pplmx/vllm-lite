@@ -188,10 +188,29 @@ impl Engine {
             "process_output: received model output"
         );
 
-        let results = self.send_and_collect_results(&output.seq_ids, &output.next_tokens);
+        // RIL ISS-053: a mid-chunk prefill's predicted token is stale (the
+        // real next prompt token is re-fed on the next chunk) — it must not
+        // reach the client channel or metrics. Read while the sequence is
+        // still in `running` (update requeues partial prefills below).
+        let stale_mask = output
+            .seq_ids
+            .iter()
+            .enumerate()
+            .map(|(i, sid)| {
+                batch.is_prefill[i]
+                    && self.scheduler.get_sequence(*sid).is_some_and(|s| {
+                        batch.num_computed_tokens[i] + batch.input_tokens[i].len() < s.prompt_len
+                    })
+            })
+            .collect::<Vec<_>>();
+        let results =
+            self.send_and_collect_results(&output.seq_ids, &output.next_tokens, &stale_mask);
 
-        let (seq_ids, sampled): (Vec<_>, Vec<_>) = results.iter().cloned().unzip();
-        self.scheduler.update(&seq_ids, &sampled, &input_counts);
+        // `update` must stay aligned with the FULL batch (seq_ids /
+        // next_tokens / input_counts all index the same batch entries); the
+        // stale-masked `results` is only for client emission and metrics.
+        self.scheduler
+            .update(&output.seq_ids, &output.next_tokens, &input_counts);
 
         // P38 v0.3 wire-type engine wire-through: stop-sequence
         // finalization. Must run after `scheduler.update` (so

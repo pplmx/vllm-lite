@@ -119,10 +119,29 @@ impl crate::engine::Engine {
 
         let input_counts: Vec<usize> = batch.input_tokens.iter().map(std::vec::Vec::len).collect();
 
+        // RIL ISS-053: a mid-chunk prefill's predicted token is stale (the
+        // real next prompt token is re-fed on the next chunk) — it must
+        // reach neither the client response channel nor the step result.
+        // Staleness is derived from the batch slice against the sequence's
+        // full prompt, read while the sequence is still in `running`
+        // (`update` requeues partial prefills before the send below).
+        let stale_mask = batch
+            .seq_ids
+            .iter()
+            .enumerate()
+            .map(|(i, sid)| {
+                batch.is_prefill[i]
+                    && self.scheduler.get_sequence(*sid).is_some_and(|s| {
+                        batch.num_computed_tokens[i] + batch.input_tokens[i].len() < s.prompt_len
+                    })
+            })
+            .collect::<Vec<_>>();
+
         self.scheduler
             .update(&batch.seq_ids, &output.next_tokens, &input_counts);
 
-        let results = self.send_and_collect_results(&batch.seq_ids, &output.next_tokens);
+        let results =
+            self.send_and_collect_results(&batch.seq_ids, &output.next_tokens, &stale_mask);
 
         // Keep `logits_per_seq` alive through this point for structural
         // symmetry with the CUDA-Graph path (P36); it is not consumed.
@@ -135,13 +154,27 @@ impl crate::engine::Engine {
     /// Send sampled tokens to each sequence's response channel and collect
     /// them into the return vec. Idempotent: if a channel is missing (e.g.
     /// the sequence was already finalized) the token is still returned.
+    ///
+    /// `stale[i] == true` marks a mid-chunk prefill whose predicted token is
+    /// NOT generated output (RIL ISS-053): it is neither sent to the channel
+    /// nor included in the returned results, so the client stream, step
+    /// results, and output-token metrics all see only real generated tokens.
     pub(crate) fn send_and_collect_results(
         &self,
         seq_ids: &[SeqId],
         next_tokens: &[SampledToken],
+        stale: &[bool],
     ) -> Vec<(SeqId, SampledToken)> {
         let mut results = Vec::with_capacity(seq_ids.len());
-        for (seq_id, sampled) in seq_ids.iter().zip(next_tokens.iter()) {
+        for ((seq_id, sampled), &is_stale) in seq_ids.iter().zip(next_tokens.iter()).zip(stale) {
+            if is_stale {
+                tracing::debug!(
+                    seq_id = %seq_id,
+                    token = %sampled.token,
+                    "Drawing stale mid-chunk prediction (not real output); not emitting"
+                );
+                continue;
+            }
             tracing::debug!(seq_id = %seq_id, token = %sampled.token, "Sending token to channel");
             if let Some(tx) = self.response_txs.get(seq_id) {
                 let _ = tx.try_send(sampled.clone());

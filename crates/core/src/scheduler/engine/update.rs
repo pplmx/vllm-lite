@@ -255,6 +255,19 @@ impl SchedulerEngine {
     fn update_running_sequence(&mut self, idx: usize, token: u32, input_count: usize) {
         // Update status based on progress
         self.advance_computed_tokens(idx, input_count);
+        // RIL ISS-053: a sequence left `Prefilling` after the advance is a
+        // mid-chunk prefill. Its predicted token is stale (re-derived on
+        // the final chunk), so it must not be folded into `seq.tokens`,
+        // dispatched as a `Decoding` observer event, or allocated a KV
+        // block. Only a completed prefill (now `Decoding`) or an
+        // already-decoding sequence produces real output.
+        if self
+            .running
+            .get(idx)
+            .is_some_and(|s| s.status == Status::Prefilling)
+        {
+            return;
+        }
         self.push_token_and_allocate(idx, token);
         self.check_completion(idx);
     }
