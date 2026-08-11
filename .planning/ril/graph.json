@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 51,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-11T07:49:03+00:00",
+  "updated_at": "2026-08-11T08:01:12+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3799,16 +3799,16 @@
       "id": "TASK-059",
       "type": "task",
       "status": "active",
-      "version": 1,
+      "version": 2,
       "created_at": "2026-08-11T07:48:03+00:00",
-      "updated_at": "2026-08-11T07:48:03+00:00",
+      "updated_at": "2026-08-11T08:01:12+00:00",
       "touched_round": 51,
       "category": "performance",
       "severity": 2,
       "confidence": 0.8,
       "effort": 5,
       "unlock_factor": 1.0,
-      "title": "Chunked-prefill admission still accounts KV memory against the FULL prompt: the preemption gate and filter_fully_allocated_prefills use seq.tokens.len() (full prompt) rather than the remaining-token frontier, so chunking bounds tokens-per-step but not KV memory. Under memory pressure a long prompt whose whole table cannot fit is permanently deferred (a capacity limit), and the preemption gate can preempt running decode sequences 'needed' for the full prompt even though only the current chunk is about to be written. Consider incremental preallocation keyed to the frontier so chunked prefill provides real memory relief (admission-accounting rework; deferred)"
+      "title": "Chunked-prefill KV memory is still accounted against the FULL prompt at admission: filter_fully_allocated_prefills rejects a prompt whose whole table cannot fit the pool up front, so chunking bounds tokens-per-step but not KV memory and a long prompt that exceeds pool capacity is permanently deferred (no incremental preallocation). The preemption-gate double-count was fixed separately (ISS-056/CHG-058). Consider incremental preallocation keyed to the frontier so long prompts that exceed pool capacity can still make progress (admission-accounting rework, deferred)"
     },
     "ISS-055": {
       "id": "ISS-055",
@@ -3830,6 +3830,39 @@
       "touched_round": 51,
       "rationale": "Deep-dive round 51 reviewed the chunked-prefill feature (TASK-055, landed edc81f79) and found two correctness bugs with direct client impact: (1) mid-chunk prefills stream their stale next-prompt-token prediction to the response channel/step results (ISS-053, fixed TASK-057/CHG-056), and (2) requeue_seq resets an advanced prefill's computed KV, causing full-prompt recompute thrashing under load (ISS-054, fixed TASK-058/CHG-057). Both were driven TDD (red tests first) and are covered by dedicated regressions. The full-prompt memory accounting (ISS-055) is deferred: it is a capacity/performance refinement, not a correctness bug, and the fix (incremental preallocation keyed to the frontier) is an admission-accounting rework deferred to TASK-059.",
       "alternatives_rejected": "Only fixing the observer-event pollution without filtering send_and_collect_results (leaves the client-visible stream bug); filtering the graph path by sending before update but keeping update aligned with filtered results (misaligns seq_ids vs input_counts); resetting preempted sequences in requeue_seq preservation logic (preemption already resets separately, so num_computed > 0 is a safe guard); committing the serde-saphyr/rcgen upgrades inside the fix commits (kept as a separate chore(deps) commit)."
+    },
+    "ISS-056": {
+      "id": "ISS-056",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-11T08:01:12+00:00",
+      "updated_at": "2026-08-11T08:01:12+00:00",
+      "touched_round": 51,
+      "title": "The build_batch preemption gate double-counts a re-admitted chunked prefill's own blocks: it compared the FULL-prompt block count against the free pool, so a chunked prefill that already holds its whole table (with fewer than that many free) needlessly preempted running decode sequences to 'free' blocks it already owned; healthy decode sequences whose own table exceeded free also tripped needless preemption"
+    },
+    "CHG-058": {
+      "id": "CHG-058",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-11T08:01:12+00:00",
+      "updated_at": "2026-08-11T08:01:12+00:00",
+      "touched_round": 51,
+      "commit": "e1e4a526",
+      "title": "fix(core): preemption gate demands only additional = blocks_needed - kv_blocks.len() of the free pool; fresh admissions unaffected (kv_blocks empty pre-preallocation), ISS-042 reject still guards allocation failure (ISS-055/056)"
+    },
+    "EV-071": {
+      "id": "EV-071",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-11T08:01:12+00:00",
+      "updated_at": "2026-08-11T08:01:12+00:00",
+      "touched_round": 51,
+      "source": "crates/core/tests/scheduler_integration.rs::readmitted_chunked_prefill_does_not_preempt_running_decode",
+      "title": "With 12 blocks, decode B holds 2 and a 100-token chunked prefill holds 7 (free 3): re-admitting A for its next chunk leaves B Decoding in running; fails pre-fix (B removed by needless preemption). 660 vllm-core tests green",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -5500,6 +5533,24 @@
       "to": "TASK-059",
       "type": "governs",
       "created_at": "2026-08-11T07:49:03+00:00"
+    },
+    {
+      "from": "CHG-058",
+      "to": "ISS-056",
+      "type": "resolves",
+      "created_at": "2026-08-11T08:01:12+00:00"
+    },
+    {
+      "from": "CHG-058",
+      "to": "TASK-059",
+      "type": "implements",
+      "created_at": "2026-08-11T08:01:12+00:00"
+    },
+    {
+      "from": "TASK-059",
+      "to": "ISS-056",
+      "type": "addresses",
+      "created_at": "2026-08-11T08:01:12+00:00"
     }
   ]
 }
