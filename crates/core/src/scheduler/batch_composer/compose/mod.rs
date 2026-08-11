@@ -26,9 +26,11 @@ mod prefill;
 pub struct BatchComposer {
     config: BatchCompositionConfig,
     packing_config: SequencePackingConfig,
-    // Read only by `compose_with_chunking` (test-only); rustc reports the
-    // field as never-read in non-test builds.
-    #[allow(dead_code)]
+    // RIL ISS-051: carries the `prefill_chunk_size` cap used when a single
+    // sequence overfills the token budget and must be chunked across
+    // rounds. `target_chunk_size` is wired from `SchedulerConfig` at
+    // engine construction; `compose_with_chunking` (test-only) reads it
+    // too.
     chunked_prefill: ChunkedPrefillConfig,
 }
 
@@ -57,15 +59,27 @@ impl BatchComposer {
     }
 
     /// Create a new batch composer with chunked prefill configuration
+    /// (used by chunked-composition tests).
     #[must_use]
     #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
     pub(crate) fn with_chunked_prefill(
         config: BatchCompositionConfig,
         chunked_prefill: ChunkedPrefillConfig,
     ) -> Self {
+        Self::with_packing_and_chunked(config, SequencePackingConfig::default(), chunked_prefill)
+    }
+
+    /// Create a new batch composer with both packing and chunked-prefill
+    /// configuration (RIL ISS-051 — production path).
+    #[must_use]
+    pub(crate) const fn with_packing_and_chunked(
+        config: BatchCompositionConfig,
+        packing_config: SequencePackingConfig,
+        chunked_prefill: ChunkedPrefillConfig,
+    ) -> Self {
         Self {
             config,
-            packing_config: SequencePackingConfig::default(),
+            packing_config,
             chunked_prefill,
         }
     }

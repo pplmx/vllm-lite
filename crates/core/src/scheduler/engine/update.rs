@@ -8,10 +8,12 @@
 //! emits observer events.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use vllm_traits::{BlockId, SampledToken, SeqId};
 
 use crate::scheduler::observer::ObserverEvent;
+use crate::scheduler::policy::SchedulingContext;
 use crate::types::Status;
 
 use super::state::SchedulerEngine;
@@ -64,6 +66,7 @@ impl SchedulerEngine {
         }
 
         self.finalize_finished_sequences();
+        self.requeue_partial_prefills();
     }
 
     /// Speculative-variant update: fold **multiple** emitted tokens per
@@ -105,6 +108,7 @@ impl SchedulerEngine {
         }
 
         self.finalize_finished_sequences();
+        self.requeue_partial_prefills();
     }
 
     /// Advance a running sequence's computed-token count by `input_count`
@@ -198,6 +202,14 @@ impl SchedulerEngine {
         let Some(seq) = self.running.get_mut(idx) else {
             return;
         };
+        // RIL ISS-051: only a completed-prefill (`Decoding`) sequence can
+        // finish via `max_tokens`. A `Prefilling` sequence mid-chunk has
+        // produced no output tokens yet — its per-chunk predicted token is
+        // stale and trimmed on requeue, so checking here would "finish" it
+        // after a single chunk with a premature/incomplete prefill.
+        if seq.status != Status::Decoding {
+            return;
+        }
         // Check completion — max_tokens is the upper bound on *generated*
         // tokens (prompt not included), per the Request documentation and
         // the OpenAI API spec. Subtract prompt_len so the sequence finishes
@@ -245,6 +257,42 @@ impl SchedulerEngine {
         self.advance_computed_tokens(idx, input_count);
         self.push_token_and_allocate(idx, token);
         self.check_completion(idx);
+    }
+
+    /// Requeue sequences left in `Prefilling` after a successful step with
+    /// partial progress (RIL ISS-051 — chunked prefill).
+    ///
+    /// `build_batch` moves freshly-admitted prefills into `running` as
+    /// `Prefilling`, and `advance_computed_tokens` transitions a sequence
+    /// to `Decoding` only once the whole prompt's KV exists. A sequence
+    /// whose chunk was processed but whose prompt is not yet complete stays
+    /// `Prefilling` — it must return to the waiting queue, NOT remain in
+    /// `running` (which must not hold `Prefilling` across steps, the
+    /// ISS-045 invariant), so the next round resumes it via
+    /// `forward_prefill_continue`. Its computed KV blocks and
+    /// `num_computed_tokens` are preserved; only the chunk's stale predicted
+    /// token (re-derived on the final chunk) is trimmed so `max_tokens`
+    /// accounting counts only real output tokens.
+    fn requeue_partial_prefills(&mut self) {
+        let mut i = 0;
+        while i < self.running.len() {
+            let is_partial_prefill = self.running[i].status == Status::Prefilling
+                && self.running[i].num_computed_tokens < self.running[i].prompt_len;
+            if is_partial_prefill {
+                let mut seq = self.running.remove(i);
+                seq.tokens.truncate(seq.prompt_len);
+                seq.status = Status::Waiting;
+                let ctx = SchedulingContext {
+                    current_time: Instant::now(),
+                    queue_length: self.request_queue.len(),
+                    running_count: self.running.len(),
+                    memory_pressure: self.get_memory_pressure(),
+                };
+                self.request_queue.enqueue(seq, self.policy.as_ref(), &ctx);
+            } else {
+                i += 1;
+            }
+        }
     }
 
     /// Move finished sequences out of `running` into `finished`,

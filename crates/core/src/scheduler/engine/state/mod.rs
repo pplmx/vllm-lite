@@ -108,6 +108,16 @@ impl SchedulerEngine {
             enable_similarity_grouping: false,
         };
 
+        // RIL ISS-051: wire the documented `prefill_chunk_size` into the
+        // composer so a prompt that overfills the token budget is chunked
+        // across rounds (and `advance_computed_tokens` resumes it) instead
+        // of being left unservable.
+        let chunked_prefill = crate::scheduler::batch_composer::ChunkedPrefillConfig {
+            enabled: true,
+            target_chunk_size: config.prefill_chunk_size,
+            ..Default::default()
+        };
+
         // Initialize CUDA Graph config from scheduler config
         let cuda_graph = SchedulerCudaGraphConfig {
             enabled: config.cuda_graph.enabled,
@@ -132,7 +142,11 @@ impl SchedulerEngine {
         Self {
             request_queue: RequestQueue::new(),
             phase_scheduler: PhaseScheduler::new(phase_switch_policy),
-            batch_composer: BatchComposer::with_packing(batch_config, config.packing.clone()),
+            batch_composer: BatchComposer::with_packing_and_chunked(
+                batch_config,
+                config.packing.clone(),
+                chunked_prefill,
+            ),
             memory: MemoryManager::new(config, num_kv_blocks),
             prefix_cache: RadixTree::new(),
             policy,

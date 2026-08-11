@@ -2,7 +2,7 @@ use std::sync::Arc;
 use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::scheduler::policy::SjfPolicy;
-use vllm_core::types::{Request, SchedulerConfig};
+use vllm_core::types::{Request, SchedulerConfig, SequencePackingConfig, Status};
 use vllm_traits::{BatchPhase, SampledToken};
 
 fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
@@ -358,4 +358,104 @@ fn step(engine: &mut SchedulerEngine, batch: &vllm_traits::Batch) {
         })
         .collect();
     engine.update(&batch.seq_ids, &next_tokens, &input_counts);
+}
+
+// RIL ISS-051: a prompt longer than max_num_batched_tokens must be served
+// via chunked prefill instead of spinning in the Prefill phase forever.
+// Each round processes a budget-sized (and prefill_chunk_size-capped)
+// chunk, the partial sequence is re-queued with its computed KV blocks +
+// num_computed_tokens preserved, and the final chunk transitions it to
+// Decoding. The invariant "running never holds Prefilling across steps"
+// (ISS-045) must hold between rounds.
+#[test]
+fn long_prompt_is_served_via_chunked_prefill() {
+    // 100-token prompt = 100/16 = 7 KV blocks. Batch token budget 32 and
+    // prefill chunk cap 16 -> ceil(100/16) = 7 chunk rounds to prefill.
+    let config = SchedulerConfig::builder()
+        .with_max_num_batched_tokens(32)
+        .with_prefill_chunk_size(16)
+        .with_packing(SequencePackingConfig {
+            enabled: false,
+            ..Default::default()
+        })
+        .build();
+    let mut engine = create_test_engine(config, 64);
+
+    engine.add_request(Request::new(5, vec![7; 100], 8));
+
+    // Drive rounds until the prefill completes (sequence leaves the queue).
+    let mut rounds = 0;
+    while engine.waiting_count() > 0 {
+        let batch = engine.build_batch();
+        assert!(
+            !batch.seq_ids.is_empty(),
+            "round {rounds}: a chunk must always be servable (max_num_seqs/budget are not the bottleneck here)"
+        );
+        step(&mut engine, &batch);
+        // ISS-045 invariant: `running` never holds Prefilling across steps
+        // (a partial chunk is re-queued by update; only a completed prefill
+        // stays in running, as Decoding).
+        for seq in engine.running() {
+            assert_ne!(
+                seq.status,
+                Status::Prefilling,
+                "no sequence may stay Prefilling in running between steps (round {rounds})"
+            );
+        }
+        rounds += 1;
+        assert!(
+            rounds <= 12,
+            "prefill must complete within ceil(100/16)+slack rounds"
+        );
+    }
+
+    // The prompt is now fully prefilled and decoding.
+    let seq = engine
+        .get_sequence(5)
+        .expect("sequence must be running as Decoding");
+    assert_eq!(
+        seq.num_computed_tokens, 100,
+        "the whole prompt must have been computed across chunks"
+    );
+    assert_eq!(
+        seq.status,
+        Status::Decoding,
+        "a completed prefill must decode"
+    );
+    assert_eq!(engine.waiting_count(), 0, "queue fully drained");
+    // max_tokens accounting: exactly ONE output token is in the stream so
+    // far (the prefill's final prediction); 7 more remain.
+    assert_eq!(
+        seq.tokens.len() - seq.prompt_len,
+        1,
+        "chunked prefill must not leak stale intermediate predictions into the output count"
+    );
+}
+
+// RIL ISS-051: a prompt that FITS the batch token budget is NOT chunked —
+// mid-size prefills keep their single-round behavior (no regression).
+#[test]
+fn fitting_prompt_stays_unchunked() {
+    let config = SchedulerConfig::builder()
+        .with_max_num_batched_tokens(64)
+        .with_prefill_chunk_size(16)
+        .with_packing(SequencePackingConfig {
+            enabled: false,
+            ..Default::default()
+        })
+        .build();
+    let mut engine = create_test_engine(config, 64);
+
+    // 20 tokens fits the 64-token budget -> single prefill round.
+    engine.add_request(Request::new(6, vec![7; 20], 8));
+    let batch = engine.build_batch();
+    assert_eq!(
+        batch.input_tokens[0].len(),
+        20,
+        "a fitting prompt must be processed whole, not chunked"
+    );
+    step(&mut engine, &batch);
+    let seq = engine.get_sequence(6).expect("served in one round");
+    assert_eq!(seq.num_computed_tokens, 20);
+    assert_eq!(seq.status, Status::Decoding);
 }

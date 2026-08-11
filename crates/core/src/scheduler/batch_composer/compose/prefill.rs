@@ -146,22 +146,47 @@ impl BatchComposer {
             return PrefillAction::Skip;
         }
 
-        if total_tokens + tokens_to_process > self.config.max_token_budget {
+        // RIL ISS-051: a sequence that overfills the batch token budget is
+        // CHUNKED (process `budget_room` tokens now, resume the rest on a
+        // later round) instead of breaking. Breaking meant a prompt longer
+        // than `max_token_budget` could never be served — the queue spun in
+        // Prefill forever, producing zero tokens, while the phase scheduler
+        // kept selecting the (never-drained) prefill phase. Only
+        // over-fitting prompts are chunked; prompts that fit run whole, so
+        // mid-size prompt behaviour is unchanged. The chunk is capped by
+        // `prefill_chunk_size` (the documented per-chunk token bound).
+        let budget_room = self.config.max_token_budget.saturating_sub(total_tokens);
+        let tokens_to_process = if tokens_to_process > budget_room {
+            budget_room.min(self.chunked_prefill.target_chunk_size.max(1))
+        } else {
+            tokens_to_process
+        };
+        if tokens_to_process == 0 {
+            // Batch budget already exhausted by earlier sequences.
             tracing::debug!(
-                "Breaking: total_tokens {} + tokens_to_process {} > max_token_budget {}",
+                "Breaking: total_tokens {} reaches max_token_budget {}",
                 total_tokens,
-                tokens_to_process,
                 self.config.max_token_budget
             );
             return PrefillAction::Break;
         }
 
-        let tokens: Vec<TokenId> = seq.tokens[start..].to_vec();
+        let chunk_end = start + tokens_to_process;
+        let tokens: Vec<TokenId> = seq.tokens[start..chunk_end].to_vec();
         let token_count = tokens.len();
+        if token_count < seq_len - start {
+            tracing::debug!(
+                seq_id = seq.id,
+                start = start,
+                chunk = token_count,
+                remaining = seq_len - chunk_end,
+                "chunked prefill: sequence exceeds the token budget; processing a chunk"
+            );
+        }
         PrefillAction::Process {
             seq_id: seq.id,
             start,
-            positions: (start..seq_len).collect(),
+            positions: (start..chunk_end).collect(),
             tokens,
             token_count,
             kv_blocks: seq.kv_blocks.as_ref().clone(),
