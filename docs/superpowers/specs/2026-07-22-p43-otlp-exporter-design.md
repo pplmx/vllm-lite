@@ -326,7 +326,7 @@ New file `crates/server/tests/otlp_exporter_integration.rs` (gated `--features o
 ci-otlp:
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@1.88
     - run: cargo test -p vllm-core --features opentelemetry otlp
     - run: cargo test -p vllm-server --features vllm-core/opentelemetry --test otlp_exporter_integration

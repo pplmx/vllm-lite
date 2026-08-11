@@ -1227,7 +1227,7 @@ Locate the existing `ci` and `ci-all-features` jobs. Add a new job in parallel:
     name: CI (opentelemetry feature)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.88

@@ -143,7 +143,7 @@ cargo test --test stress
 test:
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
     - run: cargo test --workspace
     - run: cargo clippy --workspace
 ```
