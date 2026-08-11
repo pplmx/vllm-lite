@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 51,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-11T08:04:56+00:00",
+  "updated_at": "2026-08-11T08:19:44+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3874,6 +3874,54 @@
       "touched_round": 51,
       "rationale": "Incremental KV preallocation for chunked prefill is rejected as not worth pursuing. The capacity limit is not a bug: the full prompt's KV table must physically fit in the pool to decode at all (the sum over the sequence's lifetime is identical whether allocated up front or incrementally), and vLLM itself pre-allocates the full KV at admission. Incremental allocation would add a mid-prompt OOM failure mode (the sequence runs out of blocks partway through, requiring self-preemption), and preemption of prefills is already a full reset, so no work would be saved. The fail-fast 'defer at admission' design (ISS-042 filter) is the correct behaviour for an over-capacity prompt; the preemption-gate double-count (the one real defect, ISS-056) was fixed separately in CHG-058.",
       "alternatives_rejected": "Incremental preallocation keyed to the frontier (adds a mid-prompt OOM failure mode, no total-capacity gain, contradicts vLLM's full-KV-at-admission model); keeping the full-prompt preemption gate (double-counted held blocks, ISS-056 fixed); serving an over-capacity prompt anyway (block-0 write risk, ISS-028 class)"
+    },
+    "ISS-057": {
+      "id": "ISS-057",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-11T08:19:44+00:00",
+      "updated_at": "2026-08-11T08:19:44+00:00",
+      "touched_round": 51,
+      "title": "Speculative mode streams a chunked prefill's stale mid-chunk predictions: step_speculative_inner processes prefill chunks too, drafts are generated even for a prefill entry (from the chunk's last token), and dispatch.rs's send loop forwarded every verified entry (drafts + bonus) with no phase filter - a 100-token prompt chunked by 16 streamed 24 tokens when only max_tokens=8 were real output. Also update_speculative folded the stale tokens into seq.tokens before the requeue truncation"
+    },
+    "TASK-060": {
+      "id": "TASK-060",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-11T08:19:44+00:00",
+      "updated_at": "2026-08-11T08:19:44+00:00",
+      "touched_round": 51,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 0.97,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "title": "Suppress mid-chunk prefill emission + folding in speculative mode: gate dispatch.rs's client-emission loop on a per-seq stale mask (start+chunk < prompt_len) while keeping results for update_speculative's frontier advance, and make update_speculative advance num_computed before folding and skip the fold/observer/block-allocation for post-advance Prefilling sequences (ISS-053 counterpart)"
+    },
+    "CHG-059": {
+      "id": "CHG-059",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-11T08:19:44+00:00",
+      "updated_at": "2026-08-11T08:19:44+00:00",
+      "touched_round": 51,
+      "commit": "92dfae62",
+      "title": "fix(core): never stream a mid-chunk prefill's stale predictions in speculative mode (ISS-057): dispatch.rs per-seq stale mask for the emission loop (results kept for update_speculative) + update_speculative advances the frontier before folding and skips the fold for post-advance Prefilling"
+    },
+    "EV-072": {
+      "id": "EV-072",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-11T08:19:44+00:00",
+      "updated_at": "2026-08-11T08:19:44+00:00",
+      "touched_round": 51,
+      "source": "crates/core/src/engine/spec_dispatch/tests.rs::speculative_chunked_prefill_never_streams_stale_midchunk_predictions",
+      "title": "Speculative + chunked prefill (100-token prompt, chunk 16, max_tokens 8): client channel observed 24 tokens pre-fix vs exactly 8 (= max_tokens) post-fix. 661 vllm-core tests green",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -5568,6 +5616,24 @@
       "to": "TASK-059",
       "type": "governs",
       "created_at": "2026-08-11T08:04:56+00:00"
+    },
+    {
+      "from": "TASK-060",
+      "to": "ISS-057",
+      "type": "addresses",
+      "created_at": "2026-08-11T08:19:44+00:00"
+    },
+    {
+      "from": "CHG-059",
+      "to": "ISS-057",
+      "type": "resolves",
+      "created_at": "2026-08-11T08:19:44+00:00"
+    },
+    {
+      "from": "CHG-059",
+      "to": "TASK-060",
+      "type": "implements",
+      "created_at": "2026-08-11T08:19:44+00:00"
     }
   ]
 }
