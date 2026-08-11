@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 51,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-11T08:01:12+00:00",
+  "updated_at": "2026-08-11T08:04:56+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3798,10 +3798,10 @@
     "TASK-059": {
       "id": "TASK-059",
       "type": "task",
-      "status": "active",
-      "version": 2,
+      "status": "abandoned",
+      "version": 3,
       "created_at": "2026-08-11T07:48:03+00:00",
-      "updated_at": "2026-08-11T08:01:12+00:00",
+      "updated_at": "2026-08-11T08:04:56+00:00",
       "touched_round": 51,
       "category": "performance",
       "severity": 2,
@@ -3813,10 +3813,10 @@
     "ISS-055": {
       "id": "ISS-055",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "abandoned",
+      "version": 2,
       "created_at": "2026-08-11T07:48:22+00:00",
-      "updated_at": "2026-08-11T07:48:22+00:00",
+      "updated_at": "2026-08-11T08:04:56+00:00",
       "touched_round": 51,
       "title": "Chunked-prefill KV memory is still accounted against the full prompt, so the feature bounds tokens-per-step but not KV memory: the build_batch preemption gate and filter_fully_allocated_prefills compare the whole prompt's block count against the free pool, so a long prompt whose full table cannot fit is permanently deferred, and running decode sequences can be preempted for blocks only the eventual (not current) chunk needs"
     },
@@ -3863,6 +3863,17 @@
       "source": "crates/core/tests/scheduler_integration.rs::readmitted_chunked_prefill_does_not_preempt_running_decode",
       "title": "With 12 blocks, decode B holds 2 and a 100-token chunked prefill holds 7 (free 3): re-admitting A for its next chunk leaves B Decoding in running; fails pre-fix (B removed by needless preemption). 660 vllm-core tests green",
       "confidence": 1.0
+    },
+    "DEC-041": {
+      "id": "DEC-041",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-11T08:04:56+00:00",
+      "updated_at": "2026-08-11T08:04:56+00:00",
+      "touched_round": 51,
+      "rationale": "Incremental KV preallocation for chunked prefill is rejected as not worth pursuing. The capacity limit is not a bug: the full prompt's KV table must physically fit in the pool to decode at all (the sum over the sequence's lifetime is identical whether allocated up front or incrementally), and vLLM itself pre-allocates the full KV at admission. Incremental allocation would add a mid-prompt OOM failure mode (the sequence runs out of blocks partway through, requiring self-preemption), and preemption of prefills is already a full reset, so no work would be saved. The fail-fast 'defer at admission' design (ISS-042 filter) is the correct behaviour for an over-capacity prompt; the preemption-gate double-count (the one real defect, ISS-056) was fixed separately in CHG-058.",
+      "alternatives_rejected": "Incremental preallocation keyed to the frontier (adds a mid-prompt OOM failure mode, no total-capacity gain, contradicts vLLM's full-KV-at-admission model); keeping the full-prompt preemption gate (double-counted held blocks, ISS-056 fixed); serving an over-capacity prompt anyway (block-0 write risk, ISS-028 class)"
     }
   },
   "edges": [
@@ -5551,6 +5562,12 @@
       "to": "ISS-056",
       "type": "addresses",
       "created_at": "2026-08-11T08:01:12+00:00"
+    },
+    {
+      "from": "DEC-041",
+      "to": "TASK-059",
+      "type": "governs",
+      "created_at": "2026-08-11T08:04:56+00:00"
     }
   ]
 }
