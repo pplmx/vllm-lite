@@ -459,3 +459,70 @@ fn fitting_prompt_stays_unchunked() {
     assert_eq!(seq.num_computed_tokens, 20);
     assert_eq!(seq.status, Status::Decoding);
 }
+
+// RIL ISS-054: a chunked prefill whose chunk lost the token-budget
+// competition must NOT lose its computed progress.
+//
+// `requeue_seq` (used by ISS-041 uncomposed-overflow requeue and ISS-045
+// forward-error recovery) used to unconditionally reset every requeued
+// prefill to `num_computed_tokens == 0` and release its blocks. That was
+// correct for never-advanced sequences, but chunked prefill (ISS-051)
+// deliberately requeues ADVANCED sequences — a long prompt that made
+// partial progress and is then squeezed out of the composed batch by
+// shorter requests would be reset to scratch and recompute its whole
+// prompt on every contention round (work-loss thrashing under load).
+// The requeue must preserve the sequence's frontier and blocks.
+#[test]
+fn uncomposed_prefill_overflow_keeps_chunked_progress() {
+    let config = SchedulerConfig::builder()
+        .with_max_num_batched_tokens(32)
+        .with_prefill_chunk_size(16)
+        .with_packing(SequencePackingConfig {
+            enabled: false,
+            ..Default::default()
+        })
+        .build();
+    let mut engine = create_test_engine(config, 64);
+
+    // A: long prompt served via chunked prefill.
+    engine.add_request(Request::new(10, vec![7; 100], 8));
+
+    // Round 1: A processed as a 16-token chunk -> frontier 16, requeued.
+    let batch1 = engine.build_batch();
+    assert_eq!(batch1.seq_ids, vec![10]);
+    assert_eq!(batch1.input_tokens[0].len(), 16, "A must be chunked");
+    step(&mut engine, &batch1);
+    assert_eq!(
+        engine.get_sequence(10).map(|s| s.num_computed_tokens),
+        None,
+        "A must be requeued (not running) after its partial chunk"
+    );
+
+    // B: a 32-token prompt that exactly fills the token budget.
+    engine.add_request(Request::new(11, vec![7; 32], 4));
+
+    // Round 2: compose sorts shortest-first (B = 32 fills the budget), so
+    // A (remaining 84) breaks out of composition and is requeued as
+    // uncomposed overflow. Its computed frontier must SURVIVE this requeue.
+    let batch2 = engine.build_batch();
+    assert_eq!(
+        batch2.seq_ids,
+        vec![11],
+        "B fills the budget; A is dropped from composition"
+    );
+    step(&mut engine, &batch2);
+
+    // Round 3: no competition. A must resume from its preserved frontier,
+    // not restart from the first prompt token (work-loss thrashing).
+    let batch3 = engine.build_batch();
+    assert_eq!(batch3.seq_ids, vec![10]);
+    assert_eq!(
+        batch3.num_computed_tokens[0], 16,
+        "A must resume from position 16, not recompute its prompt from scratch"
+    );
+    assert_eq!(
+        batch3.positions[0],
+        (16..32).collect::<Vec<_>>(),
+        "the resumed chunk must start at the preserved frontier"
+    );
+}

@@ -382,7 +382,32 @@ impl SchedulerEngine {
     /// corrupt KV table. Used for prefill overflow (ISS-041), partial-block
     /// OOM admission (ISS-042), and forward-error recovery (ISS-045) — all
     /// of which only ever requeue sequences that have not been advanced.
+    ///
+    /// RIL ISS-054: an ADVANCED sequence (a chunked prefill that made partial
+    /// progress before being requeued) must keep its frontier +
+    /// already-computed KV blocks — its block table is the full prompt table
+    /// from admission, so it is complete and safe to resume. The old
+    /// unconditional reset recomputed a long prompt from scratch on every
+    /// contention round (ISS-041 overflow) or every transient forward error
+    /// (ISS-045) — work-loss thrashing under load. Only never-advanced
+    /// sequences (fresh admission whose preallocation failed) are reset.
     fn requeue_seq(&mut self, mut seq: Sequence) {
+        if seq.num_computed_tokens > 0 {
+            tracing::debug!(
+                seq_id = seq.id,
+                num_computed = seq.num_computed_tokens,
+                "requeue: preserving advanced prefill's computed KV (chunked prefill)"
+            );
+            seq.status = Status::Waiting;
+            let ctx = SchedulingContext {
+                current_time: Instant::now(),
+                queue_length: self.request_queue.len(),
+                running_count: self.running.len(),
+                memory_pressure: self.get_memory_pressure(),
+            };
+            self.request_queue.enqueue(seq, self.policy.as_ref(), &ctx);
+            return;
+        }
         self.memory.release_blocks(seq.kv_blocks.as_ref());
         seq.kv_blocks = Arc::new(vec![]);
         seq.status = Status::Waiting;
