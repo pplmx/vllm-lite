@@ -526,3 +526,63 @@ fn uncomposed_prefill_overflow_keeps_chunked_progress() {
         "the resumed chunk must start at the preserved frontier"
     );
 }
+
+// RIL ISS-055 (TASK-059): the build_batch preemption gate must compare the
+// ADDITIONAL blocks a sequence still needs against the free pool, not its
+// full-prompt block count. A re-admitted chunked prefill ALREADY HOLDS its
+// whole prompt table, so demanding `full_prompt_blocks` of free space
+// double-counts its own held blocks and needlessly preempts running decode
+// sequences. Fails pre-fix: the decode sequence B is preempted (kicked out
+// of `running`, reset to Waiting) to "free" space for a chunked prefill that
+// needs zero new blocks.
+#[test]
+fn readmitted_chunked_prefill_does_not_preempt_running_decode() {
+    let config = SchedulerConfig::builder()
+        .with_max_num_batched_tokens(32)
+        .with_prefill_chunk_size(16)
+        .with_packing(SequencePackingConfig {
+            enabled: false,
+            ..Default::default()
+        })
+        .build();
+    let mut engine = create_test_engine(config, 12); // 12 blocks total
+
+    // B: short prompt (30 tokens = 2 blocks) that reaches Decode and holds
+    // its 2 blocks in `running`.
+    engine.add_request(Request::new(20, vec![7; 30], 4));
+    let batch_b = engine.build_batch();
+    step(&mut engine, &batch_b);
+    assert_eq!(
+        engine.get_sequence(20).map(|s| s.status),
+        Some(Status::Decoding),
+        "B must be decoding and holding its 2 blocks"
+    );
+
+    // A: long prompt (100 tokens = 7 blocks), chunked. Its full prompt table
+    // is preallocated in round A1, so after the partial chunk it requeues
+    // HOLDING all 7 blocks while only 3 blocks remain free.
+    engine.add_request(Request::new(10, vec![7; 100], 8));
+    let batch_a1 = engine.build_batch();
+    assert_eq!(batch_a1.seq_ids, vec![10]);
+    step(&mut engine, &batch_a1);
+    // A is requeued to the waiting queue holding its full 7-block table
+    // (frontier 16); `get_sequence` only searches `running`, so None here.
+    assert_eq!(engine.get_sequence(10).map(|s| s.status), None);
+
+    // Round A2: prefill phase re-drains A (holds 7 blocks; free = 3 < 7).
+    // The gate must see `additional == 0` and NOT preempt B to make room for
+    // blocks A already owns.
+    let batch_a2 = engine.build_batch();
+    assert_eq!(
+        batch_a2.seq_ids,
+        vec![10],
+        "A is composed for its next chunk"
+    );
+    assert_eq!(
+        engine.get_sequence(20).map(|s| s.status),
+        Some(Status::Decoding),
+        "a re-admitted chunked prefill that already holds its blocks must not \
+         preempt a running decode sequence"
+    );
+    step(&mut engine, &batch_a2);
+}

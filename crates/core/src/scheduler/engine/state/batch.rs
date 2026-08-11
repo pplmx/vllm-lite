@@ -67,10 +67,19 @@ impl SchedulerEngine {
         // Check memory and preempt if needed (before allocating the new
         // sequences' KV blocks below). Considers both the running decode
         // sequences and the newly-admitted ones.
+        //
+        // RIL ISS-055: demand only the ADDITIONAL blocks a sequence still
+        // needs, not its full-prompt block count. A re-admitted chunked
+        // prefill (TASK-055/058) already HOLDS its whole prompt table, so
+        // the old full count double-counted its own held blocks and
+        // needlessly preempted running decode sequences to "free" space the
+        // sequence already owned. Fresh admissions (kv_blocks empty before
+        // preallocation) still demand the full table, as before.
         for seq in sequences.iter().chain(new_sequences.iter()) {
             let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
-            if blocks_needed > self.memory.available_blocks() {
-                self.execute_preemption(blocks_needed);
+            let additional = blocks_needed.saturating_sub(seq.kv_blocks.len());
+            if additional > self.memory.available_blocks() {
+                self.execute_preemption(additional);
             }
         }
 
