@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 49,
+  "round": 50,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-10T21:30:00+00:00",
+  "updated_at": "2026-08-11T02:30:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3582,20 +3582,20 @@
     "ISS-051": {
       "id": "ISS-051",
       "type": "issue",
-      "status": "active",
+      "status": "resolved",
       "version": 1,
       "created_at": "2026-08-10T20:40:00+00:00",
-      "updated_at": "2026-08-10T20:40:00+00:00",
+      "updated_at": "2026-08-11T02:30:00+00:00",
       "touched_round": 48,
       "title": "Long-prompt deadlock: a prefill whose tokens exceed max_num_batched_tokens (default 4096) is never served — compose_prefill_batch returns Break when a single sequence overruns the token budget, there is no intra-sequence chunking in the production compose path (compose_with_chunking is test-only dead code), and the phase scheduler keeps the queue in Prefill forever. After the ISS-041 requeue fix it no longer strands, but it retries every round with zero tokens produced and is_healthy() true — a 10k-token prompt with default config never completes"
     },
     "TASK-055": {
       "id": "TASK-055",
       "type": "task",
-      "status": "active",
+      "status": "resolved",
       "version": 1,
       "created_at": "2026-08-10T20:40:00+00:00",
-      "updated_at": "2026-08-10T20:40:00+00:00",
+      "updated_at": "2026-08-11T02:30:00+00:00",
       "touched_round": 48,
       "category": "correctness",
       "severity": 3,
@@ -3664,6 +3664,40 @@
       "source": "crates/core/tests/scheduler_integration.rs decode_growth_failure_composes_only_complete_tables + commit 74021713",
       "confidence": 1.0,
       "title": "TDD: the regression test constructs the exact window (blocks pinned by finished sequences cached blocks, growth fails, cache-drain frees them) and fails against EITHER half (short table composed without the decode gate; needless preemption without the drain short-circuit) and passes with both. Full vllm-core suite + preemption block-hole test green."
+    },
+    "CHG-055": {
+      "id": "CHG-055",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-11T02:30:00+00:00",
+      "updated_at": "2026-08-11T02:30:00+00:00",
+      "touched_round": 50,
+      "commit": "edc81f79",
+      "title": "feat(core): chunked prefill serves prompts longer than max_num_batched_tokens"
+    },
+    "DEC-039": {
+      "id": "DEC-039",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-11T02:30:00+00:00",
+      "updated_at": "2026-08-11T02:30:00+00:00",
+      "touched_round": 50,
+      "rationale": "长于 max_num_batched_tokens 的 prompt 因 compose Break 永远无法被服务（队列持续 Prefill，零产出，健康检查仍绿）——真实性功能性缺陷而非巧合限制。决策：实现分块 prefill——单序列超预算时按预算余量切块（并受文档化的 prefill_chunk_size 封顶，顺带把该旋钮从 ISS-043 惰性集合接入真实语义）；部分进度经 update 保留 kv_blocks + num_computed 重排队，下轮经 forward_prefill_continue 续算；最后一块完成后转 Decoding。chunk 轮预测出的中间 token 是过期的（最后一块会重导），重排队时截断，保证 max_tokens 计数只算真实输出。check_completion 仅对 Decoding 生效：未完成的 prefill 尚无任何输出。本轮同时把 prefill_chunk_size 标记为已生效（部分解决 ISS-043）。",
+      "alternatives_rejected": "① 仅调大默认 max_num_batched_tokens：掩盖而非解决，且放大单批内存；② 超预算单序列直接整条进批量（无视预算）：单条 10k prompt 会撑爆批量内存上限，正是预算存在的原因；③ chunk 不封顶 prefill_chunk_size：预算余量即 chunk，虽更快但对齐 512 默认的文档语义更差，且浪费批量容量。"
+    },
+    "EV-068": {
+      "id": "EV-068",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-11T02:30:00+00:00",
+      "updated_at": "2026-08-11T02:30:00+00:00",
+      "touched_round": 50,
+      "source": "crates/core/tests/scheduler_integration.rs long_prompt_is_served_via_chunked_prefill + fitting_prompt_stays_unchunked + commit edc81f79",
+      "confidence": 1.0,
+      "title": "TDD: 100-token prompt with budget 32 / chunk 16 completes prefill across 7 chunk rounds (fails against pre-fix Break — the batch is empty); the ISS-045 invariant holds each round; no stale intermediate prediction leaks into max_tokens (tokens.len()-prompt_len == 1 after prefill); a 20-token fitting prompt stays unchunked (single round). Full vllm-core suite green after correcting the observer finish-event test to the new partial-prefill semantics."
     }
   },
   "edges": [
@@ -5268,6 +5302,24 @@
       "to": "TASK-056",
       "type": "governs",
       "created_at": "2026-08-10T21:30:00+00:00"
+    },
+    {
+      "from": "CHG-055",
+      "to": "TASK-055",
+      "type": "implements",
+      "created_at": "2026-08-11T02:30:00+00:00"
+    },
+    {
+      "from": "CHG-055",
+      "to": "ISS-051",
+      "type": "resolves",
+      "created_at": "2026-08-11T02:30:00+00:00"
+    },
+    {
+      "from": "DEC-039",
+      "to": "TASK-055",
+      "type": "governs",
+      "created_at": "2026-08-11T02:30:00+00:00"
     }
   ]
 }
