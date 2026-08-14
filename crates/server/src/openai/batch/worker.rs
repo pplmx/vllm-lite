@@ -39,7 +39,7 @@ pub fn spawn_batch_worker(state: &ApiState, job: BatchJob) -> tokio::task::JoinH
     })
 }
 
-/// Drive `job` to `Completed`/`Failed` by executing every prompt.
+/// Drive `job` to `Completed`/`Failed`/`Cancelled` by executing every prompt.
 async fn run_batch_job(
     job: BatchJob,
     engine_tx: crate::api::EngineHandle,
@@ -48,6 +48,7 @@ async fn run_batch_job(
     architecture: vllm_model::config::Architecture,
 ) {
     let job_id = job.id.clone();
+    let cancel_requested = std::sync::Arc::clone(&job.cancel_requested);
     // Fail fast if the job vanished between create and pickup (e.g. a
     // concurrent admin action removed it) — nothing to do.
     if !manager.mark_in_progress(&job_id).await {
@@ -57,6 +58,12 @@ async fn run_batch_job(
     let max_tokens = usize::try_from(job.max_tokens.unwrap_or(100)).unwrap_or(100);
 
     for (index, prompt) in job.prompts.iter().enumerate() {
+        // Cooperative stop: the manager set the flag via
+        // `POST /v1/batches/{id}/cancel`. Skip the remaining prompts —
+        // partial results already recorded stay readable.
+        if cancel_requested.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
+        }
         let result = execute_one(
             job.endpoint,
             prompt,
@@ -65,6 +72,7 @@ async fn run_batch_job(
             architecture,
             &engine_tx,
             &tokenizer,
+            &cancel_requested,
         )
         .await;
         let item = match result {
@@ -84,8 +92,13 @@ async fn run_batch_job(
         manager.add_result(&job_id, item).await;
     }
 
-    // Terminal state: any failure marks the whole batch Failed (partial
-    // results stay readable via get_batch_results).
+    // Terminal state. If the user cancelled, `request_cancel` already
+    // transitioned the job to `Cancelled` — do not override it. Otherwise
+    // any failure marks the whole batch Failed (partial results stay
+    // readable via get_batch_results).
+    if cancel_requested.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
     let any_failed = job.prompts.is_empty()
         || manager
             .get_job(&job_id)
@@ -100,6 +113,12 @@ async fn run_batch_job(
 
 /// Execute one prompt against the engine and return the generated text.
 ///
+/// `cancel_requested` is the job's shared cancellation flag; when set the
+/// in-flight engine sequence is cancelled via
+/// [`EngineMessage::CancelRequest`](vllm_core::types::EngineMessage::CancelRequest)
+/// (so the engine stops generating for a caller that has gone away) and the
+/// collected tokens so far are returned.
+///
 /// # Errors
 ///
 /// Returns the error message string when the request could not be
@@ -113,6 +132,7 @@ async fn execute_one(
     architecture: vllm_model::config::Architecture,
     engine_tx: &crate::api::EngineHandle,
     tokenizer: &Tokenizer,
+    cancel_requested: &std::sync::atomic::AtomicBool,
 ) -> Result<String, String> {
     let prompt_text = match endpoint {
         BatchEndpoint::Chat => {
@@ -137,21 +157,32 @@ async fn execute_one(
     }
 
     let (response_tx, mut response_rx) = mpsc::channel(64);
+    let (seq_id_tx, seq_id_rx) = tokio::sync::oneshot::channel();
 
     engine_tx
         .try_send(vllm_core::types::EngineMessage::AddRequest {
             request: Box::new(request),
             response_tx,
-            seq_id_tx: None, // batch worker doesn't need per-seq cancellation tracking
+            seq_id_tx: Some(seq_id_tx),
             finish_reason_tx: None,
             request_id: Some(format!("batch:{}", prompt_text.len())),
         })
         .map_err(|e| crate::openai::chat::map_engine_send_error(&e))
         .map_err(|(_, json)| json.error.message.clone())?;
 
+    // Learn the engine-assigned seq_id so a cancellation can cancel this
+    // specific sequence (not just skip the next prompt).
+    let seq_id = seq_id_rx.await.unwrap_or(0);
+
     let mut tokens = Vec::new();
     while let Some(sampled) = response_rx.recv().await {
         tokens.push(sampled);
+        if cancel_requested.load(std::sync::atomic::Ordering::Relaxed) {
+            // Best-effort: cancel the in-flight sequence so the engine
+            // stops generating; the channel then closes and we break.
+            let _ = engine_tx.try_send(vllm_core::types::EngineMessage::CancelRequest { seq_id });
+            break;
+        }
     }
 
     let token_ids: Vec<u32> = tokens.iter().map(|s: &SampledToken| s.token).collect();
@@ -193,6 +224,32 @@ mod tests {
         assert!(finished.results.iter().all(|r| r.status == "succeeded"));
         assert!(finished.results.iter().all(|r| r.content.is_some()));
         assert!(finished.completed_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn worker_stops_dispatching_when_cancelled_before_start() {
+        // Cancellation requested before the worker picks the job up: the
+        // loop sees the flag immediately, dispatches nothing, and leaves
+        // the job `Cancelled` (no override to Completed/Failed).
+        let (state, _engine) = create_state_with_mock_engine();
+        let job = state
+            .batch_manager
+            .create_job(
+                BatchEndpoint::Completion,
+                vec!["a".to_string(), "b".to_string()],
+                None,
+                Some(10),
+                None,
+            )
+            .await;
+        state.batch_manager.request_cancel(&job).await;
+
+        let handle = spawn_batch_worker(&state, state.batch_manager.get_job(&job).await.unwrap());
+        handle.await.expect("worker task must not panic");
+
+        let finished = state.batch_manager.get_job(&job).await.unwrap();
+        assert_eq!(finished.status, BatchStatus::Cancelled);
+        assert!(finished.results.is_empty(), "nothing should have run");
     }
 
     #[tokio::test]

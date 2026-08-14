@@ -120,6 +120,59 @@ pub async fn get_batch(
     ))
 }
 
+/// Cancel batch.
+///
+/// Sets the job's cooperative cancel flag (the worker stops dispatching
+/// new prompts and cancels its in-flight engine sequence) and transitions
+/// the status to `cancelled`. Returns the updated batch object.
+///
+/// # Errors
+///
+/// Returns `404 batch not found` (`invalid_request_error`) when no job
+/// with `id` exists; returns `409 batch already <terminal>` when the job
+/// already reached a terminal state.
+pub async fn cancel_batch(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<BatchResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let cancelled = state.batch_manager.request_cancel(&id).await;
+    if !cancelled {
+        // Distinguish missing from already-terminal: a `Cancelled`/terminal
+        // job is a client error (nothing left to cancel); a missing id is 404.
+        let job = state.batch_manager.get_job(&id).await;
+        return match job {
+            Some(_) => Err((
+                axum::http::StatusCode::CONFLICT,
+                Json(ErrorResponse::new(
+                    "batch is already in a terminal state",
+                    "invalid_request_error",
+                )),
+            )),
+            None => Err((
+                axum::http::StatusCode::NOT_FOUND,
+                Json(ErrorResponse::new(
+                    "batch not found",
+                    "invalid_request_error",
+                )),
+            )),
+        };
+    }
+
+    Ok(Json(
+        batch_to_response(&id, &state.batch_manager, || BatchResponse {
+            id: id.clone(),
+            object: "batch".to_string(),
+            endpoint: BatchEndpoint::Chat,
+            status: "cancelled".to_string(),
+            created_at: 0,
+            expires_at: crate::util::time::unix_now_secs() + 86_400,
+            completed_at: Some(crate::util::time::unix_now_secs()),
+            request_counts: None,
+        })
+        .await,
+    ))
+}
+
 /// Get batch results.
 /// # Errors
 ///
@@ -214,6 +267,7 @@ const fn status_str(job: &BatchJob) -> &'static str {
         BatchStatus::InProgress => "in_progress",
         BatchStatus::Completed => "completed",
         BatchStatus::Failed => "failed",
+        BatchStatus::Cancelled => "cancelled",
     }
 }
 
@@ -294,5 +348,48 @@ mod tests {
         let state = create_test_state();
         let result = list_batches(State(state)).await;
         assert!(result.0.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_cancel_batch_returns_cancelled_response() {
+        let state = create_test_state();
+        let id = state
+            .batch_manager
+            .create_job(
+                BatchEndpoint::Completion,
+                vec!["a".to_string(), "b".to_string()],
+                None,
+                Some(10),
+                None,
+            )
+            .await;
+
+        let result = cancel_batch(State(state), axum::extract::Path(id.clone())).await;
+        let response = result.expect("cancel must succeed");
+        assert_eq!(response.status, "cancelled");
+    }
+
+    #[tokio::test]
+    async fn test_cancel_batch_not_found() {
+        let state = create_test_state();
+        let result = cancel_batch(State(state), axum::extract::Path("nope".to_string())).await;
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, axum::http::StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_cancel_batch_already_terminal_conflicts() {
+        let state = create_test_state();
+        let id = state
+            .batch_manager
+            .create_job(BatchEndpoint::Chat, vec!["x".to_string()], None, None, None)
+            .await;
+        state.batch_manager.set_completed(&id).await;
+
+        let result = cancel_batch(State(state), axum::extract::Path(id)).await;
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, axum::http::StatusCode::CONFLICT);
     }
 }

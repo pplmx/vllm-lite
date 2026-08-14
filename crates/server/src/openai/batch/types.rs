@@ -152,6 +152,10 @@ pub enum BatchStatus {
     Completed,
     /// One or more requests failed; partial results may still be available.
     Failed,
+    /// The user cancelled the job (via `POST /v1/batches/{id}/cancel`).
+    /// The worker stops dispatching new prompts; an in-flight prompt's
+    /// engine sequence is cancelled and partial results stay readable.
+    Cancelled,
 }
 
 /// Background job: scheduled for execution by the worker pool. Carries the work payload plus retry / cancellation metadata.
@@ -177,6 +181,11 @@ pub struct BatchJob {
     pub created_at: i64,
     /// Unix timestamp at which the batch reached a terminal state, if any.
     pub completed_at: Option<i64>,
+    /// Cooperative cancellation signal shared with the worker. Set by
+    /// `POST /v1/batches/{id}/cancel`; the worker polls it between prompts
+    /// (and around the in-flight engine sequence) so cancellation takes
+    /// effect promptly without aborting the task mid-write.
+    pub cancel_requested: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl BatchJob {
@@ -207,6 +216,7 @@ impl BatchJob {
             results: Vec::new(),
             created_at: now,
             completed_at: None,
+            cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 }

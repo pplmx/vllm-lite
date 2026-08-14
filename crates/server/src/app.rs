@@ -43,7 +43,9 @@ use crate::api;
 use crate::auth::AuthMiddleware;
 use crate::debug;
 use crate::health_handlers;
-use crate::openai::batch::handler::{create_batch, get_batch, get_batch_results, list_batches};
+use crate::openai::batch::handler::{
+    cancel_batch, create_batch, get_batch, get_batch_results, list_batches,
+};
 use crate::openai::chat::chat_completions;
 use crate::openai::completions::completions as openai_completions;
 use crate::openai::embeddings::embeddings;
@@ -79,6 +81,7 @@ pub fn build_app(
         .route("/v1/batches", post(create_batch))
         .route("/v1/batches", get(list_batches))
         .route("/v1/batches/{id}", get(get_batch))
+        .route("/v1/batches/{id}/cancel", post(cancel_batch))
         .route("/v1/batches/{id}/results", get(get_batch_results))
         // Health, readiness, and metrics endpoints (K8s-compatible paths)
         .route("/health/live", get(health_handlers::health_handler))

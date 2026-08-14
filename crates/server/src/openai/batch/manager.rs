@@ -1,6 +1,6 @@
 //! `OpenAI` Batch API request lifecycle: enqueue, dispatch to engine, poll status, cancel, collect results.
 //!
-//! `BatchManager` owns the per-batch state machine (`Validating` →
+//! `BatchManager` owns the per-batch state machine (`Pending` →
 //! `InProgress` → `Completed`/`Failed`/`Cancelled`) and is shared across
 //! the `/v1/batches` handlers via `Arc`.
 #![allow(clippy::module_name_repetitions)]
@@ -87,11 +87,22 @@ impl BatchManager {
         }
     }
 
-    /// Transition a job to `InProgress` the first time its worker picks it up.
+    /// Transition a job to `InProgress` the first time its worker picks it
+    /// up. Returns `false` (and leaves the status untouched) when the job is
+    /// missing **or already cancelled** — a race where
+    /// [`Self::request_cancel`] won before the worker picked the job up must
+    /// not be overwritten back to `InProgress` (the worker then sees the
+    /// cancel flag, skips all prompts, and the job stays `Cancelled`).
     #[must_use]
     pub async fn mark_in_progress(&self, job_id: &str) -> bool {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.get_mut(job_id) {
+            if job
+                .cancel_requested
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                return false;
+            }
             job.status = BatchStatus::InProgress;
             true
         } else {
@@ -124,6 +135,42 @@ impl BatchManager {
                 );
             }
         }
+    }
+
+    /// Signal a job to stop. Sets the cooperative `cancel_requested` flag
+    /// so the worker (if running) stops dispatching new prompts and
+    /// cancels its in-flight engine sequence; also transitions the status
+    /// to `Cancelled` so `GET /v1/batches/{id}` reports it immediately.
+    /// No-op for jobs already in a terminal state.
+    pub async fn request_cancel(&self, job_id: &str) -> bool {
+        let mut jobs = self.jobs.write().await;
+        let result = match jobs.get_mut(job_id) {
+            None => false,
+            Some(job) => match job.status {
+                BatchStatus::Pending | BatchStatus::InProgress => {
+                    job.cancel_requested
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    job.status = BatchStatus::Cancelled;
+                    true
+                }
+                BatchStatus::Completed | BatchStatus::Failed | BatchStatus::Cancelled => false,
+            },
+        };
+        drop(jobs);
+        result
+    }
+
+    /// Whether a user requested cancellation for `job_id` (regardless of
+    /// the job's current status — the worker uses this as its stop signal).
+    #[must_use]
+    pub async fn is_cancelled(&self, job_id: &str) -> bool {
+        let jobs = self.jobs.read().await;
+        let cancelled = jobs.get(job_id).is_some_and(|j| {
+            j.cancel_requested
+                .load(std::sync::atomic::Ordering::Relaxed)
+        });
+        drop(jobs);
+        cancelled
     }
 }
 
@@ -334,5 +381,62 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         // Should not panic
         rt.block_on(mgr.set_failed("nonexistent"));
+    }
+
+    #[test]
+    fn request_cancel_transitions_in_progress_to_cancelled() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id = rt.block_on(mgr.create_job(
+            BatchEndpoint::Chat,
+            vec!["a".into(), "b".into()],
+            None,
+            None,
+            None,
+        ));
+        rt.block_on(mgr.mark_in_progress(&id));
+
+        assert!(rt.block_on(mgr.request_cancel(&id)));
+        let job = rt.block_on(mgr.get_job(&id)).unwrap();
+        assert_eq!(job.status, BatchStatus::Cancelled);
+        assert!(
+            job.cancel_requested
+                .load(std::sync::atomic::Ordering::Relaxed),
+            "cancel flag must be observable by the worker"
+        );
+    }
+
+    #[test]
+    fn request_cancel_on_pending_job_succeeds() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id = rt.block_on(mgr.create_job(
+            BatchEndpoint::Completion,
+            vec!["x".into()],
+            None,
+            None,
+            None,
+        ));
+        assert!(rt.block_on(mgr.request_cancel(&id)));
+        assert!(rt.block_on(mgr.is_cancelled(&id)));
+    }
+
+    #[test]
+    fn request_cancel_on_terminal_job_is_noop() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["done".into()], None, None, None));
+        rt.block_on(mgr.set_completed(&id));
+        // Terminal — nothing to cancel.
+        assert!(!rt.block_on(mgr.request_cancel(&id)));
+    }
+
+    #[test]
+    fn request_cancel_on_missing_job_is_noop() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        assert!(!rt.block_on(mgr.request_cancel("nonexistent")));
+        assert!(!rt.block_on(mgr.is_cancelled("nonexistent")));
     }
 }
