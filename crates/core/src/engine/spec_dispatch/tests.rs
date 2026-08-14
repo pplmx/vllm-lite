@@ -685,7 +685,15 @@ fn test_speculative_vs_non_speculative_equivalence() {
 
     assert!(!result_ns.is_empty());
     assert!(!result_sp.is_empty());
-    assert_eq!(result_ns[0].1, result_sp[0].1);
+    // Token-level equivalence: speculative decoding must produce the SAME
+    // next token as non-speculative on this agreeing fake model. Compare
+    // `.token` only — the `logprob` of a speculative-accepted draft is the
+    // documented placeholder `NEG_INFINITY` (its true logprob would
+    // require re-running the target forward pass at the accepted
+    // position), so the two paths legitimately differ there even though
+    // the sampled token is identical. `FakeModel` emits `logprob: 0.0`
+    // for every real sample, which is exactly what non-spec carries.
+    assert_eq!(result_ns[0].1.token, result_sp[0].1.token);
 }
 
 // =====================================================================

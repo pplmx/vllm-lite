@@ -41,16 +41,16 @@ impl crate::engine::Engine {
     /// **P36 v0.3 wire-type follow-up engine wire-through:** returns
     /// `Vec<(SeqId, SampledToken)>` instead of `Vec<(SeqId, TokenId)>`.
     /// Speculative-accepted draft tokens carry a placeholder
-    /// `SampledToken` with `logprob = 0.0` + `top_logprobs = vec![]`
-    /// (the logprob of an accepted draft would require re-running
-    /// the target forward pass at each accepted position, which is
-    /// non-trivial; computed-logprob for speculative accepted tokens
-    /// is deferred to a future iteration). The bonus token (sampled
-    /// by the verifier) carries the full `SampledToken` from
+    /// `SampledToken` with `logprob = NEG_INFINITY` + `top_logprobs =
+    /// vec![]` (the logprob of an accepted draft would require
+    /// re-running the target forward pass at each accepted position,
+    /// which is non-trivial; computed-logprob for speculative accepted
+    /// tokens is deferred to a future iteration). The bonus token
+    /// (sampled by the verifier) carries the full `SampledToken` from
     /// `sample_one_with_params`. The HTTP handler detects the
-    /// placeholder via `logprob == 0.0 && top_logprobs.is_empty()`
-    /// and suppresses `ChatChoice::logprobs` output for any sequence
-    /// containing one.
+    /// placeholder via a non-finite logprob
+    /// (`!logprob.is_finite()`) and suppresses `ChatChoice::logprobs`
+    /// output for any sequence containing one.
     pub(crate) fn verify_draft_tokens_logits(
         &self,
         batch: &Batch,
@@ -249,11 +249,14 @@ fn sample_or_argmax(logits: &[f32], params: &SamplingParams, seen: &[TokenId]) -
 /// Placeholder [`SampledToken`] for speculative-accepted draft tokens
 /// where the true logprob is unavailable without re-running the
 /// target forward pass at that position. Detected by the HTTP layer
-/// via `logprob == 0.0 && top_logprobs.is_empty()`.
+/// via a non-finite logprob (`!logprob.is_finite()`) — real sampled
+/// logprobs are always finite (log-softmax output), so `-INFINITY`
+/// is an unambiguous placeholder marker that cannot collide with
+/// genuine (or mock) sampled output.
 const fn placeholder_sampled(token: TokenId) -> SampledToken {
     SampledToken {
         token,
-        logprob: 0.0,
+        logprob: f32::NEG_INFINITY,
         top_logprobs: Vec::new(),
     }
 }

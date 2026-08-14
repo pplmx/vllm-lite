@@ -68,6 +68,12 @@ fn build_completion_choice_logprobs(
     req_logprobs: Option<u32>,
 ) -> Option<CompletionChoiceLogprobs> {
     let top_n = req_logprobs?;
+    // Same contract as the chat twin: speculative-accepted draft
+    // placeholders carry a fabricated logprob (0.0, no top-logprobs), so
+    // suppress the whole payload rather than emit misleading values.
+    if super::chat::contains_speculative_placeholder(sampled) {
+        return None;
+    }
     let tokens: Vec<String> = sampled
         .iter()
         .map(|s| tokenizer.decode(&[s.token]))

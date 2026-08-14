@@ -396,3 +396,47 @@ fn test_build_chat_choice_role_is_assistant_and_logprobs_omitted_when_not_asked(
     // convention only).
     assert!(choice.message.name.is_none());
 }
+
+#[test]
+fn test_chat_choice_logprobs_suppressed_when_speculative_placeholder_present() {
+    // A speculative-accepted draft token carries a placeholder
+    // `SampledToken` (`logprob = NEG_INFINITY`, empty `top_logprobs` —
+    // see `dispatch.rs`). The engine-side contract says the HTTP layer
+    // suppresses `logprobs` for any sequence containing one, so a
+    // fabricated value never reaches the client. Pin that both at the
+    // builder level and via `contains_speculative_placeholder`.
+    let tokenizer = test_tokenizer();
+    let real = chat_sampled(10, -1.5);
+    let placeholder = vllm_traits::SampledToken {
+        token: 11,
+        logprob: f32::NEG_INFINITY,
+        top_logprobs: Vec::new(),
+    };
+
+    // Builder: presence of the placeholder suppresses the whole payload.
+    let suppressed = build_chat_choice_logprobs(
+        &tokenizer,
+        &[real.clone(), placeholder.clone()],
+        Some(true),
+        None,
+    );
+    assert!(
+        suppressed.is_none(),
+        "logprobs must be suppressed when a speculative draft placeholder is in the stream"
+    );
+
+    // Helper-level guards: normal and mock (finite 0.0) tokens do NOT
+    // trip it — only the non-finite placeholder marker does.
+    assert!(!contains_speculative_placeholder(&[
+        real.clone(),
+        chat_sampled(12, -2.0)
+    ]));
+    assert!(
+        !contains_speculative_placeholder(&[chat_sampled(13, 0.0)]),
+        "a finite mock/real logprob of 0.0 must NOT be suppressed"
+    );
+    assert!(
+        contains_speculative_placeholder(&[real, placeholder]),
+        "placeholder marker is a non-finite logprob with empty top_logprobs"
+    );
+}

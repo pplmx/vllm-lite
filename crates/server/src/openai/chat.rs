@@ -42,6 +42,34 @@ fn token_ids(sampled: &[vllm_traits::SampledToken]) -> Vec<vllm_traits::TokenId>
     sampled.iter().map(|s| s.token).collect()
 }
 
+/// True iff any token in the engine's `SampledToken` stream is a
+/// speculative-accepted **draft placeholder** — a token whose logprob
+/// was never actually computed (`dispatch.rs` emits it as
+/// `logprob = F32_NEG_INFINITY`, `top_logprobs = []` for accepted
+/// drafts, because computing a real logprob would require re-running
+/// the target forward pass at each accepted position; computed-logprob
+/// for speculative accepted tokens is deferred to a future iteration).
+///
+/// The marker is a **non-finite logprob** — real sampled logprobs are
+/// always finite (log-softmax output), so `-INFINITY` cannot collide
+/// with genuine (or mock-engine) sampled output. This is what makes the
+/// suppression reliable: an earlier `logprob == 0.0` marker collided
+/// with the test mock engine's placeholder `SampledToken`s (also `0.0`,
+/// empty top-logprobs), wrongly suppressing legitimate logprobs.
+///
+/// The engine-side contract (documented on
+/// `crate::engine::Engine::step_speculative_inner`) is that the HTTP
+/// layer detects these placeholders and **suppresses** `logprobs`
+/// output for any sequence containing one — emitting a fabricated
+/// value would mislead clients. See the `ChatChoice::logprobs`
+/// suppression in [`build_chat_choice_logprobs`] and the completions
+/// twin.
+pub(super) fn contains_speculative_placeholder(sampled: &[vllm_traits::SampledToken]) -> bool {
+    sampled
+        .iter()
+        .any(|s| !s.logprob.is_finite() && s.top_logprobs.is_empty())
+}
+
 /// Build the `ChatChoiceLogprobs` payload (P36 v0.3 wire-type
 /// follow-up engine wire-through) from the engine's per-token
 /// `SampledToken` stream. Returns `None` when the request did not
@@ -58,6 +86,10 @@ fn token_ids(sampled: &[vllm_traits::SampledToken]) -> Vec<vllm_traits::TokenId>
 /// request asked). When `req.top_logprobs = Some(0)` the sub-field
 /// is `Some(vec![])` per token (request asked for top-K but capped
 /// to zero).
+///
+/// Returns `None` (suppressed) when the stream contains a
+/// speculative-accepted draft placeholder — see
+/// [`contains_speculative_placeholder`] for the rationale.
 fn build_chat_choice_logprobs(
     tokenizer: &vllm_model::tokenizer::Tokenizer,
     sampled: &[vllm_traits::SampledToken],
@@ -65,6 +97,11 @@ fn build_chat_choice_logprobs(
     req_top_logprobs: Option<u32>,
 ) -> Option<ChatChoiceLogprobs> {
     if req_logprobs != Some(true) {
+        return None;
+    }
+    // Speculative-accepted draft placeholders have no real logprob;
+    // suppress the whole logprobs payload rather than emit fabricated 0.0.
+    if contains_speculative_placeholder(sampled) {
         return None;
     }
     let include_top = req_top_logprobs.is_some_and(|n| n > 0);

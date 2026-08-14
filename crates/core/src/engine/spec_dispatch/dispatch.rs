@@ -20,16 +20,16 @@ impl crate::engine::Engine {
     /// **P36 v0.3 wire-type follow-up engine wire-through:** returns
     /// `Vec<(SeqId, SampledToken)>`. Speculative-accepted draft
     /// tokens carry a placeholder `SampledToken` with
-    /// `logprob = 0.0` + `top_logprobs = vec![]` (the logprob of an
-    /// accepted draft would require re-running the target forward
-    /// pass at each accepted position, which is non-trivial;
-    /// computed-logprob for speculative accepted tokens is deferred
-    /// to a future iteration). The bonus token (sampled by the
-    /// verifier) carries the full `SampledToken` from
+    /// `logprob = NEG_INFINITY` + `top_logprobs = vec![]` (the
+    /// logprob of an accepted draft would require re-running the
+    /// target forward pass at each accepted position, which is
+    /// non-trivial; computed-logprob for speculative accepted tokens
+    /// is deferred to a future iteration). The bonus token (sampled
+    /// by the verifier) carries the full `SampledToken` from
     /// `sample_one_with_params`. The HTTP handler detects the
-    /// placeholder via `logprob == 0.0 && top_logprobs.is_empty()`
-    /// and suppresses `ChatChoice::logprobs` output for any
-    /// sequence containing one.
+    /// placeholder via a non-finite logprob
+    /// (`!logprob.is_finite()`) and suppresses
+    /// `ChatChoice::logprobs` output for any sequence containing one.
     pub(crate) fn step_speculative_inner(
         &mut self,
         max_draft: usize,

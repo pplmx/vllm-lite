@@ -403,3 +403,36 @@ fn test_parallel_finish_choice_always_carries_text_field() {
         );
     }
 }
+
+// =============================================================================
+// P36 v0.3 wire-type follow-up — speculative placeholder suppression.
+// =============================================================================
+
+#[test]
+fn test_completion_choice_logprobs_suppressed_when_speculative_placeholder_present() {
+    // Mirrors `chat::build_chat_choice_logprobs`: a speculative-accepted
+    // draft placeholder (`logprob = NEG_INFINITY`, empty top_logprobs —
+    // see `dispatch.rs`) must suppress the whole `logprobs` payload so a
+    // fabricated value never reaches the client.
+    let tokenizer = vllm_model::tokenizer::Tokenizer::new();
+    let real = sampled(3, -0.8);
+    let placeholder = vllm_traits::SampledToken {
+        token: 7,
+        logprob: f32::NEG_INFINITY,
+        top_logprobs: Vec::new(),
+    };
+
+    let suppressed = build_completion_choice_logprobs(&tokenizer, &[real, placeholder], Some(1));
+    assert!(
+        suppressed.is_none(),
+        "completions logprobs must be suppressed when a speculative placeholder is present"
+    );
+
+    // No placeholder → logprobs rendered normally.
+    let normal = build_completion_choice_logprobs(&tokenizer, &[sampled(1, -0.1)], Some(1));
+    assert!(normal.is_some());
+
+    // A finite 0.0 (mock engine output) must NOT be suppressed.
+    let mock_like = build_completion_choice_logprobs(&tokenizer, &[sampled(2, 0.0)], Some(1));
+    assert!(mock_like.is_some());
+}
