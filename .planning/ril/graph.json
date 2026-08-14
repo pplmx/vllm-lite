@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 59,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T13:23:16+00:00",
+  "updated_at": "2026-08-14T13:26:24+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -77,7 +77,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 38,
+      "touched_round": 59,
       "title": "core/scheduler",
       "role": "queue, preemption, eviction, batch composition"
     },
@@ -4426,6 +4426,17 @@
       "source": "fdf68454dc1edab225ac863b14aa843f84873d3e; 3 new batch-cost tests; 32 cost tests; server lib 463/463; just ci exit 0",
       "title": "batch body now costs sum(prompt words) + max_tokens*N, clamped; no longer flat 1.0",
       "confidence": 1.0
+    },
+    "ISS-063": {
+      "id": "ISS-063",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T13:26:14+00:00",
+      "updated_at": "2026-08-14T13:26:14+00:00",
+      "touched_round": 59,
+      "severity": "low",
+      "title": "PreemptionManager is production-dead policy: preemption.rs (152 lines + 9 tests, allow(dead_code)) implements a config-driven surge-preemption policy (should_preempt gating on min_batch_size/max_num_seqs + memory-shortage ratio) but has ZERO production callers; its MemoryManager::should_preempt wrapper is likewise never invoked. Engine bypasses it with a direct available-blocks comparison in engine/state/batch.rs:78-84 calling execute_preemption (where ISS-052/055/056 hardening landed). min_batch_size-driven surge policy is thus a config knob that does nothing at runtime; module doc \"planned for admission-path wiring\" never happened. Candidate actions: (a) delete dead policy module + wrapper (maintainability win, but MemoryManager::should_preempt is pub -> public-API check + CHANGELOG), or (b) wire into admission gate (risks regressing hardened ISS-052/055/056). Decision-document before acting."
     }
   },
   "edges": [
@@ -6312,6 +6323,12 @@
       "to": "TASK-071",
       "type": "implements",
       "created_at": "2026-08-14T13:23:16+00:00"
+    },
+    {
+      "from": "ISS-063",
+      "to": "COMP-007",
+      "type": "located_in",
+      "created_at": "2026-08-14T13:26:24+00:00"
     }
   ]
 }
