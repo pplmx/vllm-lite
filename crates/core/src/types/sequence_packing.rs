@@ -112,8 +112,8 @@ impl SequencePackingConfigBuilder {
 mod tests {
     use super::*;
 
-    /// Serializes the from_env_* tests so they never observe each other's
-    /// transient process-wide env-var state (VLLM_SEQ_PACKING_*). Without
+    /// Serializes the `from_env_*` tests so they never observe each other's
+    /// transient process-wide env-var state (`VLLM_SEQ_PACKING_*`). Without
     /// this, `from_env_falls_back_on_parse_failure` can read a value left
     /// by `from_env_reads_env_vars` (e.g. TARGET=8 instead of default 32).
     static ENV_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
