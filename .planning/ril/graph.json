@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 59,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T13:26:24+00:00",
+  "updated_at": "2026-08-14T13:35:48+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4437,6 +4437,43 @@
       "touched_round": 59,
       "severity": "low",
       "title": "PreemptionManager is production-dead policy: preemption.rs (152 lines + 9 tests, allow(dead_code)) implements a config-driven surge-preemption policy (should_preempt gating on min_batch_size/max_num_seqs + memory-shortage ratio) but has ZERO production callers; its MemoryManager::should_preempt wrapper is likewise never invoked. Engine bypasses it with a direct available-blocks comparison in engine/state/batch.rs:78-84 calling execute_preemption (where ISS-052/055/056 hardening landed). min_batch_size-driven surge policy is thus a config knob that does nothing at runtime; module doc \"planned for admission-path wiring\" never happened. Candidate actions: (a) delete dead policy module + wrapper (maintainability win, but MemoryManager::should_preempt is pub -> public-API check + CHANGELOG), or (b) wire into admission gate (risks regressing hardened ISS-052/055/056). Decision-document before acting."
+    },
+    "TASK-072": {
+      "id": "TASK-072",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-14T13:28:48+00:00",
+      "updated_at": "2026-08-14T13:35:48+00:00",
+      "touched_round": 59,
+      "category": "security",
+      "severity": 0.75,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Batch API worker bypasses the check_context_length gate every other generation path applies: execute_one builds Request::new(prompt, max_tokens) with no max_model_len / DEFAULT_MAX_GENERATION_TOKENS ceiling. A POST /v1/batches with max_tokens=i64::MAX (or oversize prompts) against a no-max-model-len model re-opens the ISS-044 DoS (unbounded per-request scheduler burn + seq.tokens growth until OOM) on the new endpoint. Thread state.max_model_len into spawn_batch_worker->run_batch_job->execute_one and call chat::check_context_length per prompt, rejecting with 400 context_length_exceeded."
+    },
+    "CHG-070": {
+      "id": "CHG-070",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T13:34:57+00:00",
+      "updated_at": "2026-08-14T13:34:57+00:00",
+      "touched_round": 59,
+      "commit": "4855b78da26d739664637113cbab3048c1dbc6b1",
+      "title": "Batch context-length gate (TASK-072)"
+    },
+    "EV-083": {
+      "id": "EV-083",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T13:34:58+00:00",
+      "updated_at": "2026-08-14T13:34:58+00:00",
+      "touched_round": 59,
+      "source": "4855b78da26d739664637113cbab3048c1dbc6b1; new 100_000-max_tokens rejection test; 42 batch tests; server lib 464/464; just ci exit 0",
+      "title": "batch prompts pass check_context_length (max_model_len or 8192 ceiling); over-limit items fail locally, never reaching the engine",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -6329,6 +6366,12 @@
       "to": "COMP-007",
       "type": "located_in",
       "created_at": "2026-08-14T13:26:24+00:00"
+    },
+    {
+      "from": "CHG-070",
+      "to": "TASK-072",
+      "type": "implements",
+      "created_at": "2026-08-14T13:35:47+00:00"
     }
   ]
 }
