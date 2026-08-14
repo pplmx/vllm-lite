@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 55,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T11:20:17+00:00",
+  "updated_at": "2026-08-14T11:21:01+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -3926,11 +3926,11 @@
     "HYP-020": {
       "id": "HYP-020",
       "type": "hypothesis",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-14T06:56:36+00:00",
-      "updated_at": "2026-08-14T06:56:36+00:00",
-      "touched_round": 52,
+      "updated_at": "2026-08-14T11:21:01+00:00",
+      "touched_round": 55,
       "confidence": 1.0,
       "title": "gqa_attn_factor changes-output tests are flaky: they draw unseeded random weights via candle thread-local OS-entropy RNG (randn -> rand::rng()); ~0.75% of draws yield ill-conditioned attention (near-uniform, or saturated to one-hot via |qk| O(1000) after two weight matmuls) where halving score temperature with attn_factor=0.5 leaves output within 1e-5 (bit-identical when saturated), so the must-change-output assertion fails intermittently"
     },
@@ -3986,11 +3986,11 @@
     "HYP-021": {
       "id": "HYP-021",
       "type": "hypothesis",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-14T07:40:47+00:00",
-      "updated_at": "2026-08-14T07:40:47+00:00",
-      "touched_round": 52,
+      "updated_at": "2026-08-14T11:21:01+00:00",
+      "touched_round": 55,
       "confidence": 1.0,
       "title": "Speculative chunked-prefill advances the computed frontier past real prompt tokens: drafts are generated for prefill entries (drafts.rs not phase-gated) and the verifier accepts a draft when it equals the target model's continuation GUESS (verify.rs compares vs argmax, never vs the real prompt token); update_speculative then advances num_computed by input_len + accepted for a mid-chunk prefill, and requeue_partial_prefills (ISS-054) preserves the inflated frontier, so the next chunk composes from it and the real prompt tokens in between are never fed - their KV slots hold model-guess content. Independently confirmed by TWO hunt agents + reproduction test"
     },
@@ -4046,11 +4046,11 @@
     "HYP-022": {
       "id": "HYP-022",
       "type": "hypothesis",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-14T07:58:50+00:00",
-      "updated_at": "2026-08-14T07:58:50+00:00",
-      "touched_round": 53,
+      "updated_at": "2026-08-14T11:21:01+00:00",
+      "touched_round": 55,
       "confidence": 1.0,
       "title": "OTLP exporter corrupts the exported telemetry two ways: (1) it calls Counter/UpDownCounter.add() with the collector's ABSOLUTE lifetime/current value every tick, but OTel instruments (cumulative temporality) accumulate add()s server-side, so counters inflate by the sum of all observed totals and gauge-like updown counters grow unboundedly; (2) the {ratio}-unit gauges (packing_efficiency, speculative_*, throughput_speedup_ratio) are stored fixed-point as ratio*100_000 and the Prometheus exporter divides by 100_000.0, but the OTLP path records the raw integer into the f64 gauge, exporting 100,000x too large"
     },
@@ -4225,10 +4225,10 @@
     "HYP-023": {
       "id": "HYP-023",
       "type": "hypothesis",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-14T11:18:20+00:00",
-      "updated_at": "2026-08-14T11:18:20+00:00",
+      "updated_at": "2026-08-14T11:21:01+00:00",
       "touched_round": 55,
       "confidence": 0.95,
       "title": "ISS-061 root cause: three from_env_* tests race on shared VLLM_SEQ_PACKING_* process env vars under parallel test threads (SAFETY comment wrongly claimed unique var names)"
