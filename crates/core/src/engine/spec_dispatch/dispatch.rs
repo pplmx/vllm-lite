@@ -12,7 +12,7 @@
 //! 7. Records speculative metrics (efficiency, accuracy, per-request rates).
 
 use crate::error::Result;
-use vllm_traits::{BatchPhase, FinishReason, SampledToken, SeqId};
+use vllm_traits::{Batch, BatchPhase, FinishReason, SampledToken, SeqId};
 
 impl crate::engine::Engine {
     /// Speculative decode step (called from `Engine::step` when speculative mode is on).
@@ -103,83 +103,15 @@ impl crate::engine::Engine {
             })
             .collect();
 
-        let mut results = Vec::with_capacity(verified.len());
-        for (seq_id, sampled) in &verified {
-            let is_stale = stale_by_seq.get(seq_id).copied().unwrap_or(false);
-            if is_stale {
-                tracing::debug!(
-                    seq_id = %seq_id,
-                    token = %sampled.token,
-                    "Drawing stale mid-chunk prediction (not real output); not emitting"
-                );
-            } else if let Some(tx) = self.response_txs.get(seq_id) {
-                let _ = tx.try_send(sampled.clone());
-            }
-            // `results` still carries every verified entry so the
-            // per-sequence `update_speculative` below can advance the
-            // mid-chunk prefill's frontier — only client emission is gated.
-            results.push((*seq_id, sampled.clone()));
-        }
-
+        // Emit verified tokens to their client channels (gating stale
+        // mid-chunk prefill predictions, RIL ISS-057) — `results` still
+        // carries every entry so the fold below can advance frontiers.
+        let results = self.emit_verified_tokens(&verified, &stale_by_seq);
         // Multi-token scheduler input tracking (Plan 17.1-E): fold the
-        // emitted tokens into the scheduler **per sequence**. `results`
-        // carries one entry per emitted token (accepted drafts + the
-        // bonus/rejection token), and the scheduler must record every one of
-        // them; `num_computed_tokens` must advance by the number of tokens
-        // whose KV the target model actually computed during verification
-        // (`input_len + accepted`).
-        //
-        // RIL ISS-025: the old code flattened `results` into per-token
-        // `seq_ids`/`sampled` vectors but passed a per-sequence
-        // `input_counts` vector. `scheduler.update` zips the two together,
-        // so the fold truncated to one token per sequence — tokens after the
-        // first were streamed to the client but never recorded in
-        // `seq.tokens` — and `num_computed_tokens` advanced by `accepted+1`
-        // (only correct for decode batches with input_len == 1). Long
-        // prompts in speculative mode never completed prefill in one step
-        // and re-fed already-generated draft tokens back into subsequent
-        // prefill batches.
-        let mut per_seq: Vec<(SeqId, Vec<SampledToken>)> = Vec::new();
-        let mut seq_index: std::collections::HashMap<SeqId, usize> =
-            std::collections::HashMap::new();
-        for (seq_id, sampled) in &results {
-            if let Some(&i) = seq_index.get(seq_id) {
-                per_seq[i].1.push(sampled.clone());
-            } else {
-                seq_index.insert(*seq_id, per_seq.len());
-                per_seq.push((*seq_id, vec![sampled.clone()]));
-            }
-        }
-
-        for (seq_id, tokens) in &per_seq {
-            let Some(i) = batch.seq_ids.iter().position(|sid| sid == seq_id) else {
-                continue;
-            };
-            let chunk_len = batch.input_tokens.get(i).map_or(1, std::vec::Vec::len);
-            // RIL ISS-059: a MID-chunk prefill's accepted drafts occupy real
-            // upcoming prompt positions — the verifier only checked them
-            // against the target model's continuation guess, never against
-            // the prompt itself, so their KV is guessed content and the real
-            // prompt tokens would be SKIPPED if the frontier advanced past
-            // them (`requeue_partial_prefills`/ISS-054 preserves the inflated
-            // frontier, so the next chunk composes from it). Advance the
-            // frontier by the REAL chunk only; the final chunk (completes the
-            // prompt) and decode sequences keep the full
-            // `chunk_len + accepted` — there the drafts are genuine generated
-            // continuation starting at `prompt_len`. `stale_by_seq` encodes
-            // exactly this mid-chunk predicate (start + chunk < prompt_len).
-            let mid_chunk = stale_by_seq.get(seq_id).copied().unwrap_or(false);
-            let input_count = if mid_chunk {
-                chunk_len
-            } else {
-                chunk_len + accepted_counts[i]
-            };
-            self.scheduler.update_speculative(
-                std::slice::from_ref(seq_id),
-                std::slice::from_ref(tokens),
-                std::slice::from_ref(&input_count),
-            );
-        }
+        // emitted tokens into the scheduler per sequence, advancing
+        // `num_computed_tokens` by the tokens whose KV was computed
+        // (RIL ISS-025 / ISS-059).
+        self.fold_speculative_update(&batch, &results, &accepted_counts, &stale_by_seq);
 
         // P38 v0.3 wire-type engine wire-through: stop-sequence
         // finalization. Must run after `scheduler.update` (so
@@ -247,6 +179,103 @@ impl crate::engine::Engine {
         }
 
         Ok(results)
+    }
+
+    /// Send each verified token to its sequence's client channel, gating out
+    /// stale mid-chunk prefill predictions (RIL ISS-057). `verified` is a
+    /// flat token list — a sequence can contribute several entries (accepted
+    /// drafts + bonus/rejection) — and staleness is keyed by `seq_id` via its
+    /// batch entry (start + chunk < prompt_len).
+    ///
+    /// `results` still carries every verified entry so the caller's
+    /// per-sequence scheduler fold can advance the mid-chunk prefill's
+    /// frontier — only client emission is gated here.
+    fn emit_verified_tokens(
+        &self,
+        verified: &[(SeqId, SampledToken)],
+        stale_by_seq: &std::collections::HashMap<SeqId, bool>,
+    ) -> Vec<(SeqId, SampledToken)> {
+        let mut results = Vec::with_capacity(verified.len());
+        for (seq_id, sampled) in verified {
+            let is_stale = stale_by_seq.get(seq_id).copied().unwrap_or(false);
+            if is_stale {
+                tracing::debug!(
+                    seq_id = %seq_id,
+                    token = %sampled.token,
+                    "Drawing stale mid-chunk prediction (not real output); not emitting"
+                );
+            } else if let Some(tx) = self.response_txs.get(seq_id) {
+                let _ = tx.try_send(sampled.clone());
+            }
+            results.push((*seq_id, sampled.clone()));
+        }
+        results
+    }
+
+    /// Fold the step's emitted tokens into the scheduler **per sequence**
+    /// (Plan 17.1-E). `results` carries one entry per emitted token
+    /// (accepted drafts + bonus/rejection token), and the scheduler must
+    /// record every one of them; `num_computed_tokens` must advance by the
+    /// number of tokens whose KV the target model actually computed during
+    /// verification (`input_len + accepted`).
+    ///
+    /// RIL ISS-025: the old code flattened `results` into per-token
+    /// `seq_ids`/`sampled` vectors but passed a per-sequence
+    /// `input_counts` vector. `scheduler.update` zips the two together, so
+    /// the fold truncated to one token per sequence — tokens after the first
+    /// were streamed to the client but never recorded in `seq.tokens` — and
+    /// `num_computed_tokens` advanced by `accepted+1` (only correct for
+    /// decode batches with input_len == 1). Long prompts in speculative mode
+    /// never completed prefill in one step and re-fed already-generated
+    /// draft tokens back into subsequent prefill batches.
+    fn fold_speculative_update(
+        &mut self,
+        batch: &Batch,
+        results: &[(SeqId, SampledToken)],
+        accepted_counts: &[usize],
+        stale_by_seq: &std::collections::HashMap<SeqId, bool>,
+    ) {
+        let mut per_seq: Vec<(SeqId, Vec<SampledToken>)> = Vec::new();
+        let mut seq_index: std::collections::HashMap<SeqId, usize> =
+            std::collections::HashMap::new();
+        for (seq_id, sampled) in results {
+            if let Some(&i) = seq_index.get(seq_id) {
+                per_seq[i].1.push(sampled.clone());
+            } else {
+                seq_index.insert(*seq_id, per_seq.len());
+                per_seq.push((*seq_id, vec![sampled.clone()]));
+            }
+        }
+
+        for (seq_id, tokens) in &per_seq {
+            let Some(i) = batch.seq_ids.iter().position(|sid| sid == seq_id) else {
+                continue;
+            };
+            let chunk_len = batch.input_tokens.get(i).map_or(1, std::vec::Vec::len);
+            // RIL ISS-059: a MID-chunk prefill's accepted drafts occupy real
+            // upcoming prompt positions — the verifier only checked them
+            // against the target model's continuation guess, never against
+            // the prompt itself, so their KV is guessed content and the real
+            // prompt tokens would be SKIPPED if the frontier advanced past
+            // them (`requeue_partial_prefills`/ISS-054 preserves the inflated
+            // frontier, so the next chunk composes from it). Advance the
+            // frontier by the REAL chunk only; the final chunk (completes the
+            // prompt) and decode sequences keep the full
+            // `chunk_len + accepted` — there the drafts are genuine generated
+            // continuation starting at `prompt_len`. `stale_by_seq` encodes
+            // exactly this mid-chunk predicate (start + chunk < prompt_len).
+            let mid_chunk = stale_by_seq.get(seq_id).copied().unwrap_or(false);
+            let input_count = if mid_chunk {
+                chunk_len
+            } else {
+                chunk_len + accepted_counts[i]
+            };
+            self.scheduler.update_speculative(
+                std::slice::from_ref(seq_id),
+                std::slice::from_ref(tokens),
+                std::slice::from_ref(&input_count),
+            );
+        }
     }
 
     /// Grow each batch sequence's block table to cover the full speculative
