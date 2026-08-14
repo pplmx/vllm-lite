@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 56,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T12:00:35+00:00",
+  "updated_at": "2026-08-14T12:21:33+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4308,13 +4308,50 @@
     "ISS-062": {
       "id": "ISS-062",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-14T12:00:28+00:00",
-      "updated_at": "2026-08-14T12:00:28+00:00",
+      "updated_at": "2026-08-14T12:21:15+00:00",
       "touched_round": 56,
       "severity": "high",
       "title": "Batch API has no execution worker: POST /v1/batches returns honest 501 and persists no job, so GET /v1/batches/{id} and /v1/batches/{id}/results can never return a progressing batch (docs/technical-due-diligence API-01, High/P1). Handler returns 501 Not Implemented deliberately; the read endpoints still work off BatchManager for imported/legacy jobs. Longest-lived documented 'module exists but capability missing' gap not tracked in RIL."
+    },
+    "TASK-069": {
+      "id": "TASK-069",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-14T12:02:06+00:00",
+      "updated_at": "2026-08-14T12:21:33+00:00",
+      "touched_round": 56,
+      "category": "core-feature",
+      "severity": 0.7,
+      "confidence": 1.0,
+      "effort": 5,
+      "title": "Implement Batch API execution worker (ISS-062/API-01): replace the honest-501 create_batch with a tokio background task that drains a BatchJob prompts via EngineMessage::AddRequest, drives Pending->InProgress->Completed, collects SampledToken streams into BatchResultItem, and updates BatchManager state + results; keep GET /v1/batches/{id}(/results) working"
+    },
+    "CHG-067": {
+      "id": "CHG-067",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T12:21:07+00:00",
+      "updated_at": "2026-08-14T12:21:07+00:00",
+      "touched_round": 56,
+      "commit": "d921062a4a9933ab931c4c2bc73a9a5c2637fcdd",
+      "title": "Batch API execution worker (worker.rs + manager transitions + handler rewire) closes API-01 (TASK-069)"
+    },
+    "EV-080": {
+      "id": "EV-080",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T12:21:07+00:00",
+      "updated_at": "2026-08-14T12:21:07+00:00",
+      "touched_round": 56,
+      "source": "d921062a4a9933ab931c4c2bc73a9a5c2637fcdd; 30 batch tests (worker completes + engine-unavailable fail); vllm-server lib 452/452; just ci exit 0",
+      "title": "Worker drives jobs to Completed/Failed; create_batch persists+spawns+returns batch object; latent success/error vs succeeded/failed count bug fixed",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -6177,6 +6214,18 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-08-14T12:00:35+00:00"
+    },
+    {
+      "from": "CHG-067",
+      "to": "TASK-069",
+      "type": "implements",
+      "created_at": "2026-08-14T12:21:15+00:00"
+    },
+    {
+      "from": "CHG-067",
+      "to": "ISS-062",
+      "type": "resolves",
+      "created_at": "2026-08-14T12:21:15+00:00"
     }
   ]
 }
