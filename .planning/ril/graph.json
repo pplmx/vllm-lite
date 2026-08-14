@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 52,
+  "round": 54,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T08:02:30+00:00",
+  "updated_at": "2026-08-14T08:40:41+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4050,7 +4050,7 @@
       "version": 1,
       "created_at": "2026-08-14T07:58:50+00:00",
       "updated_at": "2026-08-14T07:58:50+00:00",
-      "touched_round": 52,
+      "touched_round": 53,
       "confidence": 1.0,
       "title": "OTLP exporter corrupts the exported telemetry two ways: (1) it calls Counter/UpDownCounter.add() with the collector's ABSOLUTE lifetime/current value every tick, but OTel instruments (cumulative temporality) accumulate add()s server-side, so counters inflate by the sum of all observed totals and gauge-like updown counters grow unboundedly; (2) the {ratio}-unit gauges (packing_efficiency, speculative_*, throughput_speedup_ratio) are stored fixed-point as ratio*100_000 and the Prometheus exporter divides by 100_000.0, but the OTLP path records the raw integer into the f64 gauge, exporting 100,000x too large"
     },
@@ -4123,6 +4123,57 @@
       "touched_round": 52,
       "commit": "644485f8",
       "title": "OTLP exporter delta-feed + ratio scale: prev_values tracking, counter_delta/updown_delta (signed) pure helpers, gauge scale via {ratio} unit; 3 new unit tests; verified with --features opentelemetry (10 tests)"
+    },
+    "TASK-064": {
+      "id": "TASK-064",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-14T08:39:04+00:00",
+      "updated_at": "2026-08-14T08:39:11+00:00",
+      "touched_round": 53,
+      "title": "Adopt cargo-fixit as preferred auto-fix path (just autofix)",
+      "category": "dx",
+      "priority_score": 2
+    },
+    "DEC-042": {
+      "id": "DEC-042",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T08:39:04+00:00",
+      "updated_at": "2026-08-14T08:39:04+00:00",
+      "touched_round": 53,
+      "title": "Autofix tooling: prefer cargo-fixit over cargo fix + cargo clippy --fix",
+      "rationale": "cargo-fixit (crate-ci, rust-lang/cargo#13214 prototype) harvests machine-applicable rustfix suggestions from one JSON-diagnostic pass, batches only transitively-independent packages, and reverts files on failed recompiles; it is a strictly faster drop-in replacement for the two-step cargo fix + cargo clippy --fix in just autofix. Validated against the full vllm-lite workspace: --clippy pass applied one real fix (repeat_n in chunked_prefill_no_stale_stream), plain check pass clean, full just ci green.",
+      "alternatives_rejected": [
+        "legacy cargo fix (slower, no batching)",
+        "cargo clippy --fix (same rustfix engine but slower startup; cannot share one pass across rustc+clippy)",
+        "keep manual fixes only (loses automation)"
+      ]
+    },
+    "EV-077": {
+      "id": "EV-077",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T08:39:04+00:00",
+      "updated_at": "2026-08-14T08:39:04+00:00",
+      "touched_round": 53,
+      "title": "cargo-fixit validated on full workspace (1 fix + green CI)",
+      "source": "cargo fixit --clippy --all-targets --workspace --all-features (commit 1ec82408); cargo fixit (check) no-op; just ci exit 0",
+      "confidence": 1.0
+    },
+    "CHG-063": {
+      "id": "CHG-063",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T08:39:11+00:00",
+      "updated_at": "2026-08-14T08:39:11+00:00",
+      "touched_round": 53,
+      "title": "just autofix prefers cargo-fixit with cargo fix fallback",
+      "commit": "9b264ec0"
     }
   },
   "edges": [
@@ -5931,6 +5982,12 @@
       "to": "ISS-060",
       "type": "resolves",
       "created_at": "2026-08-14T08:02:30+00:00"
+    },
+    {
+      "from": "CHG-063",
+      "to": "TASK-064",
+      "type": "implements",
+      "created_at": "2026-08-14T08:39:11+00:00"
     }
   ]
 }
