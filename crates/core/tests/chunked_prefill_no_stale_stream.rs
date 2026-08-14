@@ -158,7 +158,7 @@ fn chunked_prefill_never_streams_stale_midchunk_predictions() {
         received,
         {
             let mut expect = vec![PREFILL_MARK];
-            expect.extend(std::iter::repeat(DECODE_MARK).take(7));
+            expect.extend(std::iter::repeat_n(DECODE_MARK, 7));
             expect
         },
         "the client stream must contain exactly max_tokens real output tokens \
