@@ -185,7 +185,7 @@ impl crate::engine::Engine {
     /// stale mid-chunk prefill predictions (RIL ISS-057). `verified` is a
     /// flat token list — a sequence can contribute several entries (accepted
     /// drafts + bonus/rejection) — and staleness is keyed by `seq_id` via its
-    /// batch entry (start + chunk < prompt_len).
+    /// batch entry (start + chunk < `prompt_len`).
     ///
     /// `results` still carries every verified entry so the caller's
     /// per-sequence scheduler fold can advance the mid-chunk prefill's
@@ -225,7 +225,7 @@ impl crate::engine::Engine {
     /// the fold truncated to one token per sequence — tokens after the first
     /// were streamed to the client but never recorded in `seq.tokens` — and
     /// `num_computed_tokens` advanced by `accepted+1` (only correct for
-    /// decode batches with input_len == 1). Long prompts in speculative mode
+    /// decode batches with `input_len` == 1). Long prompts in speculative mode
     /// never completed prefill in one step and re-fed already-generated
     /// draft tokens back into subsequent prefill batches.
     fn fold_speculative_update(
