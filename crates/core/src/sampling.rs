@@ -615,14 +615,19 @@ pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty
 /// `seen_tokens`, regardless of how many times each id appeared
 /// (`OpenAI` `presence_penalty` semantic).
 ///
-/// **Difference from [`apply_repeat_penalty`]:** `apply_repeat_penalty`
-/// is *frequency-style* — divides the logit by `penalty` once per
-/// occurrence. `apply_presence_penalty` is *presence-style* —
-/// subtracts `penalty` from the logit of each distinct seen token
-/// exactly once, regardless of count. Per `OpenAI`'s spec for
-/// `presence_penalty`: "Positive values penalize new tokens based on
-/// whether they appear in the prompt so far, increasing the model's
-/// likelihood to talk about new topics."
+/// **Difference from [`apply_repeat_penalty`]:** both are applied to
+/// each *distinct* seen token exactly once (duplicates are deduped via
+/// an internal `HashSet`), but `apply_repeat_penalty` is
+/// *sign-aware multiplicative* — it divides positive logits by
+/// `penalty` and multiplies negative logits by it — whereas
+/// `apply_presence_penalty` is *additive* — it subtracts `penalty`
+/// from the logit of each distinct seen token. Neither is
+/// per-occurrence: `apply_repeat_penalty` is a per-distinct
+/// APPROXIMATION of `OpenAI`'s per-occurrence `frequency_penalty`
+/// (see `vllm_server::openai::sampling_validation` for the mapping).
+/// Per `OpenAI`'s spec for `presence_penalty`: "Positive values
+/// penalize new tokens based on whether they appear in the prompt so
+/// far, increasing the model's likelihood to talk about new topics."
 ///
 /// Negative values *encourage* repetition by raising the logits of
 /// seen tokens (because subtracting a negative is the same as
