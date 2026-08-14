@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 52,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T06:59:47+00:00",
+  "updated_at": "2026-08-14T08:02:30+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 36,
+      "touched_round": 52,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -1821,7 +1821,7 @@
       "version": 1,
       "created_at": "2026-08-10T10:39:57+00:00",
       "updated_at": "2026-08-10T10:39:57+00:00",
-      "touched_round": 31,
+      "touched_round": 52,
       "title": "vllm-core engine/speculative dispatch + scheduler update",
       "role": "speculative decoding step orchestration and scheduler state fold"
     },
@@ -3982,6 +3982,147 @@
       "touched_round": 52,
       "commit": "185c771b",
       "title": "Deterministic fixtures for GQA attn_factor sensitivity tests: replace unseeded randn with deterministic_flat (amplitude 0.25) shared across standard/paged/tiled/flash paths; verified margins 0.33/0.021; full nextest 2126/2126 green"
+    },
+    "HYP-021": {
+      "id": "HYP-021",
+      "type": "hypothesis",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T07:40:47+00:00",
+      "updated_at": "2026-08-14T07:40:47+00:00",
+      "touched_round": 52,
+      "confidence": 1.0,
+      "title": "Speculative chunked-prefill advances the computed frontier past real prompt tokens: drafts are generated for prefill entries (drafts.rs not phase-gated) and the verifier accepts a draft when it equals the target model's continuation GUESS (verify.rs compares vs argmax, never vs the real prompt token); update_speculative then advances num_computed by input_len + accepted for a mid-chunk prefill, and requeue_partial_prefills (ISS-054) preserves the inflated frontier, so the next chunk composes from it and the real prompt tokens in between are never fed - their KV slots hold model-guess content. Independently confirmed by TWO hunt agents + reproduction test"
+    },
+    "EV-074": {
+      "id": "EV-074",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T07:40:47+00:00",
+      "updated_at": "2026-08-14T07:40:47+00:00",
+      "touched_round": 52,
+      "confidence": 1.0,
+      "source": "crates/core/src/engine/spec_dispatch/tests.rs::speculative_chunked_prefill_feeds_every_real_prompt_position (recording model); pre-fix observed verify chunk starts [(0,19),(19,19),(38,19),(57,19),(76,27),(103,4)] (skip real prompt positions; start 19 not a multiple of chunk 16); post-fix starts [(0,16),(16,16),(32,16),(48,16),(64,16),(80,20)] tile [0,100) exactly",
+      "title": "Frontier overshoot measured: pre-fix mid-chunk starts skip real prompt tokens (19,38,57,...); full nextest also ran 2126/2126 with the fix"
+    },
+    "ISS-059": {
+      "id": "ISS-059",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-14T07:41:49+00:00",
+      "updated_at": "2026-08-14T07:46:55+00:00",
+      "touched_round": 52,
+      "title": "Speculative + chunked prefill advances num_computed_tokens past real prompt tokens (frontier overshoot): drafts are generated for mid-chunk prefills, the verifier accepts them against the target's continuation guess (not the real prompt), and update_speculative folds input_len + accepted into advance_computed_tokens; requeue preserves the inflated frontier, so the next chunk composes from it and the skipped real prompt positions are NEVER fed (their KV slots hold guessed content) - with self-spec greedy this corrupts every chunked prompt. Round 51's ISS-057 masked only the client emission, not the frontier advance"
+    },
+    "TASK-062": {
+      "id": "TASK-062",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-14T07:41:49+00:00",
+      "updated_at": "2026-08-14T07:46:55+00:00",
+      "touched_round": 52,
+      "category": "correctness",
+      "severity": 4,
+      "confidence": 1.0,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "priority_score": 25.0,
+      "title": "Cap the speculative prefill frontier advance to the REAL chunk: in step_speculative_inner, for a mid-chunk prefill (stale_by_seq predicate: start + chunk < prompt_len) pass input_count = chunk_len (drop the accepted drafts - they are guesses at real upcoming prompt positions, not real input); the final chunk and decode keep chunk_len + accepted (genuine continuation). Fixes the prompt-context corruption in speculative chunked-prefill (ISS-059)"
+    },
+    "CHG-061": {
+      "id": "CHG-061",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T07:46:55+00:00",
+      "updated_at": "2026-08-14T07:46:55+00:00",
+      "touched_round": 52,
+      "commit": "c2794f1a",
+      "title": "Cap speculative prefill frontier to the real chunk (mid-chunk passes input_count=chunk_len, reusing the stale_by_seq predicate; final chunk/decode keep +accepted); regression recording-model test; full nextest 2127/2127"
+    },
+    "HYP-022": {
+      "id": "HYP-022",
+      "type": "hypothesis",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T07:58:50+00:00",
+      "updated_at": "2026-08-14T07:58:50+00:00",
+      "touched_round": 52,
+      "confidence": 1.0,
+      "title": "OTLP exporter corrupts the exported telemetry two ways: (1) it calls Counter/UpDownCounter.add() with the collector's ABSOLUTE lifetime/current value every tick, but OTel instruments (cumulative temporality) accumulate add()s server-side, so counters inflate by the sum of all observed totals and gauge-like updown counters grow unboundedly; (2) the {ratio}-unit gauges (packing_efficiency, speculative_*, throughput_speedup_ratio) are stored fixed-point as ratio*100_000 and the Prometheus exporter divides by 100_000.0, but the OTLP path records the raw integer into the f64 gauge, exporting 100,000x too large"
+    },
+    "EV-075": {
+      "id": "EV-075",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T07:58:50+00:00",
+      "updated_at": "2026-08-14T07:58:50+00:00",
+      "touched_round": 52,
+      "confidence": 1.0,
+      "source": "crates/core/src/metrics/exporter/otlp.rs export loop (+ prometheus.rs 122/127/132/139 dividing by 100_000.0); memory-agent report independently confirmed; unit tests now pin counter_delta/updown_delta/ratio_scale_for semantics",
+      "title": "OTLP loop previously did c.add(absolute)/u.add(snapshot)/g.record(fixed_point as f64); fixed to deltas-from-prev + ratio scale; 10 exporter tests green"
+    },
+    "ISS-060": {
+      "id": "ISS-060",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-14T07:58:50+00:00",
+      "updated_at": "2026-08-14T08:02:30+00:00",
+      "touched_round": 52,
+      "title": "OTLP exporter double-counts counters (feeds absolute lifetime totals into accumulating Counter/UpDownCounter add()) and drops the 100,000 fixed-point scale on the {ratio} gauges: a monotonic counter like requests_total that reaches 300 is exported as 100 then 100+200=300 (cumulative sum of absolute totals), and packing_efficiency 0.85 is exported as 85000.0 instead of 0.85. Operators scraping the collector see inflating monotonic counters, unbounded gauge-like sums, and 100,000x too-large ratios - the OTel path disagrees with the Prometheus path for the same series"
+    },
+    "TASK-063": {
+      "id": "TASK-063",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-14T07:58:50+00:00",
+      "updated_at": "2026-08-14T08:02:30+00:00",
+      "touched_round": 52,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 2,
+      "unlock_factor": 1.0,
+      "title": "Fix OTLP export semantics: feed Counter/UpDownCounter the DELTA since the previous tick (track prev values; signed for updown so decreases propagate) and divide {ratio} gauges by 100_000.0 to match the Prometheus exporter; add pure-function tests for counter_delta/updown_delta/ratio_scale_for (ISS-060)"
+    },
+    "ISS-061": {
+      "id": "ISS-061",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T08:00:02+00:00",
+      "updated_at": "2026-08-14T08:00:02+00:00",
+      "touched_round": 52,
+      "title": "sequence_packing env-var tests race on shared process env: from_env_reads_env_vars / from_env_uses_defaults_when_vars_unset / from_env_falls_back_on_parse_failure all mutate the same VLLM_SEQ_PACKING_* vars concurrently (cargo test runs threads in parallel; the SAFETY comments claim single-threaded execution), so a run intermittently reads a stale value - observed from_env_falls_back_on_parse_failure reading TARGET=8 instead of the default 32 (left by another test) and the earlier full-suite run failing. CI-flake class identical to the GQA randn one (ISS-058)"
+    },
+    "EV-076": {
+      "id": "EV-076",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T08:00:02+00:00",
+      "updated_at": "2026-08-14T08:00:02+00:00",
+      "touched_round": 52,
+      "confidence": 1.0,
+      "source": "crates/core/src/types/sequence_packing.rs tests: reproduced twice in full-lib runs (from_env_falls_back_on_parse_failure left:8 right:32); passes in isolation and when scheduled without interleaving",
+      "title": "sequence_packing env tests observed failing with stale env values under parallel test execution"
+    },
+    "CHG-062": {
+      "id": "CHG-062",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T08:02:30+00:00",
+      "updated_at": "2026-08-14T08:02:30+00:00",
+      "touched_round": 52,
+      "commit": "644485f8",
+      "title": "OTLP exporter delta-feed + ratio scale: prev_values tracking, counter_delta/updown_delta (signed) pure helpers, gauge scale via {ratio} unit; 3 new unit tests; verified with --features opentelemetry (10 tests)"
     }
   },
   "edges": [
@@ -5724,6 +5865,72 @@
       "to": "ISS-058",
       "type": "resolves",
       "created_at": "2026-08-14T06:59:47+00:00"
+    },
+    {
+      "from": "EV-074",
+      "to": "HYP-021",
+      "type": "validates",
+      "created_at": "2026-08-14T07:40:47+00:00"
+    },
+    {
+      "from": "TASK-062",
+      "to": "ISS-059",
+      "type": "addresses",
+      "created_at": "2026-08-14T07:41:49+00:00"
+    },
+    {
+      "from": "ISS-059",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-14T07:41:49+00:00"
+    },
+    {
+      "from": "CHG-061",
+      "to": "TASK-062",
+      "type": "implements",
+      "created_at": "2026-08-14T07:46:55+00:00"
+    },
+    {
+      "from": "CHG-061",
+      "to": "ISS-059",
+      "type": "resolves",
+      "created_at": "2026-08-14T07:46:55+00:00"
+    },
+    {
+      "from": "EV-075",
+      "to": "HYP-022",
+      "type": "validates",
+      "created_at": "2026-08-14T07:58:50+00:00"
+    },
+    {
+      "from": "TASK-063",
+      "to": "ISS-060",
+      "type": "addresses",
+      "created_at": "2026-08-14T07:58:50+00:00"
+    },
+    {
+      "from": "ISS-060",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-14T07:58:50+00:00"
+    },
+    {
+      "from": "ISS-061",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-14T08:00:02+00:00"
+    },
+    {
+      "from": "CHG-062",
+      "to": "TASK-063",
+      "type": "implements",
+      "created_at": "2026-08-14T08:02:30+00:00"
+    },
+    {
+      "from": "CHG-062",
+      "to": "ISS-060",
+      "type": "resolves",
+      "created_at": "2026-08-14T08:02:30+00:00"
     }
   ]
 }
