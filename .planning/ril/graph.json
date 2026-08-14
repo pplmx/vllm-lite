@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 55,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T11:21:01+00:00",
+  "updated_at": "2026-08-14T11:43:14+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4244,6 +4244,43 @@
       "rationale": "TASK-065 is an accidental duplicate of TASK-066 created by a failed first attempt at  (node was written, then the command errored on severity parse). The real fix (ENV_TEST_MUTEX in sequence_packing.rs, CHG-064) lives under TASK-066. TASK-065 is marked abandoned rather than executed, keeping the audit trail.",
       "alternatives_rejected": "delete TASK-065 = no CLI delete exists and direct graph.json edit is forbidden; leave it active = would double-count the same work",
       "title": "TASK-065 abandoned as duplicate of TASK-066"
+    },
+    "TASK-067": {
+      "id": "TASK-067",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-14T11:32:01+00:00",
+      "updated_at": "2026-08-14T11:42:52+00:00",
+      "touched_round": 55,
+      "category": "maintainability",
+      "severity": 0.4,
+      "confidence": 1.0,
+      "effort": 2,
+      "title": "Reduce step_speculative_inner cognitive complexity (31/25) in crates/core/src/engine/spec_dispatch/dispatch.rs:33 — regrew above threshold when ISS-057/ISS-059 fixes stacked on the round-26 zero-complexity baseline; extract the self-contained emission loop and per-sequence scheduler-fold loop into private helpers, keeping the hot-path logic identical (risk: most bug-dense function; guard with full spec_dispatch test suite)"
+    },
+    "CHG-065": {
+      "id": "CHG-065",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T11:42:31+00:00",
+      "updated_at": "2026-08-14T11:42:31+00:00",
+      "touched_round": 55,
+      "commit": "a50d7970695116021509f947607dc3da3223a281",
+      "title": "step_speculative_inner complexity 31→<25 via emit_verified_tokens + fold_speculative_update extraction (TASK-067)"
+    },
+    "EV-079": {
+      "id": "EV-079",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T11:42:31+00:00",
+      "updated_at": "2026-08-14T11:42:31+00:00",
+      "touched_round": 55,
+      "source": "a50d7970695116021509f947607dc3da3223a281; cargo clippy (complexity warning gone); vllm-core lib 440/440; chunked_prefill_no_stale_stream ISS-057 ok; just ci exit 0",
+      "title": "Refactor is behavior-preserving: no cognitive_complexity warning remains and every speculative regression test passes",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -6088,6 +6125,12 @@
       "to": "TASK-065",
       "type": "governs",
       "created_at": "2026-08-14T11:20:17+00:00"
+    },
+    {
+      "from": "CHG-065",
+      "to": "TASK-067",
+      "type": "implements",
+      "created_at": "2026-08-14T11:42:52+00:00"
     }
   ]
 }
