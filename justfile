@@ -115,12 +115,25 @@ doctest:
 
 # Auto-fix all fixable lints and format issues. Mutates the working tree —
 # use `just quick` if you want a non-mutating verification pass instead.
+#
+# Preferred path uses `cargo-fixit` (github.com/crate-ci/cargo-fixit), a faster
+# drop-in replacement for `cargo fix` + `cargo clippy --fix` (harvests
+# machine-applicable rustfix suggestions from one JSON diagnostic pass and
+# batches independent packages). Falls back to the legacy two-step commands
+# when cargo-fixit isn't installed. Install via:
+#   cargo install cargo-fixit --locked
+# Its own MSRV is 1.95, but the installed prebuilt binary drives any cargo.
 autofix:
-	cargo fix --allow-dirty --allow-staged --all-targets --workspace --all-features
-	cargo clippy --fix --allow-dirty --allow-staged --all-targets --workspace --all-features -- \
-		-D clippy::correctness \
-		-D clippy::suspicious \
-		-D clippy::perf
+	@if command -v cargo-fixit >/dev/null 2>&1; then \
+		cargo fixit --clippy --all-targets --workspace --all-features --allow-dirty --allow-staged; \
+	else \
+		echo "cargo-fixit not found; falling back to cargo fix + cargo clippy --fix"; \
+		cargo fix --allow-dirty --allow-staged --all-targets --workspace --all-features; \
+		cargo clippy --fix --allow-dirty --allow-staged --all-targets --workspace --all-features -- \
+			-D clippy::correctness \
+			-D clippy::suspicious \
+			-D clippy::perf; \
+	fi
 	cargo fmt --all
 
 # Legacy alias for `autofix`. Kept so existing muscle-memory commands still work.
