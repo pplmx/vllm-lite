@@ -3,64 +3,87 @@
 //! Each handler is a thin wrapper over `BatchManager` plus RBAC + rate-limit middleware.
 use axum::{Json, extract::State};
 
-use super::types::{BatchResponse, BatchResults, BatchStatus, RequestCounts, SimpleBatchRequest};
+use super::manager::BatchManager;
+use super::types::{
+    BatchEndpoint, BatchJob, BatchResponse, BatchResults, BatchStatus, RequestCounts,
+    SimpleBatchRequest,
+};
 use crate::ApiState;
 use crate::openai::types::ErrorResponse;
 
 /// Create batch.
 ///
-/// API-01 (technical due diligence): the Batch API surface accepts
-/// requests, validates them, and persists a `BatchJob` in memory —
-/// but the project has no background worker that would advance
-/// `BatchJob` state from `Pending` -> `InProgress` -> `Completed`.
-/// Without a worker, a successful `create_batch` returns `pending`
-/// that never resolves, `get_batch` reports a status that is never
-/// updated, and `get_batch_results` returns an empty array forever.
-///
-/// The honest options are:
-///   1. Return `200 OK` and silently leave the job stuck (current
-///      behaviour — the technical due diligence calls this out as
-///      misleadingly compatible with the `OpenAI` Batch API).
-///   2. Return `501 Not Implemented` so SDKs and operators see an
-///      explicit, machine-readable "this endpoint exists but the
-///      server does not implement it" signal.
-///   3. Implement the worker (a real tokio task that drains the
-///      job's prompts into the engine and updates state).
-///
-/// We choose (2) for now: the handler still validates the request
-/// shape and returns the missing-piece error code so SDKs can
-/// distinguish "your request was malformed" from "the server is
-/// not yet capable". Once a worker lands, this handler can flip
-/// back to (1) without changing the surrounding types.
-///
-/// `GET /v1/batches/{id}` and `GET /v1/batches/{id}/results`
-/// continue to return whatever state the job has today, since those
-/// endpoints are useful for inspecting legacy or imported jobs and
-/// are also wired through `BatchManager` (read-only).
+/// API-01 (technical due diligence): this endpoint used to return
+/// `501 Not Implemented` because the project had no background worker
+/// to advance a `BatchJob` from `Pending` -> `InProgress` ->
+/// `Completed`. That worker now lives in [`super::worker`]: this
+/// handler persists the job, spawns the worker, and returns the
+/// `200 OK` batch object immediately.
 ///
 /// # Errors
 ///
-/// Always returns `501 Not Implemented` (error code `server_error`)
-/// because the Batch API executor is not yet implemented. The
-/// request is validated for shape but never persisted; callers
-/// should retry after the executor ships.
+/// Returns `400 Bad Request` (`invalid_request_error`) when the
+/// request has no prompts to run.
 ///
-/// Must be `async` for axum 0.8 `Handler` trait compatibility.
-/// The body returns immediately without `.await` (all work is synchronous).
+/// Must be `async` for axum 0.8 `Handler` trait compatibility. The
+/// worker runs in the background; the handler never awaits it.
 #[allow(clippy::unused_async)]
 pub async fn create_batch(
-    State(_state): State<ApiState>,
-    Json(_req): Json<SimpleBatchRequest>,
+    State(state): State<ApiState>,
+    Json(req): Json<SimpleBatchRequest>,
 ) -> Result<Json<BatchResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    Err((
-        axum::http::StatusCode::NOT_IMPLEMENTED,
-        Json(ErrorResponse::new(
-            "Batch API executor is not implemented; the server can \
-             persist the job but no worker advances state from \
-             pending to completed. Track the implementation in \
-             docs/technical-due-diligence/architecture-performance.md#api-01.",
-            "server_error",
-        )),
+    if req.prompts.is_empty() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "At least one prompt is required to create a batch",
+                "invalid_request_error",
+            )),
+        ));
+    }
+
+    let job_id = state
+        .batch_manager
+        .create_job(
+            req.endpoint,
+            req.prompts,
+            req.model,
+            req.max_tokens,
+            req.temperature,
+        )
+        .await;
+
+    // The manager retains the authoritative copy; hand the worker a clone.
+    let job = state.batch_manager.get_job(&job_id).await.ok_or_else(|| {
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse::new(
+                "batch was created but could not be read back from the manager",
+                "server_error",
+            )),
+        )
+    })?;
+    // Deliberately fire-and-forget: the worker owns the job's execution and
+    // the handler must return immediately with the batch object. The returned
+    // `JoinHandle` is intentionally dropped (JoinHandle is a Future, so use
+    // `drop` — clippy::let_underscore_future).
+    drop(super::worker::spawn_batch_worker(&state, job));
+
+    Ok(Json(
+        batch_to_response(&job_id, &state.batch_manager, || BatchResponse {
+            id: job_id.clone(),
+            object: "batch".to_string(),
+            // Fallback endpoint used only in the (impossible) race where
+            // the job vanished right after creation; the Chat marker is
+            // arbitrary since no real job exists to describe.
+            endpoint: BatchEndpoint::Chat,
+            status: "pending".to_string(),
+            created_at: crate::util::time::unix_now_secs(),
+            expires_at: crate::util::time::unix_now_secs() + 86_400,
+            completed_at: None,
+            request_counts: None,
+        })
+        .await,
     ))
 }
 
@@ -72,7 +95,7 @@ pub async fn get_batch(
     State(state): State<ApiState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Json<BatchResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    let job = state.batch_manager.get_job(&id).await.ok_or_else(|| {
+    state.batch_manager.get_job(&id).await.ok_or_else(|| {
         (
             axum::http::StatusCode::NOT_FOUND,
             Json(ErrorResponse::new(
@@ -82,32 +105,19 @@ pub async fn get_batch(
         )
     })?;
 
-    let status = match job.status {
-        BatchStatus::Pending => "pending",
-        BatchStatus::InProgress => "in_progress",
-        BatchStatus::Completed => "completed",
-        BatchStatus::Failed => "failed",
-    };
-
-    let completed =
-        i32::try_from(job.results.iter().filter(|r| r.status == "success").count()).unwrap_or(0);
-    let failed =
-        i32::try_from(job.results.iter().filter(|r| r.status == "error").count()).unwrap_or(0);
-
-    Ok(Json(BatchResponse {
-        id: job.id,
-        object: "batch".to_string(),
-        endpoint: job.endpoint,
-        status: status.to_string(),
-        created_at: job.created_at,
-        expires_at: job.created_at + 86400,
-        completed_at: job.completed_at,
-        request_counts: Some(RequestCounts {
-            total: i32::try_from(job.prompts.len()).unwrap_or(i32::MAX),
-            completed,
-            failed,
-        }),
-    }))
+    Ok(Json(
+        batch_to_response(&id, &state.batch_manager, || BatchResponse {
+            id: id.clone(),
+            object: "batch".to_string(),
+            endpoint: BatchEndpoint::Chat,
+            status: "not_found".to_string(),
+            created_at: 0,
+            expires_at: crate::util::time::unix_now_secs() + 86_400,
+            completed_at: None,
+            request_counts: None,
+        })
+        .await,
+    ))
 }
 
 /// Get batch results.
@@ -128,16 +138,10 @@ pub async fn get_batch_results(
         )
     })?;
 
-    let status = match job.status {
-        BatchStatus::Pending => "pending",
-        BatchStatus::InProgress => "in_progress",
-        BatchStatus::Completed => "completed",
-        BatchStatus::Failed => "failed",
-    };
-
+    let status = status_str(&job).to_string();
     Ok(Json(BatchResults {
         batch_id: job.id,
-        status: status.to_string(),
+        status,
         results: job.results,
     }))
 }
@@ -148,31 +152,19 @@ pub async fn get_batch_results(
 /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
 pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchResponse>> {
     let jobs = state.batch_manager.get_all_jobs().await;
-    // See `crate::util::time::unix_now_secs` for the panic-free contract.
-    let now = crate::util::time::unix_now_secs();
 
     let responses: Vec<BatchResponse> = jobs
         .into_iter()
         .map(|job| {
-            let status = match job.status {
-                BatchStatus::Pending => "pending",
-                BatchStatus::InProgress => "in_progress",
-                BatchStatus::Completed => "completed",
-                BatchStatus::Failed => "failed",
-            };
-            let completed =
-                i32::try_from(job.results.iter().filter(|r| r.status == "success").count())
-                    .unwrap_or(0);
-            let failed = i32::try_from(job.results.iter().filter(|r| r.status == "error").count())
-                .unwrap_or(0);
-
+            let (completed, failed) = counts(&job);
+            let status = status_str(&job).to_string();
             BatchResponse {
                 id: job.id,
                 object: "batch".to_string(),
                 endpoint: job.endpoint,
-                status: status.to_string(),
+                status,
                 created_at: job.created_at,
-                expires_at: now + 86400,
+                expires_at: crate::util::time::unix_now_secs() + 86_400,
                 completed_at: job.completed_at,
                 request_counts: Some(RequestCounts {
                     total: i32::try_from(job.prompts.len()).unwrap_or(i32::MAX),
@@ -186,22 +178,72 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchRespon
     Json(responses)
 }
 
+/// Build a [`BatchResponse`] from the manager's live copy of a job.
+/// `fallback` is only touched in the impossible race where the job
+/// vanished between the call and the read-back (it documents the
+/// intended shape without panicking).
+async fn batch_to_response<F>(job_id: &str, manager: &BatchManager, fallback: F) -> BatchResponse
+where
+    F: FnOnce() -> BatchResponse,
+{
+    let Some(job) = manager.get_job(job_id).await else {
+        return fallback();
+    };
+    let (completed, failed) = counts(&job);
+    let status = status_str(&job).to_string();
+    BatchResponse {
+        id: job.id,
+        object: "batch".to_string(),
+        endpoint: job.endpoint,
+        status,
+        created_at: job.created_at,
+        expires_at: crate::util::time::unix_now_secs() + 86_400,
+        completed_at: job.completed_at,
+        request_counts: Some(RequestCounts {
+            total: i32::try_from(job.prompts.len()).unwrap_or(i32::MAX),
+            completed,
+            failed,
+        }),
+    }
+}
+
+/// OpenAI-compatible status string for a job's lifecycle state.
+const fn status_str(job: &BatchJob) -> &'static str {
+    match job.status {
+        BatchStatus::Pending => "pending",
+        BatchStatus::InProgress => "in_progress",
+        BatchStatus::Completed => "completed",
+        BatchStatus::Failed => "failed",
+    }
+}
+
+/// Counted results, matching the status strings the worker writes
+/// (`"succeeded"` / `"failed"`).
+fn counts(job: &BatchJob) -> (i32, i32) {
+    let completed = i32::try_from(
+        job.results
+            .iter()
+            .filter(|r| r.status == "succeeded")
+            .count(),
+    )
+    .unwrap_or(0);
+    let failed =
+        i32::try_from(job.results.iter().filter(|r| r.status == "failed").count()).unwrap_or(0);
+    (completed, failed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::openai::batch::types::BatchEndpoint;
+    use crate::test_fixtures;
 
     fn create_test_state() -> crate::ApiState {
-        crate::test_fixtures::api_state(vllm_model::config::Architecture::Qwen3)
+        test_fixtures::api_state(vllm_model::config::Architecture::Qwen3)
     }
 
     #[tokio::test]
-    async fn test_create_batch_empty_prompts_returns_501_until_executor_exists() {
-        // API-01: with the executor unimplemented, empty-prompt
-        // rejection (which used to be a 400) is now subsumed by the
-        // 501 short-circuit. Once the executor lands, restore the
-        // empty-prompt -> 400 path by re-introducing the validator
-        // *before* the 501 return.
+    async fn test_create_batch_empty_prompts_returns_400() {
         let state = create_test_state();
         let req = SimpleBatchRequest {
             prompts: vec![],
@@ -214,16 +256,13 @@ mod tests {
         let result = create_batch(State(state), Json(req)).await;
         assert!(result.is_err());
         let (status, _) = result.unwrap_err();
-        assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED);
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
-    async fn test_create_batch_returns_501_until_executor_exists() {
-        // API-01: the Batch API surface persists jobs but has no
-        // worker to advance them. Until that lands we surface a
-        // 501 instead of misleadingly returning a job that will
-        // stay pending forever.
+    async fn test_create_batch_persists_job_and_returns_pending() {
         let state = create_test_state();
+        let manager = std::sync::Arc::clone(&state.batch_manager);
         let req = SimpleBatchRequest {
             prompts: vec!["Hello".to_string(), "World".to_string()],
             endpoint: BatchEndpoint::Completion,
@@ -233,12 +272,12 @@ mod tests {
         };
 
         let result = create_batch(State(state), Json(req)).await;
-        let (status, _) = result.expect_err("create_batch must reject with an error");
-        assert_eq!(
-            status,
-            axum::http::StatusCode::NOT_IMPLEMENTED,
-            "create_batch must return 501 until a worker exists"
-        );
+        let response = result.expect("create_batch must succeed once the worker exists");
+        assert_eq!(response.status, "pending");
+        assert!(response.id.starts_with("batch_"));
+        // The job should be visible to the manager immediately.
+        let job = manager.get_job(&response.id).await;
+        assert!(job.is_some());
     }
 
     #[tokio::test]

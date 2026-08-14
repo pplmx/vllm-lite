@@ -86,6 +86,45 @@ impl BatchManager {
             );
         }
     }
+
+    /// Transition a job to `InProgress` the first time its worker picks it up.
+    #[must_use]
+    pub async fn mark_in_progress(&self, job_id: &str) -> bool {
+        let mut jobs = self.jobs.write().await;
+        if let Some(job) = jobs.get_mut(job_id) {
+            job.status = BatchStatus::InProgress;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Set a job to `Failed` (one or more requests errored). Records the
+    /// completion timestamp so `get_batch` reports a terminal state; partial
+    /// results remain readable via `get_batch_results`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    pub async fn set_failed(&self, job_id: &str) {
+        let mut jobs = self.jobs.write().await;
+        if let Some(job) = jobs.get_mut(job_id) {
+            job.status = BatchStatus::Failed;
+            if job.completed_at.is_none() {
+                job.completed_at = Some(
+                    // invariant: monotonic clock is always >= UNIX_EPOCH.
+                    i64::try_from(
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            // invariant: pre-conditions make this infallible at this call site.
+                            .unwrap()
+                            .as_secs(),
+                    )
+                    .unwrap_or(i64::MAX),
+                );
+            }
+        }
+    }
 }
 
 impl Default for BatchManager {
@@ -250,5 +289,50 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         // Should not panic
         rt.block_on(mgr.set_completed("nonexistent"));
+    }
+
+    #[test]
+    fn mark_in_progress_transitions_pending_job() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["go".into()], None, None, None));
+        assert!(rt.block_on(mgr.mark_in_progress(&id)));
+        let job = rt.block_on(mgr.get_job(&id)).unwrap();
+        assert_eq!(job.status, BatchStatus::InProgress);
+        // Idempotent — a second transition keeps InProgress.
+        assert!(rt.block_on(mgr.mark_in_progress(&id)));
+    }
+
+    #[test]
+    fn mark_in_progress_on_missing_job_is_noop() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        assert!(!rt.block_on(mgr.mark_in_progress("nonexistent")));
+    }
+
+    #[test]
+    fn set_failed_marks_terminal_with_timestamp() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id = rt.block_on(mgr.create_job(
+            BatchEndpoint::Completion,
+            vec!["boom".into()],
+            None,
+            None,
+            None,
+        ));
+        rt.block_on(mgr.set_failed(&id));
+        let job = rt.block_on(mgr.get_job(&id)).unwrap();
+        assert_eq!(job.status, BatchStatus::Failed);
+        assert!(job.completed_at.is_some());
+    }
+
+    #[test]
+    fn set_failed_on_missing_job_is_noop() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // Should not panic
+        rt.block_on(mgr.set_failed("nonexistent"));
     }
 }
