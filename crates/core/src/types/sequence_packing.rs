@@ -101,13 +101,22 @@ impl SequencePackingConfigBuilder {
 
 #[cfg(test)]
 #[allow(clippy::float_cmp)]
-// SAFETY: the test module mutates process-wide env vars
-// (VLLM_SEQ_PACKING_*) which is `unsafe` in the Rust 2024 edition.
-// The per-block SAFETY comments above each `unsafe` block document why
-// the specific env-var names cannot race with other tests.
+// The tests below mutate process-wide env vars (VLLM_SEQ_PACKING_*),
+// which is `unsafe` in the Rust 2024 edition AND a data race when test
+// threads run in parallel (cargo test/nextest run test threads in the
+// same process). All three from_env_* tests share the same variable
+// names, so they race with each other unless serialized. Mutate under
+// `ENV_TEST_MUTEX` — the same pattern server/config/tests.rs uses for
+// its env-touching tests — to keep them deterministic and race-free.
 #[allow(unsafe_code)]
 mod tests {
     use super::*;
+
+    /// Serializes the from_env_* tests so they never observe each other's
+    /// transient process-wide env-var state (VLLM_SEQ_PACKING_*). Without
+    /// this, `from_env_falls_back_on_parse_failure` can read a value left
+    /// by `from_env_reads_env_vars` (e.g. TARGET=8 instead of default 32).
+    static ENV_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn default_values() {
@@ -142,11 +151,12 @@ mod tests {
 
     #[test]
     fn from_env_uses_defaults_when_vars_unset() {
+        // Serialize against the other from_env_* tests sharing these vars.
+        let _guard = ENV_TEST_MUTEX.lock().unwrap();
         // Ensure env vars are not set.
-        // SAFETY: These env var names are unique to this test and won't race
-        // with other tests because no other test in the workspace writes to
-        // VLLM_SEQ_PACKING_* variables. Single-threaded test execution also
-        // prevents concurrent access.
+        // SAFETY: `std::env::remove_var` is unsafe since Rust 1.80 (process-wide
+        // state). Safe here because ENV_TEST_MUTEX guarantees no other test
+        // thread reads or writes VLLM_SEQ_PACKING_* concurrently.
         unsafe {
             std::env::remove_var("VLLM_SEQ_PACKING_ENABLED");
             std::env::remove_var("VLLM_SEQ_PACKING_TARGET_BATCH");
@@ -159,9 +169,11 @@ mod tests {
 
     #[test]
     fn from_env_reads_env_vars() {
-        // SAFETY: Same reasoning as from_env_uses_defaults_when_vars_unset — these
-        // env var names are unique to this test module and won't race with other
-        // tests that don't write to VLLM_SEQ_PACKING_* variables.
+        // Serialize against the other from_env_* tests sharing these vars.
+        let _guard = ENV_TEST_MUTEX.lock().unwrap();
+        // SAFETY: `std::env::set_var` is unsafe since Rust 1.80 (process-wide
+        // state). Safe here because ENV_TEST_MUTEX guarantees no other test
+        // thread reads or writes VLLM_SEQ_PACKING_* concurrently.
         unsafe {
             std::env::set_var("VLLM_SEQ_PACKING_ENABLED", "false");
             std::env::set_var("VLLM_SEQ_PACKING_TARGET_BATCH", "8");
@@ -174,7 +186,7 @@ mod tests {
         assert_eq!(cfg.max_batch_size, 16);
         assert!((cfg.similarity_threshold - 0.35).abs() < f32::EPSILON);
         // Clean up.
-        // SAFETY: Same reasoning as above — unique env var names ensure no races with other tests.
+        // SAFETY: Same rationale — ENV_TEST_MUTEX excludes concurrent readers.
         unsafe {
             std::env::remove_var("VLLM_SEQ_PACKING_ENABLED");
             std::env::remove_var("VLLM_SEQ_PACKING_TARGET_BATCH");
@@ -185,7 +197,14 @@ mod tests {
 
     #[test]
     fn from_env_falls_back_on_parse_failure() {
-        // SAFETY: Same reasoning as above — unique env var names ensure no races with other tests.
+        // Serialize against the other from_env_* tests sharing these vars.
+        let _guard = ENV_TEST_MUTEX.lock().unwrap();
+        // SAFETY: `std::env::set_var` is unsafe since Rust 1.80 (process-wide
+        // state). Safe here because ENV_TEST_MUTEX guarantees no other test
+        // thread reads or writes VLLM_SEQ_PACKING_* concurrently. Without this
+        // guard this test intermittently failed (confirmed in the field):
+        // it read TARGET=8 left by from_env_reads_env_vars instead of the
+        // default 32 it must assert.
         unsafe {
             std::env::set_var("VLLM_SEQ_PACKING_ENABLED", "not-a-bool");
             std::env::set_var("VLLM_SEQ_PACKING_TARGET_BATCH", "not-a-number");
@@ -193,7 +212,7 @@ mod tests {
         let cfg = SequencePackingConfig::from_env();
         assert!(cfg.enabled); // default
         assert_eq!(cfg.target_batch_size, 32); // default
-        // SAFETY: Same reasoning as above — unique env var names ensure no races with other tests.
+        // SAFETY: Same rationale — ENV_TEST_MUTEX excludes concurrent readers.
         unsafe {
             std::env::remove_var("VLLM_SEQ_PACKING_ENABLED");
             std::env::remove_var("VLLM_SEQ_PACKING_TARGET_BATCH");
