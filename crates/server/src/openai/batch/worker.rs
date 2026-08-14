@@ -86,6 +86,8 @@ async fn run_batch_job(
             job.temperature,
             architecture,
             max_model_len,
+            &job_id,
+            index,
             &engine_tx,
             &tokenizer,
             &cancel_requested,
@@ -147,6 +149,8 @@ async fn execute_one(
     temperature: Option<f32>,
     architecture: vllm_model::config::Architecture,
     max_model_len: Option<usize>,
+    job_id: &str,
+    index: usize,
     engine_tx: &crate::api::EngineHandle,
     tokenizer: &Tokenizer,
     cancel_requested: &std::sync::atomic::AtomicBool,
@@ -193,7 +197,11 @@ async fn execute_one(
             response_tx,
             seq_id_tx: Some(seq_id_tx),
             finish_reason_tx: None,
-            request_id: Some(format!("batch:{}", prompt_text.len())),
+            // Production-readiness §6: correlation id must be unique per
+            // request so engine-side spans are traceable to a specific
+            // prompt. Job + index (not prompt length) — a length is not
+            // unique across same-sized prompts and breaks log correlation.
+            request_id: Some(format!("batch:{job_id}:{index}")),
         })
         .map_err(|e| crate::openai::chat::map_engine_send_error(&e))
         .map_err(|(_, json)| json.error.message.clone())?;
