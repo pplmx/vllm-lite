@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 57,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T12:25:54+00:00",
+  "updated_at": "2026-08-14T12:41:57+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4352,6 +4352,43 @@
       "source": "d921062a4a9933ab931c4c2bc73a9a5c2637fcdd; 30 batch tests (worker completes + engine-unavailable fail); vllm-server lib 452/452; just ci exit 0",
       "title": "Worker drives jobs to Completed/Failed; create_batch persists+spawns+returns batch object; latent success/error vs succeeded/failed count bug fixed",
       "confidence": 1.0
+    },
+    "TASK-070": {
+      "id": "TASK-070",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-14T12:28:36+00:00",
+      "updated_at": "2026-08-14T12:41:57+00:00",
+      "touched_round": 57,
+      "category": "core-feature",
+      "severity": 0.6,
+      "confidence": 1.0,
+      "effort": 3,
+      "title": "Implement POST /v1/batches/{id}/cancel + BatchStatus::Cancelled: batch API documents a cancel endpoint, a Cancelled status, and cancellation metadata (types.rs doc, manager.rs module doc, handler header) but no route/handler/variant exists. Add BatchManager cancel flag (Arc<AtomicBool> per job) shared with the worker; worker tracks the in-flight seq_id via seq_id_tx and sends EngineMessage::CancelRequest on cancel; handler + route in app.rs; status_str/Cancelled wiring across handler/manager"
+    },
+    "CHG-068": {
+      "id": "CHG-068",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T12:41:17+00:00",
+      "updated_at": "2026-08-14T12:41:17+00:00",
+      "touched_round": 57,
+      "commit": "1c606472e5b78a1643179b0285a70e86b096c25f",
+      "title": "Batch cancel endpoint + Cancelled status (TASK-070)"
+    },
+    "EV-081": {
+      "id": "EV-081",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T12:41:18+00:00",
+      "updated_at": "2026-08-14T12:41:18+00:00",
+      "touched_round": 57,
+      "source": "1c606472e5b78a1643179b0285a70e86b096c25f; 8 new cancel tests; 38 batch tests; server lib 460/460; just ci exit 0",
+      "title": "cancel works: request_cancel sets shared flag, worker stops dispatching + cancels in-flight engine seq via CancelRequest, mark_in_progress refuses to clobber Cancelled",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -6226,6 +6263,12 @@
       "to": "ISS-062",
       "type": "resolves",
       "created_at": "2026-08-14T12:21:15+00:00"
+    },
+    {
+      "from": "CHG-068",
+      "to": "TASK-070",
+      "type": "implements",
+      "created_at": "2026-08-14T12:41:57+00:00"
     }
   ]
 }
