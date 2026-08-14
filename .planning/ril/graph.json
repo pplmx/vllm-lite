@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 56,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T11:52:00+00:00",
+  "updated_at": "2026-08-14T12:00:35+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 36,
+      "touched_round": 56,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -4304,6 +4304,17 @@
       "touched_round": 55,
       "commit": "f241bd78d35a6da5d78a14e76f3da9a6f8fe4992",
       "title": "float_cmp allow in OTLP exporter test module"
+    },
+    "ISS-062": {
+      "id": "ISS-062",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T12:00:28+00:00",
+      "updated_at": "2026-08-14T12:00:28+00:00",
+      "touched_round": 56,
+      "severity": "high",
+      "title": "Batch API has no execution worker: POST /v1/batches returns honest 501 and persists no job, so GET /v1/batches/{id} and /v1/batches/{id}/results can never return a progressing batch (docs/technical-due-diligence API-01, High/P1). Handler returns 501 Not Implemented deliberately; the read endpoints still work off BatchManager for imported/legacy jobs. Longest-lived documented 'module exists but capability missing' gap not tracked in RIL."
     }
   },
   "edges": [
@@ -6160,6 +6171,12 @@
       "to": "TASK-068",
       "type": "implements",
       "created_at": "2026-08-14T11:48:01+00:00"
+    },
+    {
+      "from": "ISS-062",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-14T12:00:35+00:00"
     }
   ]
 }
