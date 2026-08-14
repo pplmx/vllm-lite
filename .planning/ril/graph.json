@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 58,
+  "round": 59,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T12:44:59+00:00",
+  "updated_at": "2026-08-14T13:23:16+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4389,6 +4389,43 @@
       "source": "1c606472e5b78a1643179b0285a70e86b096c25f; 8 new cancel tests; 38 batch tests; server lib 460/460; just ci exit 0",
       "title": "cancel works: request_cancel sets shared flag, worker stops dispatching + cancels in-flight engine seq via CancelRequest, mark_in_progress refuses to clobber Cancelled",
       "confidence": 1.0
+    },
+    "TASK-071": {
+      "id": "TASK-071",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-14T13:16:21+00:00",
+      "updated_at": "2026-08-14T13:23:16+00:00",
+      "touched_round": 59,
+      "category": "security",
+      "severity": 0.9,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Fix rate-limit cost bypass for POST /v1/batches: estimate_request_cost recognizes messages/prompt/input but not the batch field \"prompts\", so a batch of N prompts (each generating max_tokens) falls through to the flat 1.0 cost — any valid API key can spam arbitrarily large batches while consuming 1 rate-limit token (class identical to the previous array-of-strings prompt bypass fix). Cost the batch as sum(prompt words) + max_tokens * N, clamped like the other paths"
+    },
+    "CHG-069": {
+      "id": "CHG-069",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T13:23:01+00:00",
+      "updated_at": "2026-08-14T13:23:01+00:00",
+      "touched_round": 59,
+      "commit": "fdf68454dc1edab225ac863b14aa843f84873d3e",
+      "title": "Batch rate-limit cost bypass fixed (TASK-071)"
+    },
+    "EV-082": {
+      "id": "EV-082",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T13:23:02+00:00",
+      "updated_at": "2026-08-14T13:23:02+00:00",
+      "touched_round": 59,
+      "source": "fdf68454dc1edab225ac863b14aa843f84873d3e; 3 new batch-cost tests; 32 cost tests; server lib 463/463; just ci exit 0",
+      "title": "batch body now costs sum(prompt words) + max_tokens*N, clamped; no longer flat 1.0",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -6269,6 +6306,12 @@
       "to": "TASK-070",
       "type": "implements",
       "created_at": "2026-08-14T12:41:57+00:00"
+    },
+    {
+      "from": "CHG-069",
+      "to": "TASK-071",
+      "type": "implements",
+      "created_at": "2026-08-14T13:23:16+00:00"
     }
   ]
 }
