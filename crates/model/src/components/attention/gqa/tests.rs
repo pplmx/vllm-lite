@@ -563,21 +563,57 @@ fn test_matmul_rejects_non_contiguous_batch_dims() -> Result<()> {
 }
 
 // === attn_factor wiring ===
+//
+// The sensitivity tests below build a fixed (deterministic) fixture —
+// NOT `Tensor::randn`. `randn` uses candle's thread-local,
+// OS-entropy-seeded RNG, so these tests used to draw different weights
+// on every run; ~0.75% of draws produce an ill-conditioned attention
+// (near-uniform or saturated) where halving the score temperature with
+// `attn_factor = 0.5` leaves the output unchanged within `f32`
+// (measured: 15/2000 draws with `max diff <= 1e-5` — an intermittent
+// CI flake observed on `gqa_attn_factor_changes_output`). A fixed
+// deterministic draw eliminates the flake while keeping the assertion
+// meaningful, because the draw is verified (below) to yield a
+// non-degenerate attention for which temperature scaling is
+// macroscopic.
 
-#[test]
-fn gqa_attn_factor_one_is_noop() -> Result<()> {
+/// Deterministic spread values in `[-0.25, 0.75)` — a fixed
+/// multiplicative-hash mask of the index, so the fixture is reproducible
+/// across runs and threads (unlike `randn`).
+fn deterministic_flat(n: usize) -> Vec<f32> {
+    (0..n)
+        .map(|i| {
+            let h = (i as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            // invariant: `h >> 32` spans the full 32-bit range across
+            // consecutive indices (Knuth multiplicative hashing), so the
+            // normalized value is well-spread and never panics. The
+            // 0.25 amplitude keeps the projected attention logits in the
+            // sensitive (non-saturated, non-uniform) regime — a full
+            // [-1, 1) span amplifies through the two weight matmuls to
+            // |qk| ~ 2000, saturating softmax to a one-hot so halving the
+            // temperature leaves the output bit-identical (the exact
+            // failure mode these fixtures remove).
+            ((h >> 32) as f32 / u32::MAX as f32).mul_add(0.5, -0.25)
+        })
+        .collect()
+}
+
+/// Build a `GqaAttention` with deterministic projection weights (shared
+/// across the per-test pairs so the only varying input is `attn_factor`).
+fn build_deterministic_attn() -> Result<GqaAttention> {
     let device = candle_core::Device::Cpu;
     let num_heads = 4;
     let num_kv_heads = 4;
     let head_dim = 32;
     let hidden_size = num_heads * head_dim;
+    let n = hidden_size * hidden_size;
 
-    let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let q_w = Tensor::from_vec(deterministic_flat(n), (hidden_size, hidden_size), &device)?;
+    let k_w = Tensor::from_vec(deterministic_flat(n), (hidden_size, hidden_size), &device)?;
+    let v_w = Tensor::from_vec(deterministic_flat(n), (hidden_size, hidden_size), &device)?;
+    let o_w = Tensor::from_vec(deterministic_flat(n), (hidden_size, hidden_size), &device)?;
 
-    let mut attn = GqaAttention::new_with_weights(
+    GqaAttention::new_with_weights(
         hidden_size,
         num_heads,
         num_kv_heads,
@@ -590,9 +626,39 @@ fn gqa_attn_factor_one_is_noop() -> Result<()> {
         false,
         None,
         None,
-    )?;
+    )
+}
 
-    let x = Tensor::randn(0.0f32, 1.0, (1, 4, hidden_size), &device)?;
+/// Build deterministic Q/K/V tensors in the `[batch, num_heads, seq_len,
+/// head_dim]` layout expected by `paged_attention_fn` / `tiled_attention_fn` /
+/// `flash_attention_fn`.
+fn build_deterministic_qkv() -> Result<(Tensor, Tensor, Tensor)> {
+    let device = candle_core::Device::Cpu;
+    let batch = 1;
+    let num_heads = 4;
+    let seq_len = 4;
+    let head_dim = 32;
+    let shape = (batch, num_heads, seq_len, head_dim);
+    let n = batch * num_heads * seq_len * head_dim;
+    let q = Tensor::from_vec(deterministic_flat(n), shape, &device)?;
+    let k = Tensor::from_vec(deterministic_flat(n), shape, &device)?;
+    let v = Tensor::from_vec(deterministic_flat(n), shape, &device)?;
+    Ok((q, k, v))
+}
+
+#[test]
+fn gqa_attn_factor_one_is_noop() -> Result<()> {
+    let device = candle_core::Device::Cpu;
+    let num_heads = 4;
+    let head_dim = 32;
+    let hidden_size = num_heads * head_dim;
+
+    let mut attn = build_deterministic_attn()?;
+    let x = Tensor::from_vec(
+        deterministic_flat(4 * hidden_size),
+        (1, 4, hidden_size),
+        &device,
+    )?;
 
     // attn_factor = 1.0 must match attn_factor = None
     attn.attn_factor = Some(1.0);
@@ -615,31 +681,15 @@ fn gqa_attn_factor_one_is_noop() -> Result<()> {
 fn gqa_attn_factor_changes_output() -> Result<()> {
     let device = candle_core::Device::Cpu;
     let num_heads = 4;
-    let num_kv_heads = 4;
     let head_dim = 32;
     let hidden_size = num_heads * head_dim;
 
-    let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-
-    let mut attn = GqaAttention::new_with_weights(
-        hidden_size,
-        num_heads,
-        num_kv_heads,
-        head_dim,
-        q_w,
-        k_w,
-        v_w,
-        o_w,
-        AttentionConfig::default(),
-        false,
-        None,
-        None,
+    let mut attn = build_deterministic_attn()?;
+    let x = Tensor::from_vec(
+        deterministic_flat(4 * hidden_size),
+        (1, 4, hidden_size),
+        &device,
     )?;
-
-    let x = Tensor::randn(0.0f32, 1.0, (1, 4, hidden_size), &device)?;
 
     // attn_factor = 0.5 must change the output (halves the score temperature)
     attn.attn_factor = Some(0.5);
@@ -670,55 +720,15 @@ fn gqa_attn_factor_changes_output() -> Result<()> {
 // standard-path tests (`seq_len=4` fits one tile for the tiled path; all
 // three paths accept the same Q/K/V layout).
 
-/// Build a `GqaAttention` with random projection weights (shared across the
-/// per-test pairs so the only varying input is `attn_factor`).
-fn build_random_attn() -> Result<GqaAttention> {
-    let device = candle_core::Device::Cpu;
-    let num_heads = 4;
-    let num_kv_heads = 4;
-    let head_dim = 32;
-    let hidden_size = num_heads * head_dim;
-
-    let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-
-    GqaAttention::new_with_weights(
-        hidden_size,
-        num_heads,
-        num_kv_heads,
-        head_dim,
-        q_w,
-        k_w,
-        v_w,
-        o_w,
-        AttentionConfig::default(),
-        false,
-        None,
-        None,
-    )
-}
-
-/// Build random Q/K/V tensors in the `[batch, num_heads, seq_len, head_dim]`
-/// layout expected by `paged_attention_fn` / `tiled_attention_fn` /
-/// `flash_attention_fn`.
-fn build_random_qkv() -> Result<(Tensor, Tensor, Tensor)> {
-    let device = candle_core::Device::Cpu;
-    let batch = 1;
-    let num_heads = 4;
-    let seq_len = 4;
-    let head_dim = 32;
-    let q = Tensor::randn(0.0f32, 1.0, (batch, num_heads, seq_len, head_dim), &device)?;
-    let k = Tensor::randn(0.0f32, 1.0, (batch, num_heads, seq_len, head_dim), &device)?;
-    let v = Tensor::randn(0.0f32, 1.0, (batch, num_heads, seq_len, head_dim), &device)?;
-    Ok((q, k, v))
-}
-
+/// The paged / tiled / flash wiring tests below reuse the deterministic
+/// fixtures from the standard-path section: [`build_deterministic_attn`]
+/// and [`build_deterministic_qkv`] (defined above — see the note at the
+/// `attn_factor wiring` marker explaining why the fixtures are fixed
+/// rather than `randn`).
 #[test]
 fn paged_attention_fn_attn_factor_one_is_noop() -> Result<()> {
-    let mut attn = build_random_attn()?;
-    let (q, k, v) = build_random_qkv()?;
+    let mut attn = build_deterministic_attn()?;
+    let (q, k, v) = build_deterministic_qkv()?;
 
     attn.attn_factor = None;
     let out_no_factor = attn.paged_attention_fn(&q, &k, &v)?;
@@ -738,8 +748,8 @@ fn paged_attention_fn_attn_factor_one_is_noop() -> Result<()> {
 
 #[test]
 fn paged_attention_fn_attn_factor_changes_output() -> Result<()> {
-    let mut attn = build_random_attn()?;
-    let (q, k, v) = build_random_qkv()?;
+    let mut attn = build_deterministic_attn()?;
+    let (q, k, v) = build_deterministic_qkv()?;
 
     attn.attn_factor = Some(0.5);
     let out_with = attn.paged_attention_fn(&q, &k, &v)?;
@@ -759,8 +769,8 @@ fn paged_attention_fn_attn_factor_changes_output() -> Result<()> {
 
 #[test]
 fn tiled_attention_fn_attn_factor_one_is_noop() -> Result<()> {
-    let mut attn = build_random_attn()?;
-    let (q, k, v) = build_random_qkv()?;
+    let mut attn = build_deterministic_attn()?;
+    let (q, k, v) = build_deterministic_qkv()?;
 
     attn.attn_factor = None;
     let out_no_factor = attn.tiled_attention_fn(&q, &k, &v)?;
@@ -780,8 +790,8 @@ fn tiled_attention_fn_attn_factor_one_is_noop() -> Result<()> {
 
 #[test]
 fn tiled_attention_fn_attn_factor_changes_output() -> Result<()> {
-    let mut attn = build_random_attn()?;
-    let (q, k, v) = build_random_qkv()?;
+    let mut attn = build_deterministic_attn()?;
+    let (q, k, v) = build_deterministic_qkv()?;
 
     attn.attn_factor = Some(0.5);
     let out_with = attn.tiled_attention_fn(&q, &k, &v)?;
@@ -801,8 +811,8 @@ fn tiled_attention_fn_attn_factor_changes_output() -> Result<()> {
 
 #[test]
 fn flash_attention_fn_attn_factor_one_is_noop() -> Result<()> {
-    let mut attn = build_random_attn()?;
-    let (q, k, v) = build_random_qkv()?;
+    let mut attn = build_deterministic_attn()?;
+    let (q, k, v) = build_deterministic_qkv()?;
 
     attn.attn_factor = None;
     let out_no_factor = attn.flash_attention_fn(&q, &k, &v)?;
@@ -822,8 +832,8 @@ fn flash_attention_fn_attn_factor_one_is_noop() -> Result<()> {
 
 #[test]
 fn flash_attention_fn_attn_factor_changes_output() -> Result<()> {
-    let mut attn = build_random_attn()?;
-    let (q, k, v) = build_random_qkv()?;
+    let mut attn = build_deterministic_attn()?;
+    let (q, k, v) = build_deterministic_qkv()?;
 
     attn.attn_factor = Some(0.5);
     let out_with = attn.flash_attention_fn(&q, &k, &v)?;
