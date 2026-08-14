@@ -34,18 +34,33 @@ pub fn spawn_batch_worker(state: &ApiState, job: BatchJob) -> tokio::task::JoinH
     let tokenizer = Arc::clone(&state.tokenizer);
     let manager = Arc::clone(&state.batch_manager);
     let architecture = state.architecture;
+    let max_model_len = state.max_model_len;
     tokio::spawn(async move {
-        run_batch_job(job, engine_tx, tokenizer, manager, architecture).await;
+        run_batch_job(
+            job,
+            engine_tx,
+            tokenizer,
+            manager,
+            architecture,
+            max_model_len,
+        )
+        .await;
     })
 }
 
 /// Drive `job` to `Completed`/`Failed`/`Cancelled` by executing every prompt.
+///
+/// `max_model_len` is threaded in so each prompt passes the same
+/// `check_context_length` gate as the non-batch generation paths — the
+/// batch worker must not re-open the ISS-044 `max_tokens`-ceiling bypass
+/// that the chat/completions/embeddings endpoints all enforce.
 async fn run_batch_job(
     job: BatchJob,
     engine_tx: crate::api::EngineHandle,
     tokenizer: Arc<Tokenizer>,
     manager: Arc<BatchManager>,
     architecture: vllm_model::config::Architecture,
+    max_model_len: Option<usize>,
 ) {
     let job_id = job.id.clone();
     let cancel_requested = std::sync::Arc::clone(&job.cancel_requested);
@@ -70,6 +85,7 @@ async fn run_batch_job(
             max_tokens,
             job.temperature,
             architecture,
+            max_model_len,
             &engine_tx,
             &tokenizer,
             &cancel_requested,
@@ -130,6 +146,7 @@ async fn execute_one(
     max_tokens: usize,
     temperature: Option<f32>,
     architecture: vllm_model::config::Architecture,
+    max_model_len: Option<usize>,
     engine_tx: &crate::api::EngineHandle,
     tokenizer: &Tokenizer,
     cancel_requested: &std::sync::atomic::AtomicBool,
@@ -151,6 +168,17 @@ async fn execute_one(
     };
 
     let prompt_tokens = tokenizer.encode(&prompt_text);
+    // Same context-length gate as the chat/completions/embeddings paths:
+    // `prompt + max_tokens` must fit `max_model_len` (or the hard
+    // `DEFAULT_MAX_GENERATION_TOKENS` ceiling when none is configured).
+    // Without this, a batch prompt can carry `max_tokens = i64::MAX`
+    // against an unconfigured model and re-open the ISS-044 DoS (unbounded
+    // per-sequence token growth until OOM) on the new endpoint.
+    if let Err((_, json)) =
+        crate::openai::chat::check_context_length(prompt_tokens.len(), max_tokens, max_model_len)
+    {
+        return Err(json.error.message.clone());
+    }
     let mut request = vllm_core::types::Request::new(0, prompt_tokens.clone(), max_tokens);
     if let Some(t) = temperature {
         request.sampling_params.temperature = t;
@@ -224,6 +252,38 @@ mod tests {
         assert!(finished.results.iter().all(|r| r.status == "succeeded"));
         assert!(finished.results.iter().all(|r| r.content.is_some()));
         assert!(finished.completed_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn worker_rejects_prompt_exceeding_context_length() {
+        // `max_tokens` beyond the hard ceiling (no max_model_len configured
+        // -> check_context_length caps at DEFAULT_MAX_GENERATION_TOKENS) must
+        // fail the item locally, never reaching the engine — re-opening the
+        // ISS-044 DoS on the batch endpoint is not allowed.
+        let (state, _engine) = create_state_with_mock_engine();
+        let job = state
+            .batch_manager
+            .create_job(
+                BatchEndpoint::Completion,
+                vec!["hello".to_string()],
+                None,
+                Some(100_000),
+                None,
+            )
+            .await;
+
+        let handle = spawn_batch_worker(&state, state.batch_manager.get_job(&job).await.unwrap());
+        handle.await.expect("worker task must not panic");
+
+        let finished = state.batch_manager.get_job(&job).await.unwrap();
+        assert_eq!(finished.status, BatchStatus::Failed);
+        assert_eq!(finished.results.len(), 1);
+        assert_eq!(finished.results[0].status, "failed");
+        let error = finished.results[0].error.as_deref().unwrap_or("");
+        assert!(
+            error.contains("max_tokens") || error.contains("context"),
+            "error should describe the context-length rejection, got: {error}"
+        );
     }
 
     #[tokio::test]
