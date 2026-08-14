@@ -166,13 +166,13 @@ ragged batch、paged KV 和 decode 特化的 kernel contract。
 
 上述五项主要偏差在 v31.0 期间已全部关闭：
 
-| #   | 偏差                                   | 关闭批次                        | 关键提交 / 文档                                                 |
-| --- | -------------------------------------- | ------------------------------- | --------------------------------------------------------------- |
-| 1   | `top_p` / `n` / `stop` 字段未生效      | P6（`n`/`stop`）+ P9（`top_p`） | `5f00bd5` / `7a3e194`；`docs/reference/openai-compatibility.md` |
-| 2   | `finish_reason` 不能区分 stop / length | P4                              | `5f00bd5`（finish_reason_tx）                                   |
-| 3   | SSE `[DONE]` 与 JSON 拼在同一 data     | P4                              | `5f00bd5`（test_chat_streaming_done_is_separate_event）         |
-| 4   | Batch API 创建 job 但无 worker 推进    | P1                              | `5f232b9`（501 Not Implemented）                                |
-| 5   | 客户端断开不传播取消                   | P1                              | `b6a70cf`（cancel_propagation.rs）                              |
+| #   | 偏差                                   | 关闭批次                        | 关键提交 / 文档                                                                                                                                                                                                                                             |
+| --- | -------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `top_p` / `n` / `stop` 字段未生效      | P6（`n`/`stop`）+ P9（`top_p`） | `5f00bd5` / `7a3e194`；`docs/reference/openai-compatibility.md`                                                                                                                                                                                             |
+| 2   | `finish_reason` 不能区分 stop / length | P4                              | `5f00bd5`（finish_reason_tx）                                                                                                                                                                                                                               |
+| 3   | SSE `[DONE]` 与 JSON 拼在同一 data     | P4                              | `5f00bd5`（test_chat_streaming_done_is_separate_event）                                                                                                                                                                                                     |
+| 4   | Batch API 创建 job 但无 worker 推进    | P1，后完整实现                  | `5f232b9`（P1：501 Not Implemented 诚实降级）；后续 `openai::batch::worker` 实现后台执行器（`d921062a`，TASK-069）——`create_batch` 持久化 job 并 spawn worker 推进 `pending → in_progress → completed/failed`，结果可经 `GET /v1/batches/{id}/results` 读取 |
+| 5   | 客户端断开不传播取消                   | P1                              | `b6a70cf`（cancel_propagation.rs）                                                                                                                                                                                                                          |
 
 本节保留为“原始问题清单 + 闭合追溯”，不要删除 — 后续字段（如 `seed` / `logprobs` /
 `tools`）若进入待评估状态，应在本节追加为新的主要偏差项而非重开旧项。
