@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 59,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T13:35:48+00:00",
+  "updated_at": "2026-08-14T13:47:19+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4474,6 +4474,31 @@
       "source": "4855b78da26d739664637113cbab3048c1dbc6b1; new 100_000-max_tokens rejection test; 42 batch tests; server lib 464/464; just ci exit 0",
       "title": "batch prompts pass check_context_length (max_model_len or 8192 ceiling); over-limit items fail locally, never reaching the engine",
       "confidence": 1.0
+    },
+    "TASK-073": {
+      "id": "TASK-073",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-14T13:46:46+00:00",
+      "updated_at": "2026-08-14T13:47:19+00:00",
+      "touched_round": 59,
+      "category": "observability",
+      "severity": 0.3,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Batch worker request_id collides across same-length prompts (batch:{length} instead of unique per-prompt); fix to batch:{job_id}:{index} for traceable engine spans (production-readiness §6)"
+    },
+    "CHG-071": {
+      "id": "CHG-071",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T13:47:19+00:00",
+      "updated_at": "2026-08-14T13:47:19+00:00",
+      "touched_round": 59,
+      "commit": "b4edcde63df3ea2731318c984e3dfac7a2208936",
+      "title": "unique batch request_id (TASK-073)"
     }
   },
   "edges": [
@@ -6372,6 +6397,12 @@
       "to": "TASK-072",
       "type": "implements",
       "created_at": "2026-08-14T13:35:47+00:00"
+    },
+    {
+      "from": "CHG-071",
+      "to": "TASK-073",
+      "type": "implements",
+      "created_at": "2026-08-14T13:47:19+00:00"
     }
   ]
 }
