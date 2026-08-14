@@ -637,6 +637,28 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
             _ => return 1.0,
         };
         return words.clamp(1.0, 100_000.0);
+    } else if let Some(prompts) = json.get("prompts").and_then(Value::as_array) {
+        // Batch (`POST /v1/batches`): every prompt runs to completion as
+        // its own generation, so the cost is the combined prompt length
+        // plus `max_tokens` per prompt (N distinct generations). Without
+        // this branch a batch body has no `messages`/`prompt`/`input`
+        // key and falls through to the flat 1.0 default — a batch of N
+        // prompts each generating `max_tokens` tokens would under-pay
+        // the rate-limit budget by N × max_tokens.
+        let prompt_words: f64 = prompts
+            .iter()
+            .filter_map(|p| p.as_str())
+            .map(|s| s.split_whitespace().count() as f64)
+            .sum();
+        let max_tokens: f64 = json
+            .get("max_tokens")
+            .and_then(Value::as_i64)
+            .filter(|&m| m > 0)
+            .unwrap_or(100) as f64;
+        let num_prompts = prompts.len() as f64;
+        return max_tokens
+            .mul_add(num_prompts, prompt_words)
+            .clamp(1.0, 100_000.0);
     } else {
         return 1.0;
     };
@@ -1028,6 +1050,36 @@ mod tests {
         // An empty string still costs the 1.0 floor (not 0), so a
         // zero-cost request can never slip through for free.
         let body = r#"{"input": [""], "model": "m"}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 1.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_batch_prompts_not_flat() {
+        // Regression: pre-fix, a batch body had no `prompt` / `messages` /
+        // `input` key so it fell through to the flat 1.0 default — a batch
+        // of N prompts (each generating `max_tokens` output) cost the same
+        // as a single prompt, letting a caller under-pay the rate-limit
+        // budget on the compute-heavy batch endpoint.
+        let body = r#"{"prompts": ["hello world", "foo bar baz"], "endpoint": "completion", "max_tokens": 20}"#;
+        let cost = estimate_request_cost(body);
+        // 2 + 3 words across both prompts + (20 max_tokens × 2 prompts) = 45
+        assert_eq!(cost, 45.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_batch_default_max_tokens() {
+        // No max_tokens → the 100 default per prompt.
+        let body = r#"{"prompts": ["hello"], "endpoint": "chat"}"#;
+        let cost = estimate_request_cost(body);
+        // 1 word + (100 × 1 prompt) = 101
+        assert_eq!(cost, 101.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_batch_still_floored_at_one() {
+        // Empty prompts with no max_tokens still cost the 1.0 floor.
+        let body = r#"{"prompts": [], "endpoint": "completion"}"#;
         let cost = estimate_request_cost(body);
         assert_eq!(cost, 1.0);
     }
