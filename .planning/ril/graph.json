@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 60,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T13:49:09+00:00",
+  "updated_at": "2026-08-14T13:59:35+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4499,6 +4499,43 @@
       "touched_round": 59,
       "commit": "b4edcde63df3ea2731318c984e3dfac7a2208936",
       "title": "unique batch request_id (TASK-073)"
+    },
+    "TASK-074": {
+      "id": "TASK-074",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-14T13:58:32+00:00",
+      "updated_at": "2026-08-14T13:59:35+00:00",
+      "touched_round": 60,
+      "category": "maintainability",
+      "severity": 0.3,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Fix stale apply_repeat_penalty doc: apply_presence_penalty doc claimed repeat_penalty divides once per occurrence (frequency-style), but code + SamplingParams field doc + server sampling_validation all agree it is per-distinct (deduped HashSet), additive-vs-multiplicative being the actual difference. Doc was a semantic decoy that would mislead a sampler port into frequency-weighting."
+    },
+    "CHG-072": {
+      "id": "CHG-072",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T13:59:16+00:00",
+      "updated_at": "2026-08-14T13:59:16+00:00",
+      "touched_round": 60,
+      "commit": "80c530f7370b07b3d433a1f55645b71ae3da8c3a",
+      "title": "sampling penalty doc correction (TASK-074)"
+    },
+    "EV-084": {
+      "id": "EV-084",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T13:59:16+00:00",
+      "updated_at": "2026-08-14T13:59:16+00:00",
+      "touched_round": 60,
+      "source": "80c530f7370b07b3d433a1f55645b71ae3da8c3a; 89 sampling tests pass; code + SamplingParams field doc + server sampling_validation all agree on per-distinct",
+      "title": "repeat_penalty doc now matches deduped implementation (multiplicative vs presence additive); frequency-style claim removed",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -6403,6 +6440,12 @@
       "to": "TASK-073",
       "type": "implements",
       "created_at": "2026-08-14T13:47:19+00:00"
+    },
+    {
+      "from": "CHG-072",
+      "to": "TASK-074",
+      "type": "implements",
+      "created_at": "2026-08-14T13:59:35+00:00"
     }
   ]
 }
