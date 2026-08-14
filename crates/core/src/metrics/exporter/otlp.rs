@@ -598,6 +598,10 @@ impl OtlpExporterBuilder {
 }
 
 #[cfg(test)]
+// `ratio_gauge_scale_applies_only_to_ratio_units` asserts exact equality
+// against the fixed-point scale constants (not a tolerance-based float
+// comparison), so `float_cmp` is allowed — same as the other test modules.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 
