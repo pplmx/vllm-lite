@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 55,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T11:18:34+00:00",
+  "updated_at": "2026-08-14T11:20:17+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4178,14 +4178,14 @@
     "TASK-065": {
       "id": "TASK-065",
       "type": "task",
-      "status": "active",
-      "version": 1,
+      "status": "abandoned",
+      "version": 2,
       "created_at": "2026-08-14T11:13:47+00:00",
-      "updated_at": "2026-08-14T11:13:47+00:00",
+      "updated_at": "2026-08-14T11:19:09+00:00",
       "touched_round": 55,
       "category": "stability",
       "severity": "high",
-      "title": "Fix sequence_packing env-var test race (ISS-061): three from_env_* tests mutate same VLLM_SEQ_PACKING_* process env vars without a mutex; SAFETY comments falsely claim names unique; server/config/tests.rs already uses ENV_TEST_MUTEX for same class. Add module mutex + fix comments"
+      "title": "Duplicate of TASK-066 (accidental first attempt at node add); ISS-061 fixed via TASK-066/CHG-064 instead"
     },
     "TASK-066": {
       "id": "TASK-066",
@@ -4232,6 +4232,18 @@
       "touched_round": 55,
       "confidence": 0.95,
       "title": "ISS-061 root cause: three from_env_* tests race on shared VLLM_SEQ_PACKING_* process env vars under parallel test threads (SAFETY comment wrongly claimed unique var names)"
+    },
+    "DEC-043": {
+      "id": "DEC-043",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T11:20:17+00:00",
+      "updated_at": "2026-08-14T11:20:17+00:00",
+      "touched_round": 55,
+      "rationale": "TASK-065 is an accidental duplicate of TASK-066 created by a failed first attempt at  (node was written, then the command errored on severity parse). The real fix (ENV_TEST_MUTEX in sequence_packing.rs, CHG-064) lives under TASK-066. TASK-065 is marked abandoned rather than executed, keeping the audit trail.",
+      "alternatives_rejected": "delete TASK-065 = no CLI delete exists and direct graph.json edit is forbidden; leave it active = would double-count the same work",
+      "title": "TASK-065 abandoned as duplicate of TASK-066"
     }
   },
   "edges": [
@@ -6070,6 +6082,12 @@
       "to": "TASK-066",
       "type": "implements",
       "created_at": "2026-08-14T11:18:33+00:00"
+    },
+    {
+      "from": "DEC-043",
+      "to": "TASK-065",
+      "type": "governs",
+      "created_at": "2026-08-14T11:20:17+00:00"
     }
   ]
 }
