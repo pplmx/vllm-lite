@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 55,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T11:43:32+00:00",
+  "updated_at": "2026-08-14T11:48:01+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4281,6 +4281,29 @@
       "source": "a50d7970695116021509f947607dc3da3223a281; cargo clippy (complexity warning gone); vllm-core lib 440/440; chunked_prefill_no_stale_stream ISS-057 ok; just ci exit 0",
       "title": "Refactor is behavior-preserving: no cognitive_complexity warning remains and every speculative regression test passes",
       "confidence": 1.0
+    },
+    "TASK-068": {
+      "id": "TASK-068",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-14T11:47:13+00:00",
+      "updated_at": "2026-08-14T11:48:01+00:00",
+      "touched_round": 55,
+      "category": "maintainability",
+      "severity": 0.2,
+      "title": "Allow float_cmp in OTLP exporter test module — round-52 OTLP tests assert exact equality against fixed-point scale constants (RATIO_FIXED_POINT_SCALE), which clippy pedantic flags; add module-level allow matching sequence_packing.rs precedent"
+    },
+    "CHG-066": {
+      "id": "CHG-066",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T11:47:18+00:00",
+      "updated_at": "2026-08-14T11:47:18+00:00",
+      "touched_round": 55,
+      "commit": "f241bd78d35a6da5d78a14e76f3da9a6f8fe4992",
+      "title": "float_cmp allow in OTLP exporter test module"
     }
   },
   "edges": [
@@ -6131,6 +6154,12 @@
       "to": "TASK-067",
       "type": "implements",
       "created_at": "2026-08-14T11:42:52+00:00"
+    },
+    {
+      "from": "CHG-066",
+      "to": "TASK-068",
+      "type": "implements",
+      "created_at": "2026-08-14T11:48:01+00:00"
     }
   ]
 }
