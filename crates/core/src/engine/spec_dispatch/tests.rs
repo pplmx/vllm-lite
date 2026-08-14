@@ -1147,3 +1147,229 @@ fn speculative_chunked_prefill_never_streams_stale_midchunk_predictions() {
          no stale mid-chunk prefill predictions (got {received})"
     );
 }
+
+/// A [`ModelBackend`] that behaves like [`FakeModel`] (fixed token) but
+/// records every `forward_logits` call's `(start_position, input_len)`
+/// so a test can rebuild exactly which absolute positions the TARGET model
+/// was fed as real input. Only calls with `input_len > 1` represent real
+/// prefill chunks (decode-batch verification feeds exactly one input
+/// token); draft-KV warmup uses `forward`, not `forward_logits`, so it
+/// never pollutes the record. Records `(start_position, real_chunk_len)` —
+/// see `forward_logits` for how the real chunk is separated from the drafts.
+#[derive(Clone)]
+struct RecordingModel {
+    token_to_return: TokenId,
+    vocab_size: usize,
+    calls: std::sync::Arc<std::sync::Mutex<Vec<(usize, usize)>>>,
+}
+
+impl RecordingModel {
+    fn new(token: TokenId) -> Self {
+        Self {
+            token_to_return: token,
+            vocab_size: 100,
+            calls: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+        }
+    }
+
+    fn logits_for_token(&self, token: TokenId) -> Vec<f32> {
+        let mut logits = vec![-10.0; self.vocab_size];
+        if (token as usize) < self.vocab_size {
+            logits[token as usize] = 10.0;
+        }
+        logits
+    }
+}
+
+impl ModelBackend for RecordingModel {
+    fn forward(
+        &mut self,
+        seq_ids: &[SeqId],
+        _input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
+    ) -> ModelResult<BatchOutput> {
+        Ok(BatchOutput {
+            seq_ids: seq_ids.to_vec(),
+            next_tokens: seq_ids
+                .iter()
+                .map(|_| SampledToken {
+                    token: self.token_to_return,
+                    logprob: 0.0,
+                    top_logprobs: vec![],
+                })
+                .collect(),
+        })
+    }
+
+    fn forward_logits(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
+    ) -> ModelResult<Vec<Vec<f32>>> {
+        for ((&_sid, tokens), &nc) in seq_ids
+            .iter()
+            .zip(input_tokens.iter())
+            .zip(num_computed_tokens.iter())
+        {
+            // A prefill verification call feeds `real chunk + drafts` as one
+            // flat token list. The real chunk is the leading run of prompt
+            // tokens (7 in this fixture); the drafts (the draft backend's
+            // fixed token 42) follow it. Splitting on the first non-prompt
+            // token yields the REAL chunk length, which is what composes the
+            // sequence's true frontier — `tokens.len()` would include the
+            // drafts and (falsely) suggest the front covered them.
+            if tokens.len() > 1
+                && let Ok(mut calls) = self.calls.lock()
+            {
+                let real_len = tokens.iter().take_while(|&&t| t == 7).count();
+                if real_len > 0 {
+                    calls.push((nc, real_len));
+                }
+            }
+        }
+        Ok(input_tokens
+            .iter()
+            .map(|tokens| {
+                tokens
+                    .iter()
+                    .flat_map(|_| self.logits_for_token(self.token_to_return))
+                    .collect()
+            })
+            .collect())
+    }
+
+    fn embed(
+        &mut self,
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+    ) -> ModelResult<Vec<Vec<f32>>> {
+        Ok(input_tokens
+            .iter()
+            .map(|tokens| vec![0.0; tokens.len()])
+            .collect())
+    }
+
+    fn vocab_size(&self) -> usize {
+        self.vocab_size
+    }
+
+    fn num_layers(&self) -> usize {
+        1
+    }
+
+    fn num_heads(&self) -> usize {
+        1
+    }
+}
+
+// RIL ISS-059: a chunked prefill running in SPECULATIVE mode must advance
+// its computed frontier by the REAL chunk only — never past real prompt
+// tokens. Drafts ARE generated for prefill entries (drafts.rs is not
+// phase-gated), and the verifier accepts a draft when it equals the target
+// model's continuation guess — which is NOT the real prompt token at that
+// position. `update_speculative` advanced `num_computed_tokens` by
+// `input_len + accepted`, so a mid-chunk prefill overshot into its
+// remaining prompt: verification wrote guessed-content KV at those
+// positions and `requeue_partial_prefills` (ISS-054) preserved the
+// inflated frontier, so the NEXT chunk composed from
+// `num_computed_tokens` and the real prompt tokens in between were NEVER
+// fed — the model attends to guesses, not the user's prompt (self-spec +
+// greedy accepts every draft, so this used to corrupt EVERY chunked
+// prompt).
+#[test]
+fn speculative_chunked_prefill_feeds_every_real_prompt_position() {
+    let config = SchedulerConfig::builder()
+        .with_max_num_batched_tokens(32)
+        .with_prefill_chunk_size(16)
+        .build();
+    let target = RecordingModel::new(42);
+    let records = target.calls.clone();
+    let mut engine = Engine::with_config_boxed(
+        Box::new(target),
+        Some(Box::new(FakeModel::new(42))),
+        config,
+        3,
+        256,
+    );
+    engine.enable_speculative();
+
+    let (tx, mut rx) = tokio_mpsc::channel(256);
+    engine.add_request(Request::new(1, vec![7; 100], 8), tx);
+
+    let mut rounds = 0;
+    while engine.has_pending() {
+        engine.step().unwrap();
+        rounds += 1;
+        assert!(
+            rounds <= 40,
+            "must complete within prefill + decode rounds; got {rounds}"
+        );
+    }
+
+    let calls = records.lock().map(|g| g.clone()).unwrap_or_default();
+    assert!(
+        !calls.is_empty(),
+        "prefill verification should have fed real chunks (recorded {calls:?})"
+    );
+    let prompt_len = 100usize;
+    let chunk_len = 16usize;
+    // Each verification call's `num_computed` IS the next chunk's start.
+    // While the prompt is unfinished, that start must be a real chunk
+    // boundary — never the overshot `start + chunk_len + accepted` that
+    // would skip real prompt tokens (the drafts occupy real upcoming
+    // prompt positions and their KV is guessed content).
+    for &(start, _len) in &calls {
+        if start < prompt_len {
+            assert_eq!(
+                start % chunk_len,
+                0,
+                "prefill chunk start {start} is not a real chunk boundary ({chunk_len}); \
+                 the frontier overshot real prompt tokens via accepted drafts (recorded                  starts {calls:?}, want multiples of {chunk_len})"
+            );
+        }
+    }
+    // The real chunks tile the prompt exactly once when the starts are
+    // correct: interval [start, start+chunk) capped at the prompt end.
+    let mut covered = vec![false; prompt_len];
+    for &(start, len) in &calls {
+        if start < prompt_len {
+            let end = (start + len).min(prompt_len);
+            for slot in &mut covered[start..end] {
+                assert!(
+                    !*slot,
+                    "real prompt position is fed twice (chunk starts {calls:?})"
+                );
+                *slot = true;
+            }
+        }
+    }
+    let missing: Vec<usize> = covered
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| !**c)
+        .map(|(i, _)| i)
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "speculative chunked prefill must feed every real prompt position exactly once; \
+         missing positions {missing:?} (chunk starts {calls:?}) — the frontier overshot \
+         real prompt tokens via accepted drafts (ISS-059)"
+    );
+
+    let mut received = 0usize;
+    while rx.try_recv().is_ok() {
+        received += 1;
+    }
+    assert_eq!(
+        received, 8,
+        "the speculative client stream must contain exactly max_tokens real output tokens \
+         (got {received})"
+    );
+}

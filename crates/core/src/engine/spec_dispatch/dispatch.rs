@@ -155,8 +155,25 @@ impl crate::engine::Engine {
             let Some(i) = batch.seq_ids.iter().position(|sid| sid == seq_id) else {
                 continue;
             };
-            let input_count =
-                batch.input_tokens.get(i).map_or(1, std::vec::Vec::len) + accepted_counts[i];
+            let chunk_len = batch.input_tokens.get(i).map_or(1, std::vec::Vec::len);
+            // RIL ISS-059: a MID-chunk prefill's accepted drafts occupy real
+            // upcoming prompt positions — the verifier only checked them
+            // against the target model's continuation guess, never against
+            // the prompt itself, so their KV is guessed content and the real
+            // prompt tokens would be SKIPPED if the frontier advanced past
+            // them (`requeue_partial_prefills`/ISS-054 preserves the inflated
+            // frontier, so the next chunk composes from it). Advance the
+            // frontier by the REAL chunk only; the final chunk (completes the
+            // prompt) and decode sequences keep the full
+            // `chunk_len + accepted` — there the drafts are genuine generated
+            // continuation starting at `prompt_len`. `stale_by_seq` encodes
+            // exactly this mid-chunk predicate (start + chunk < prompt_len).
+            let mid_chunk = stale_by_seq.get(seq_id).copied().unwrap_or(false);
+            let input_count = if mid_chunk {
+                chunk_len
+            } else {
+                chunk_len + accepted_counts[i]
+            };
             self.scheduler.update_speculative(
                 std::slice::from_ref(seq_id),
                 std::slice::from_ref(tokens),
