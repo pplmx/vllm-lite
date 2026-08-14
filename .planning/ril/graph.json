@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 51,
+  "round": 52,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-11T08:19:44+00:00",
+  "updated_at": "2026-08-14T06:59:47+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -33,7 +33,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 16,
+      "touched_round": 52,
       "title": "vllm-model",
       "role": "model architectures, kernels, paged tensor store"
     },
@@ -3922,6 +3922,66 @@
       "source": "crates/core/src/engine/spec_dispatch/tests.rs::speculative_chunked_prefill_never_streams_stale_midchunk_predictions",
       "title": "Speculative + chunked prefill (100-token prompt, chunk 16, max_tokens 8): client channel observed 24 tokens pre-fix vs exactly 8 (= max_tokens) post-fix. 661 vllm-core tests green",
       "confidence": 1.0
+    },
+    "HYP-020": {
+      "id": "HYP-020",
+      "type": "hypothesis",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T06:56:36+00:00",
+      "updated_at": "2026-08-14T06:56:36+00:00",
+      "touched_round": 52,
+      "confidence": 1.0,
+      "title": "gqa_attn_factor changes-output tests are flaky: they draw unseeded random weights via candle thread-local OS-entropy RNG (randn -> rand::rng()); ~0.75% of draws yield ill-conditioned attention (near-uniform, or saturated to one-hot via |qk| O(1000) after two weight matmuls) where halving score temperature with attn_factor=0.5 leaves output within 1e-5 (bit-identical when saturated), so the must-change-output assertion fails intermittently"
+    },
+    "EV-073": {
+      "id": "EV-073",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T06:56:44+00:00",
+      "updated_at": "2026-08-14T06:56:44+00:00",
+      "touched_round": 52,
+      "confidence": 1.0,
+      "source": "crates/model/src/components/attention/gqa/tests.rs + ad-hoc measurement: 2000 reiterations with fresh randn draws gave 15 (0.75%) with max diff <= 1e-5; full nextest run failed gqa_attn_factor_changes_output (max diff = 0) while isolated runs pass",
+      "title": "Measured flake rate 15/2000 (0.75%) for the unseeded gqa attn_factor sensitivity fixture; deterministic amplitude-0.25 fixture keeps all four forward paths at 0.33 (standard) / 0.021 (paged/tiled/flash) margin"
+    },
+    "ISS-058": {
+      "id": "ISS-058",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-14T06:56:51+00:00",
+      "updated_at": "2026-08-14T06:59:47+00:00",
+      "touched_round": 52,
+      "title": "Intermittent CI failure in GQA attn_factor 'changes output' tests (gqa_attn_factor_changes_output + 3 sibling paged/tiled/flash variants sharing the same fixture): assert attn_factor=0.5 changes the forward output, but the fixture uses unseeded random weights (candle thread-local RNG); ~0.75% of draws produce ill-conditioned attention where the assertion fails (max diff = 0 observed in a full nextest run, isolated runs pass). Test-quality defect: sensitivity assertion depends on a random draw rather than a verified non-degenerate fixture"
+    },
+    "TASK-061": {
+      "id": "TASK-061",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-14T06:56:58+00:00",
+      "updated_at": "2026-08-14T06:59:47+00:00",
+      "touched_round": 52,
+      "category": "test-quality",
+      "severity": 2,
+      "confidence": 1.0,
+      "effort": 1,
+      "unlock_factor": 1.0,
+      "priority_score": 8.0,
+      "title": "Replace the unseeded randn fixtures in the four GQA attn_factor changes-output tests with a fixed deterministic fixture (deterministic_flat multiplicative-hash draw at amplitude 0.25, verified to keep all four forward paths non-degenerate with 0.02-0.33 margins) so the intermittent CI flake (25% of full-suite runs hit a bad draw within expectations) is removed (ISS-058)"
+    },
+    "CHG-060": {
+      "id": "CHG-060",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T06:59:47+00:00",
+      "updated_at": "2026-08-14T06:59:47+00:00",
+      "touched_round": 52,
+      "commit": "185c771b",
+      "title": "Deterministic fixtures for GQA attn_factor sensitivity tests: replace unseeded randn with deterministic_flat (amplitude 0.25) shared across standard/paged/tiled/flash paths; verified margins 0.33/0.021; full nextest 2126/2126 green"
     }
   },
   "edges": [
@@ -5634,6 +5694,36 @@
       "to": "TASK-060",
       "type": "implements",
       "created_at": "2026-08-11T08:19:44+00:00"
+    },
+    {
+      "from": "EV-073",
+      "to": "HYP-020",
+      "type": "validates",
+      "created_at": "2026-08-14T06:57:10+00:00"
+    },
+    {
+      "from": "TASK-061",
+      "to": "ISS-058",
+      "type": "addresses",
+      "created_at": "2026-08-14T06:57:10+00:00"
+    },
+    {
+      "from": "ISS-058",
+      "to": "COMP-003",
+      "type": "located_in",
+      "created_at": "2026-08-14T06:57:10+00:00"
+    },
+    {
+      "from": "CHG-060",
+      "to": "TASK-061",
+      "type": "implements",
+      "created_at": "2026-08-14T06:59:47+00:00"
+    },
+    {
+      "from": "CHG-060",
+      "to": "ISS-058",
+      "type": "resolves",
+      "created_at": "2026-08-14T06:59:47+00:00"
     }
   ]
 }
