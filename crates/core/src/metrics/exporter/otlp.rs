@@ -131,7 +131,7 @@ pub enum OtlpError {
 /// Schema mapping: `(prometheus_name, otel_name, InstrumentKind, unit)`.
 /// `InstrumentKind` is a private tag because the `OTel` Counter/Gauge types
 /// are not nameable across `Option<>` in a const table.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InstrumentKind {
     Counter,
     Gauge,
@@ -269,6 +269,59 @@ enum Instrument {
     UpDownCounter(UpDownCounter<i64>),
 }
 
+/// Fixed-point scale for the ratio gauges (`packing_efficiency`,
+/// `speculative_*`, `throughput_speedup_ratio`): the collector stores them
+/// as `ratio * 100_000` (u64) and the Prometheus exporter prints
+/// `value / 100_000.0`. `OTel` must apply the same scale before
+/// `Gauge::record`, otherwise the exported value is ``100_000×`` too large.
+const RATIO_FIXED_POINT_SCALE: f64 = 100_000.0;
+
+/// Delta an `OTel` [`Counter`] should be `add`ed since the previous export
+/// tick, given the collector's ABSOLUTE lifetime total (`value`) and the
+/// previously-exported total (`prev`). `OTel` counters accumulate their
+/// `add()`s server-side (cumulative temporality), so feeding the absolute
+/// total every tick inflates the series by the sum of every observed total
+/// (e.g. `requests_total` 100 then 200 would read 100 then 300). Sending
+/// the delta makes the backend cumulative equal the true lifetime total.
+/// `None` `prev` (the first tick) sends the full value — the backend starts
+/// empty. Monotonic counters never decrease, so the delta saturates at 0.
+const fn counter_delta(prev: Option<u64>, value: u64) -> u64 {
+    match prev {
+        Some(p) => value.saturating_sub(p),
+        None => value,
+    }
+}
+
+/// Signed delta an `OTel` [`UpDownCounter`] should be `add`ed since the
+/// previous export tick. The [`UpDownCounter`] instruments back gauge-like
+/// `CURRENT` snapshots (request queue depth, active sequences, memory
+/// bytes), so the signed delta keeps the backend cumulative equal to the
+/// current value — including when it falls (negative delta). The first
+/// tick (no `prev`) sends the current value once, matching the backend's
+/// empty start.
+fn updown_delta(prev: Option<u64>, value: u64) -> i64 {
+    prev.map_or_else(
+        || i64::try_from(value).unwrap_or(i64::MAX),
+        |p| {
+            // invariant: the exact i128 subtraction never overflows for any
+            // pair of u64s; the clamp only guards the i64 conversion.
+            let delta = i128::from(value) - i128::from(p);
+            i64::try_from(delta).unwrap_or(if delta < 0 { i64::MIN } else { i64::MAX })
+        },
+    )
+}
+
+/// Gauge value-scale for an `OTel` [`Gauge`]. Only the `{ratio}` unit
+/// series are fixed-point (`ratio * 100_000`) and need the 100,000-scale;
+/// all other gauges export the raw current value.
+fn ratio_scale_for(unit: &str) -> f64 {
+    if unit == "{ratio}" {
+        RATIO_FIXED_POINT_SCALE
+    } else {
+        1.0
+    }
+}
+
 /// Push-based OTLP metrics exporter polling the collector and exporting via `OTel`.
 ///
 /// Holds an `EnhancedMetricsCollector` reference + an OTLP `SdkMeterProvider`;
@@ -395,6 +448,19 @@ impl OtlpExporter {
         // `interval`, not at t=0 (gives the engine time to record data).
         ticker.tick().await;
 
+        // Per-schema gauge scaling: only the `{ratio}` series are stored
+        // fixed-point and must be divided by `RATIO_FIXED_POINT_SCALE`.
+        let gauge_scales: HashMap<&str, f64> = SCHEMA_MAP
+            .iter()
+            .filter(|(_, _, kind, _)| *kind == InstrumentKind::Gauge)
+            .map(|(p, _, _, unit)| (*p, ratio_scale_for(unit)))
+            .collect();
+
+        // Last-exported absolute values per instrument, so Counter /
+        // UpDownCounter can be fed DELTAS (their OTel semantics accumulate
+        // `add()`s) instead of absolute totals (which double/triple-count).
+        let mut prev_values: HashMap<String, u64> = HashMap::with_capacity(SCHEMA_MAP.len());
+
         loop {
             ticker.tick().await;
             // Index by Prometheus name for O(1) lookups. All metric sources
@@ -440,23 +506,35 @@ impl OtlpExporter {
 
             for (prom_name, inst) in &instruments {
                 let value = by_name.get(*prom_name).copied().unwrap_or(0);
+                let prev = prev_values.get(*prom_name).copied();
                 match inst {
-                    // Counter takes u64 — pass directly, no cast.
-                    Instrument::Counter(c) => c.add(value, &[]),
-                    // Gauge's OTel API takes f64 — an unavoidable cast; integer
-                    // counters don't exceed 2^53 in practice for a single
-                    // reporting interval so precision loss is negligible here.
-                    Instrument::Gauge(g) => {
-                        #[allow(clippy::cast_precision_loss)]
-                        g.record(value as f64, &[]);
+                    // Counter takes u64 deltas: the backend (cumulative
+                    // temporality) accumulates `add()`s, so send the delta
+                    // since the last tick — the absolute total would be
+                    // added AGAIN server-side, inflating the series.
+                    Instrument::Counter(c) => {
+                        let delta = counter_delta(prev, value);
+                        c.add(delta, &[]);
                     }
-                    // UpDownCounter takes i64 — counters are non-negative and
-                    // i64::MAX is practically unreachable, so `try_from` with
-                    // a clamp avoids silent two's-complement wrap.
+                    // Gauge's OTel API takes f64 — an unavoidable cast;
+                    // integers don't exceed 2^53 in practice so precision
+                    // loss is negligible here. Gauges are snapshots (no
+                    // delta) — but the `{ratio}` series are fixed-point and
+                    // must be scaled by 100,000 to match the Prometheus
+                    // exporter's `value / 100_000.0`.
+                    Instrument::Gauge(g) => {
+                        let scale = gauge_scales.get(*prom_name).copied().unwrap_or(1.0);
+                        #[allow(clippy::cast_precision_loss)]
+                        g.record(value as f64 / scale, &[]);
+                        continue;
+                    }
+                    // UpDownCounter takes i64 signed deltas (can decrease).
                     Instrument::UpDownCounter(u) => {
-                        u.add(i64::try_from(value).unwrap_or(i64::MAX), &[]);
+                        let delta = updown_delta(prev, value);
+                        u.add(delta, &[]);
                     }
                 }
+                prev_values.insert((*prom_name).to_string(), value);
             }
             // PeriodicReader auto-flushes on each tick; no explicit flush call.
         }
@@ -606,5 +684,45 @@ mod tests {
                 "Prometheus metric {name} has no `OTel` counterpart in SCHEMA_MAP"
             );
         }
+    }
+
+    #[test]
+    fn counter_delta_first_tick_is_full_value_then_deltas() {
+        // The collector exposes ABSOLUTE lifetime totals from an atomic
+        // counter. An OTel Counter (cumulative temporality) accumulates its
+        // `add()`s server-side, so feeding the absolute value every tick
+        // inflates the series by the sum of all observed totals. The
+        // exporter must send the delta since the last tick.
+        assert_eq!(counter_delta(None, 100), 100);
+        assert_eq!(counter_delta(Some(100), 200), 100);
+        assert_eq!(counter_delta(Some(200), 250), 50);
+    }
+
+    #[test]
+    fn counter_delta_clamps_monotonic_overflow() {
+        // A monotonic counter can never decrease; a decrease reads as 0
+        // delta (never a negative add that would corrupt the backend).
+        assert_eq!(counter_delta(Some(50), 30), 0);
+    }
+
+    #[test]
+    fn updown_delta_preserves_decreases() {
+        // UpDownCounter instruments back gauge-like CURRENT snapshots (queue
+        // depth, active sequences). Signed deltas keep the backend cumulative
+        // equal to the current value, including when it falls.
+        assert_eq!(updown_delta(None, 5), 5);
+        assert_eq!(updown_delta(Some(5), 8), 3);
+        assert_eq!(updown_delta(Some(5), 3), -2);
+    }
+
+    #[test]
+    fn ratio_gauge_scale_applies_only_to_ratio_units() {
+        // `packing_efficiency` / `speculative_*` / `throughput_speedup_ratio`
+        // are stored fixed-point as `ratio * 100_000` (u64); the Prometheus
+        // exporter divides by 100_000.0. OTLP must apply the same scale,
+        // otherwise `Gauge::record(85000.0)` is 100,000× too large.
+        assert_eq!(ratio_scale_for("{ratio}"), RATIO_FIXED_POINT_SCALE);
+        assert_eq!(ratio_scale_for("{sequence}"), 1.0);
+        assert_eq!(ratio_scale_for("By"), 1.0);
     }
 }
