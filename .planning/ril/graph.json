@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 54,
+  "round": 55,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T08:40:41+00:00",
+  "updated_at": "2026-08-14T11:18:34+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4094,11 +4094,11 @@
     "ISS-061": {
       "id": "ISS-061",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-14T08:00:02+00:00",
-      "updated_at": "2026-08-14T08:00:02+00:00",
-      "touched_round": 52,
+      "updated_at": "2026-08-14T11:18:34+00:00",
+      "touched_round": 55,
       "title": "sequence_packing env-var tests race on shared process env: from_env_reads_env_vars / from_env_uses_defaults_when_vars_unset / from_env_falls_back_on_parse_failure all mutate the same VLLM_SEQ_PACKING_* vars concurrently (cargo test runs threads in parallel; the SAFETY comments claim single-threaded execution), so a run intermittently reads a stale value - observed from_env_falls_back_on_parse_failure reading TARGET=8 instead of the default 32 (left by another test) and the earlier full-suite run failing. CI-flake class identical to the GQA randn one (ISS-058)"
     },
     "EV-076": {
@@ -4174,6 +4174,64 @@
       "touched_round": 53,
       "title": "just autofix prefers cargo-fixit with cargo fix fallback",
       "commit": "9b264ec0"
+    },
+    "TASK-065": {
+      "id": "TASK-065",
+      "type": "task",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T11:13:47+00:00",
+      "updated_at": "2026-08-14T11:13:47+00:00",
+      "touched_round": 55,
+      "category": "stability",
+      "severity": "high",
+      "title": "Fix sequence_packing env-var test race (ISS-061): three from_env_* tests mutate same VLLM_SEQ_PACKING_* process env vars without a mutex; SAFETY comments falsely claim names unique; server/config/tests.rs already uses ENV_TEST_MUTEX for same class. Add module mutex + fix comments"
+    },
+    "TASK-066": {
+      "id": "TASK-066",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-14T11:13:53+00:00",
+      "updated_at": "2026-08-14T11:18:34+00:00",
+      "touched_round": 55,
+      "category": "stability",
+      "severity": 0.8,
+      "title": "Fix sequence_packing env-var test race (ISS-061): three from_env_* tests mutate same VLLM_SEQ_PACKING_* process env vars without a mutex; SAFETY comments falsely claim names unique; server/config/tests.rs already uses ENV_TEST_MUTEX for same class. Add module mutex + fix comments"
+    },
+    "CHG-064": {
+      "id": "CHG-064",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T11:17:48+00:00",
+      "updated_at": "2026-08-14T11:17:48+00:00",
+      "touched_round": 55,
+      "commit": "04148c1937c1cab26214faa498a890549a0e55a5",
+      "title": "sequence_packing env-var tests serialized (ENV_TEST_MUTEX, TASK-066/ISS-061)"
+    },
+    "EV-078": {
+      "id": "EV-078",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T11:17:59+00:00",
+      "updated_at": "2026-08-14T11:17:59+00:00",
+      "touched_round": 55,
+      "source": "04148c19 (commit); 10x nextest stress @8 threads; vllm-core lib 440/440; just ci exit 0",
+      "title": "fixed: from_env_* tests pass deterministically under parallel nextest after ENV_TEST_MUTEX; full CI green",
+      "confidence": 1.0
+    },
+    "HYP-023": {
+      "id": "HYP-023",
+      "type": "hypothesis",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-14T11:18:20+00:00",
+      "updated_at": "2026-08-14T11:18:20+00:00",
+      "touched_round": 55,
+      "confidence": 0.95,
+      "title": "ISS-061 root cause: three from_env_* tests race on shared VLLM_SEQ_PACKING_* process env vars under parallel test threads (SAFETY comment wrongly claimed unique var names)"
     }
   },
   "edges": [
@@ -5988,6 +6046,30 @@
       "to": "TASK-064",
       "type": "implements",
       "created_at": "2026-08-14T08:39:11+00:00"
+    },
+    {
+      "from": "TASK-066",
+      "to": "ISS-061",
+      "type": "addresses",
+      "created_at": "2026-08-14T11:14:09+00:00"
+    },
+    {
+      "from": "EV-078",
+      "to": "HYP-023",
+      "type": "validates",
+      "created_at": "2026-08-14T11:18:33+00:00"
+    },
+    {
+      "from": "CHG-064",
+      "to": "ISS-061",
+      "type": "resolves",
+      "created_at": "2026-08-14T11:18:33+00:00"
+    },
+    {
+      "from": "CHG-064",
+      "to": "TASK-066",
+      "type": "implements",
+      "created_at": "2026-08-14T11:18:33+00:00"
     }
   ]
 }
