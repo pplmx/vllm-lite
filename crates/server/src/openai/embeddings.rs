@@ -5,6 +5,17 @@ use axum::{Json, extract::State, response::IntoResponse};
 use tokio::sync::mpsc;
 use vllm_core::types::EngineMessage;
 
+/// Hard cap on the number of input elements a single `POST /v1/embeddings`
+/// request may carry (RIL ISS-068 / TASK-081).
+///
+/// Each element yields a full model-dimension vector that is materialised,
+/// kept in memory, and serialized; with no cap (the generation siblings
+/// bound fan-out via `n <= 8` / `best_of <= 20`) a single 1 MiB body of
+/// short strings would amplify into an unbounded number of dense vectors.
+/// Matches the `OpenAI` embeddings API's documented batch bound (an array
+/// of up to 2,048 strings per request).
+const MAX_EMBEDDINGS_INPUTS: usize = 2048;
+
 /// OpenAI-compatible `/v1/embeddings` HTTP handler.
 ///
 /// Encodes each input string, sends an [`EngineMessage::GetEmbeddings`] to the
@@ -73,11 +84,63 @@ pub async fn embeddings(
         ));
     }
 
+    // RIL ISS-068 / TASK-081: per-element + count + context validation,
+    // mirroring the sibling boundary checks on chat/completions.
+    //
+    // Empty / whitespace-only elements reject the whole request — the sync
+    // completions contract (`req.prompt.is_empty()` -> 400) applied per
+    // element. A single blank string would otherwise encode to a zero-token
+    // embed that every sibling path explicitly forbids.
+    if req.input.iter().any(|text| text.trim().is_empty()) {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "input elements must not be empty or whitespace-only",
+                "invalid_request_error",
+            )),
+        ));
+    }
+
+    // Bound the element count — each element is a full model-dimension
+    // vector; without a cap a 1 MiB body of tiny strings amplifies into an
+    // unbounded response (the `n <= 8` fan-out bound on the siblings).
+    if req.input.len() > MAX_EMBEDDINGS_INPUTS {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "too many input elements (maximum is 2,048)",
+                "invalid_request_error",
+            )),
+        ));
+    }
+
     let input_tokens: Vec<Vec<u32>> = req
         .input
         .iter()
         .map(|text| state.tokenizer.encode(text))
         .collect();
+
+    // RIL ISS-068 / TASK-081 (ISS-044 class): reject an input whose token
+    // count exceeds the model's context length instead of forcing a
+    // full-length embed forward. `check_context_length(prompt, 0, ...)`
+    // with `max_tokens = 0` reduces the gate to exactly
+    // `prompt_tokens <= max_model_len` (the `max_model_len = None` branch
+    // is a no-op for `max_tokens = 0`, which is fine — a stub model with no
+    // known context can't be gated, matching the generation paths).
+    for (i, tokens) in input_tokens.iter().enumerate() {
+        if let Err((_, json)) =
+            super::chat::check_context_length(tokens.len(), 0, state.max_model_len)
+        {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::with_code(
+                    &format!("input[{i}] {}", json.error.message),
+                    "invalid_request_error",
+                    "context_length_exceeded",
+                )),
+            ));
+        }
+    }
 
     let (response_tx, mut rx) = mpsc::unbounded_channel::<Vec<Vec<f32>>>();
 
