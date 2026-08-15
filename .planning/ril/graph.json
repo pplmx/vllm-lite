@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 68,
+  "round": 70,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T03:01:07+00:00",
+  "updated_at": "2026-08-15T06:28:21+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 67,
+      "touched_round": 69,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -4833,6 +4833,173 @@
       "source": "crates/server/src/openai/batch/handler.rs test_create_batch_rejects_empty_prompt_string, test_create_batch_rejects_batch_with_any_empty_prompt",
       "confidence": 1.0,
       "title": "2 new handler tests: single empty prompt + mixed-list fail-fast rejected with 400 before persist; full just ci green."
+    },
+    "ISS-068": {
+      "id": "ISS-068",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-15T05:12:55+00:00",
+      "updated_at": "2026-08-15T06:20:13+00:00",
+      "touched_round": 69,
+      "title": "Embeddings handler has no sibling boundary checks: (a) input: [\"\"] / whitespace-only elements pass (no per-element empty rejection, unlike sync completions req.prompt.is_empty()->400), (b) no check_context_length gate (ISS-044 class: arbitrarily long inputs force full-length embed forward, bounded only by 1MiB body), (c) no input-element-count cap (unbounded batch amplification vs n<=8/best_of<=20 on siblings), (d) engine handle_get_embeddings swallows model.embed errors -> misleading 503 engine_unavailable",
+      "severity": 3,
+      "confidence": 1.0
+    },
+    "ISS-069": {
+      "id": "ISS-069",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-15T05:13:24+00:00",
+      "updated_at": "2026-08-15T05:27:56+00:00",
+      "touched_round": 69,
+      "title": "Chat completions skips validation in streaming path: validate_chat_request (model/messages non-empty) runs only in handle_chat (chat.rs:502), not in stream_chat_completion/run_n_parallel_chat/stream_n_parallel_chat -> messages:[] or model:\"\" with stream:true yields a 200 empty SSE (no error event) whereas non-stream chat and sync completions 400. Also role is a free String silently dropped by templates (data loss with 200 OK) and empty message content is never rejected",
+      "severity": 3,
+      "confidence": 1.0
+    },
+    "ISS-070": {
+      "id": "ISS-070",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-15T05:13:32+00:00",
+      "updated_at": "2026-08-15T06:07:13+00:00",
+      "touched_round": 69,
+      "title": "Batch resource bounding: (a) create_batch has no max-prompts cap -- N full generations packed into one request vs 1 for sync completions, and estimate_request_cost clamps at 100k so beyond the clamp extra prompts are free amplification (round-59 cost-bypass class); OpenAI documents 50k requests per batch file; (b) batch worker awaits seq_id_rx with no timeout (worker.rs:211) vs siblings' 1s timeout + CancelOnDrop -> a stalled engine hangs the job in InProgress forever, and in-progress jobs are never evicted (unbounded retention, compounds (a))",
+      "severity": 3,
+      "confidence": 1.0
+    },
+    "TASK-081": {
+      "id": "TASK-081",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-08-15T05:14:07+00:00",
+      "updated_at": "2026-08-15T06:20:18+00:00",
+      "touched_round": 69,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 3,
+      "priority_score": 17.3,
+      "title": "Harden embeddings endpoint to sibling boundary parity (ISS-068): per-element empty/whitespace rejection (mirror sync completions empty-prompt 400), check_context_length gate per input (ISS-044 class), input-count cap, and don't map model.embed failure to retryable 503",
+      "lock_owner": "loop-1",
+      "lock_until": "2026-08-15T07:07:48+00:00"
+    },
+    "TASK-082": {
+      "id": "TASK-082",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-08-15T05:14:07+00:00",
+      "updated_at": "2026-08-15T05:27:42+00:00",
+      "touched_round": 69,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 2,
+      "priority_score": 21.2,
+      "title": "Chat streaming validation parity (ISS-069): validate model/messages non-empty before the stream/n-parallel dispatch (mirror sync completions pre-dispatch validation), constrain role to system/user/assistant/tool (silent data loss today), reject empty message content",
+      "lock_owner": "loop-1",
+      "lock_until": "2026-08-15T06:14:26+00:00"
+    },
+    "TASK-083": {
+      "id": "TASK-083",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-08-15T05:14:07+00:00",
+      "updated_at": "2026-08-15T06:07:13+00:00",
+      "touched_round": 69,
+      "category": "security",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 2,
+      "priority_score": 21.2,
+      "title": "Batch resource bounding (ISS-070): cap create_batch prompts (0.5x OpenAI 50k contract, reject with 400) closing cost-clamp-amplification, and add seq_id_rx timeout in batch worker (mirror siblings' 1s + CancelOnDrop) so a stalled engine can't hang a job InProgress forever",
+      "lock_owner": "loop-1",
+      "lock_until": "2026-08-15T06:28:29+00:00"
+    },
+    "CHG-078": {
+      "id": "CHG-078",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T05:27:00+00:00",
+      "updated_at": "2026-08-15T05:27:00+00:00",
+      "touched_round": 69,
+      "commit": "62a8ec5f",
+      "title": "Chat streaming + per-message validation parity: validate_chat_request runs at chat_completions boundary (stream/n>1 paths), rejects empty content + constrains role to {system,user,assistant,tool}"
+    },
+    "EV-091": {
+      "id": "EV-091",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T05:27:00+00:00",
+      "updated_at": "2026-08-15T05:27:00+00:00",
+      "touched_round": 69,
+      "source": "test",
+      "title": "TDD: 4 new unit tests (empty content, any-empty, unknown role, malformed role, valid roles pass) + 3 handler-level streaming regression tests (empty messages / empty model / empty content with stream=true -> 400) all GREEN; full just ci passes (294+266+307+284 tests)",
+      "confidence": 1.0
+    },
+    "CHG-079": {
+      "id": "CHG-079",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T06:06:11+00:00",
+      "updated_at": "2026-08-15T06:06:11+00:00",
+      "touched_round": 69,
+      "commit": "0d8eae96",
+      "title": "Batch resource bounding: create_batch cap at 10k prompts (400 pre-persist) + worker seq_id_rx 3s timeout (stalled engine no longer hangs job InProgress forever)"
+    },
+    "EV-092": {
+      "id": "EV-092",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T06:06:11+00:00",
+      "updated_at": "2026-08-15T06:06:11+00:00",
+      "touched_round": 69,
+      "source": "test",
+      "title": "TDD: 2 handler tests (accept 10k / reject 10k+1 without persisting) + 2 worker tests incl. stalled-engine regression (30s outer bound; pre-fix hangs, post-fix item fails in ~3s); full just ci green (484 server lib tests)",
+      "confidence": 1.0
+    },
+    "CHG-080": {
+      "id": "CHG-080",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T06:20:07+00:00",
+      "updated_at": "2026-08-15T06:20:07+00:00",
+      "touched_round": 69,
+      "commit": "3dcfc252",
+      "title": "Embeddings sibling boundary checks: reject empty/whitespace elements (400), per-input context-length gate (ISS-044), 2048 element cap"
+    },
+    "EV-093": {
+      "id": "EV-093",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T06:20:07+00:00",
+      "updated_at": "2026-08-15T06:20:07+00:00",
+      "touched_round": 69,
+      "source": "test",
+      "title": "TDD: 9 new embeddings unit tests (empty element, whitespace, any-empty-in-list, over/at-cap count, context-length exceed/within) GREEN; full just ci passes (492 server lib tests + 3 capability integration)",
+      "confidence": 1.0
+    },
+    "DEC-047": {
+      "id": "DEC-047",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T06:22:06+00:00",
+      "updated_at": "2026-08-15T06:22:06+00:00",
+      "touched_round": 69,
+      "rationale": "Embeddings part (d) of ISS-068 (engine handle_get_embeddings swallows model.embed errors -> misleading retryable 503 engine_unavailable) is deferred as a public-API wire change: fixing the misclassification properly requires carrying a typed error on EngineMessage::GetEmbeddings response channel (UnboundedSender<Vec<Vec<f32>>> -> Result), which bumps the public-API baseline for a Low-Medium latent misclassification; the error is already logged server-side and the 503 is not silent data loss",
+      "alternatives_rejected": "(a) Naive sentinel (e.g. send empty vec on error): would fabricate a zero-vector response indistinguishable from a real empty batch; (b) Wire Result type now: public-API baseline churn + dist/tests touch for an error the audit rated Low-Medium"
     }
   },
   "edges": [
@@ -6863,6 +7030,78 @@
       "to": "ISS-067",
       "type": "resolves",
       "created_at": "2026-08-15T03:00:27+00:00"
+    },
+    {
+      "from": "ISS-068",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-15T05:13:47+00:00"
+    },
+    {
+      "from": "ISS-069",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-15T05:13:48+00:00"
+    },
+    {
+      "from": "ISS-070",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-15T05:13:48+00:00"
+    },
+    {
+      "from": "TASK-081",
+      "to": "ISS-068",
+      "type": "addresses",
+      "created_at": "2026-08-15T05:14:15+00:00"
+    },
+    {
+      "from": "TASK-082",
+      "to": "ISS-069",
+      "type": "addresses",
+      "created_at": "2026-08-15T05:14:15+00:00"
+    },
+    {
+      "from": "TASK-083",
+      "to": "ISS-070",
+      "type": "addresses",
+      "created_at": "2026-08-15T05:14:15+00:00"
+    },
+    {
+      "from": "CHG-078",
+      "to": "TASK-082",
+      "type": "implements",
+      "created_at": "2026-08-15T05:27:16+00:00"
+    },
+    {
+      "from": "CHG-078",
+      "to": "ISS-069",
+      "type": "resolves",
+      "created_at": "2026-08-15T05:27:16+00:00"
+    },
+    {
+      "from": "CHG-079",
+      "to": "TASK-083",
+      "type": "implements",
+      "created_at": "2026-08-15T06:06:43+00:00"
+    },
+    {
+      "from": "CHG-079",
+      "to": "ISS-070",
+      "type": "resolves",
+      "created_at": "2026-08-15T06:06:43+00:00"
+    },
+    {
+      "from": "CHG-080",
+      "to": "TASK-081",
+      "type": "implements",
+      "created_at": "2026-08-15T06:20:13+00:00"
+    },
+    {
+      "from": "CHG-080",
+      "to": "ISS-068",
+      "type": "resolves",
+      "created_at": "2026-08-15T06:20:13+00:00"
     }
   ]
 }

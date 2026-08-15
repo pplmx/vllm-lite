@@ -293,7 +293,7 @@ fn test_validate_chat_request_rejects_malformed_role() {
     }
 }
 
-/// RIL ISS-069 / TASK-082: the four OpenAI roles must remain accepted.
+/// RIL ISS-069 / TASK-082: the four `OpenAI` roles must remain accepted.
 #[test]
 fn test_validate_chat_request_accepts_valid_roles() {
     for role in ["system", "user", "assistant", "tool"] {
