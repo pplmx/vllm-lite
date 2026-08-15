@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 71,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T13:27:18+00:00",
+  "updated_at": "2026-08-15T13:54:25+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -5102,11 +5102,11 @@
     "ISS-074": {
       "id": "ISS-074",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-15T09:04:09+00:00",
-      "updated_at": "2026-08-15T09:04:09+00:00",
-      "touched_round": 70,
+      "updated_at": "2026-08-15T13:54:25+00:00",
+      "touched_round": 71,
       "title": "Silent token loss: engine sends every sampled token with tx.try_send and ignores the result (scheduler/batch.rs:179-181); when the 64-slot mpsc response channel fills (handler drains slower than generation), TrySendError::Full drops the token permanently -- client stream has a gap, sequence burns KV to max_tokens, nothing logged. A dropped receiver is benign; the full-buffer drop is the silent-loss case.",
       "severity": 3,
       "confidence": 0.9
@@ -5252,6 +5252,44 @@
       "effort": 1,
       "priority_score": 2.0,
       "title": "Correct FinishReason::Stop doc to stop claiming EOS-stop is implemented (state ISS-075/DEC-050 deferral honestly); no behavior change"
+    },
+    "TASK-089": {
+      "id": "TASK-089",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-15T13:38:03+00:00",
+      "updated_at": "2026-08-15T13:54:25+00:00",
+      "touched_round": 71,
+      "category": "stability",
+      "severity": 3,
+      "confidence": 0.9,
+      "effort": 2,
+      "priority_score": 18.0,
+      "title": "Make token-channel drops observable (ISS-074): engine try_send ignores TrySendError::Full on the 64-slot response channel -> silent stream gap, no log. Add dropped_tokens_total counter + warn! on Full + Prometheus export; Closed stays benign. TDD counter test."
+    },
+    "CHG-085": {
+      "id": "CHG-085",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T13:53:46+00:00",
+      "updated_at": "2026-08-15T13:53:46+00:00",
+      "touched_round": 71,
+      "commit": "1bffc064",
+      "title": "Token-channel drops observable: try_send Full -> warn! + dropped_tokens_total counter (Prometheus /metrics); Closed stays benign; pub fn record_dropped_token"
+    },
+    "EV-097": {
+      "id": "EV-097",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T13:53:46+00:00",
+      "updated_at": "2026-08-15T13:53:46+00:00",
+      "touched_round": 71,
+      "source": "test",
+      "title": "TDD: counter test (0->2) + engine-level Full-channel drop test both RED (methods absent) -> GREEN; full vllm-core 440/472 (all-features) pass; clippy 0 warnings; just ci green; public API +1",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -7474,6 +7512,18 @@
       "to": "ISS-075",
       "type": "addresses",
       "created_at": "2026-08-15T13:27:18+00:00"
+    },
+    {
+      "from": "CHG-085",
+      "to": "TASK-089",
+      "type": "implements",
+      "created_at": "2026-08-15T13:53:47+00:00"
+    },
+    {
+      "from": "CHG-085",
+      "to": "ISS-074",
+      "type": "resolves",
+      "created_at": "2026-08-15T13:53:47+00:00"
     }
   ]
 }
