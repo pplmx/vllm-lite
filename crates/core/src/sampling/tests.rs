@@ -104,6 +104,92 @@ fn test_top_k_all_neg_inf_falls_back_to_greedy() {
     assert_eq!(top_k_sample(&logits, 5, 0.5), 0);
 }
 
+// RIL ISS-073 / TASK-086: a single NaN logit among FINITE logits must not
+// produce an arbitrary (non-argmax) token — the pre-fix guard checked only
+// `max_val` finiteness, but `f32::max` silently ignores NaN, so a NaN row
+// left `max_val` finite while the softmax exp-sum became NaN and every
+// `random_threshold <= cumsum` comparison was false, falling through to the
+// tail index (len-1). Write the regression so the mixed-NaN input must pick
+// the actual argmax, not the fallback tail.
+
+#[test]
+fn test_temperature_mixed_nan_picks_finite_argmax() {
+    // Logits: index 1 is the clear max; index 0 is NaN. Pre-fix the NaN
+    // poisoned the softmax -> fallback returned token 2 (the tail), not
+    // the argmax at index 1.
+    let logits = vec![f32::NAN, 1.0, 0.0];
+    // Threshold 0.5: the argmax carries the probability mass, so the
+    // cumulative sum crosses 0.5 at index 1 for any sane distribution.
+    assert_eq!(temperature_sample(&logits, 0.8, 0.5), 1);
+
+    // A different random threshold must still land in the finite set, never
+    // the silent tail fallback for a NaN-adjacent row.
+    let logits = vec![f32::NAN, 2.0, 1.0];
+    assert_eq!(temperature_sample(&logits, 0.8, 0.001), 1);
+    let logits = vec![2.0, f32::NAN, 1.0];
+    assert_eq!(temperature_sample(&logits, 0.8, 0.001), 0);
+    let logits = vec![f32::NAN, 0.0, 1.0];
+    assert_eq!(temperature_sample(&logits, 0.8, 0.5), 2);
+
+    // Positive infinity among finite logits must behave the same (the
+    // infinite logit is the argmax and wins outright).
+    let logits = vec![f32::NAN, f32::INFINITY, 0.0];
+    assert_eq!(temperature_sample(&logits, 0.8, 0.5), 1);
+}
+
+#[test]
+fn test_top_p_mixed_nan_picks_finite_argmax() {
+    // Same mixed-NaN regression for the nucleus sampler: pre-fix the NaN
+    // sorted last, the exp-sum collapsed to NaN, the cutoff loop never
+    // triggered, and the fallback returned the NaN position (the last
+    // sorted index) instead of the argmax.
+    let logits = vec![f32::NAN, 1.0, 0.0];
+    assert_eq!(top_p_sample(&logits, 0.9, 0.5), 1);
+
+    let logits = vec![f32::NAN, 2.0, 1.0];
+    assert_eq!(top_p_sample(&logits, 0.9, 0.001), 1);
+    let logits = vec![2.0, f32::NAN, 1.0];
+    assert_eq!(top_p_sample(&logits, 0.9, 0.001), 0);
+
+    // `-inf` mixed with finite must keep degrading to greedy (the finite
+    // argmax wins, never the -inf tail).
+    let logits = vec![f32::NEG_INFINITY, 1.0, f32::NEG_INFINITY];
+    assert_eq!(top_p_sample(&logits, 0.9, 0.5), 1);
+}
+
+// RIL ISS-073 / TASK-086: the logprob helpers shared the same mixed-NaN
+// poisoning — a NaN slipped past the `max_val.is_finite()` guard and made
+// `log_softmax` / `renormalized_top_p_logprobs` emit NaN logprobs for the
+// finite entries (which breaks `SampledToken` JSON serialization).
+
+#[test]
+fn test_log_softmax_mixed_nan_gives_finite_logprobs() {
+    let out = log_softmax(&[f32::NAN, 1.0, 0.0]);
+    assert_eq!(out.len(), 3);
+    // The NaN position must be -inf; the finite entries must be finite and
+    // ordered (index 1 strictly higher than index 2).
+    assert!(out[0] == f32::NEG_INFINITY);
+    assert!(out[1].is_finite() && out[2].is_finite());
+    assert!(
+        out[1] > out[2],
+        "argmax logit must have the highest logprob; got {out:?}"
+    );
+}
+
+#[test]
+fn test_renormalized_top_p_logprobs_mixed_nan_gives_finite_logprobs() {
+    let out = renormalized_top_p_logprobs(&[f32::NAN, 1.0, 0.0], 0.9);
+    assert_eq!(out.len(), 3);
+    // The NaN position is excluded from the nucleus -> -inf; the finite
+    // entries inside the cutoff have finite, positive-mass logprobs.
+    assert!(out[0] == f32::NEG_INFINITY);
+    assert!(out[1].is_finite() && out[2].is_finite());
+    assert!(
+        out[1] > out[2],
+        "argmax logit must have the highest logprob; got {out:?}"
+    );
+}
+
 #[test]
 fn test_sample_batch_with_params_all_neg_inf_degenerates_safely() {
     // Public-surface regression: all-`-inf` logits must yield the

@@ -92,11 +92,20 @@ fn log_softmax(logits: &[f32]) -> Vec<f32> {
     if logits.is_empty() {
         return Vec::new();
     }
-    let max_val = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    // RIL ISS-073 / TASK-086: sanitise `NaN` to `-inf` before the exp-sum
+    // (same rationale as `temperature_sample` — `f32::max` ignores NaN, so
+    // a single NaN would leave `max_val` finite while NaN-poisoning the
+    // sum and hence every finite entry's logprob). `+inf` stays so the
+    // guard below routes it to the all-`-inf` fallback.
+    let cleaned: Vec<f32> = logits
+        .iter()
+        .map(|&x| if x.is_nan() { f32::NEG_INFINITY } else { x })
+        .collect();
+    let max_val = cleaned.iter().copied().fold(f32::NEG_INFINITY, f32::max);
     if !max_val.is_finite() {
         return vec![f32::NEG_INFINITY; logits.len()];
     }
-    let sum_exp: f32 = logits.iter().map(|x| (x - max_val).exp()).sum();
+    let sum_exp: f32 = cleaned.iter().map(|x| (x - max_val).exp()).sum();
     let log_sum_exp = max_val + sum_exp.ln();
     logits
         .iter()
@@ -128,7 +137,16 @@ fn renormalized_top_p_logprobs(logits: &[f32], top_p: f32) -> Vec<f32> {
     // (zero-indexed) iff the cumulative probability up to and
     // including `i` is `≤ top_p`; the first index that pushes
     // cumsum over `top_p` becomes the exclusive upper bound.
-    let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
+    // RIL ISS-073 / TASK-086: sanitise `NaN` to `-inf` before sorting +
+    // softmax (same rationale as `top_p_sample`; a NaN would otherwise sort
+    // last, keep `max_val` finite, NaN-poison every logprob, and break the
+    // cutoff loop). `+inf` stays so the guard below routes to the
+    // all-`-inf` fallback.
+    let mut indexed: Vec<(usize, f32)> = logits
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| (i, if v.is_nan() { f32::NEG_INFINITY } else { v }))
+        .collect();
     indexed.sort_by(|a, b| {
         b.1.partial_cmp(&a.1)
             .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
@@ -185,7 +203,25 @@ pub(crate) fn temperature_sample(
         return greedy_sample(logits);
     }
 
-    let scaled: Vec<f32> = logits.iter().map(|x| x / temperature).collect();
+    // RIL ISS-073 / TASK-086: sanitise `NaN` logits to `-inf` BEFORE the
+    // softmax. A single NaN among finite logits would otherwise slip past
+    // the `max_val.is_finite()` guard (`f32::max` silently ignores NaN, so
+    // `max_val` stays finite) and poison the exp-sum: every probability
+    // becomes NaN, every `random_threshold <= cumsum` check is false, and
+    // the loop falls through to the tail index `len-1` — an arbitrary
+    // non-argmax token. Mapping NaN to `-inf` makes it contribute
+    // `exp(-inf) == 0` probability, so the finite entries recover the
+    // correct distribution and the argmax wins. `+inf` is deliberately left
+    // alone: it makes `max_val` non-finite, driving the guard below to
+    // `greedy_sample`, whose strict-`>` argmax correctly picks the `+inf`
+    // logit. `-inf` needs no rewrite (contributes 0 probability as-is).
+    let scaled: Vec<f32> = logits
+        .iter()
+        .map(|x| {
+            let s = x / temperature;
+            if s.is_nan() { f32::NEG_INFINITY } else { s }
+        })
+        .collect();
     let max_val = scaled.iter().copied().fold(f32::NEG_INFINITY, f32::max);
     // Degenerate input (all `-inf`, or `NaN`): there is no valid
     // distribution to sample from. Fall back to greedy argmax —
@@ -214,7 +250,21 @@ pub(crate) fn top_p_sample(logits: &[f32], top_p: f32, random_threshold: f32) ->
         return greedy_sample(logits);
     }
 
-    let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
+    // RIL ISS-073 / TASK-086: sanitise `NaN` logits to `-inf` BEFORE
+    // sorting + softmax. A single NaN would otherwise sort last, keep
+    // `max_val` finite (the `.1` of the first entry is the largest finite
+    // value), and poison the exp-sum exactly like `temperature_sample`:
+    // all-NaN probabilities, an untriggered cutoff loop, and the fallback
+    // returning the NaN position. `-inf` entries contribute
+    // `exp(-inf) == 0` probability, so the finite entries drive a correct
+    // nucleus distribution. `+inf` is left alone — it makes `max_val`
+    // non-finite, driving the guard below to `greedy_sample` (correct
+    // strict-`>` argmax pick).
+    let mut indexed: Vec<(usize, f32)> = logits
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| (i, if v.is_nan() { f32::NEG_INFINITY } else { v }))
+        .collect();
     indexed.sort_by(|a, b| {
         b.1.partial_cmp(&a.1)
             .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
