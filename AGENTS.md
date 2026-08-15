@@ -206,7 +206,7 @@ If a function does both acquisition and construction, prefer `load_*` over `crea
 
 | Suffix        | When required                                                       | Example                      |
 | ------------- | ------------------------------------------------------------------- | ---------------------------- |
-| `*Manager`    | Type owns and coordinates a concrete resource                       | `BatchManager`, `PreemptionManager` |
+| `*Manager`    | Type owns and coordinates a concrete resource                       | `BatchManager` |
 | `*Info`       | Type is metadata-only (no behavior); bare name would be ambiguous  | `NodeInfo` (vs graph `Node`) |
 | `*Data`       | Avoid unless matching an external API spec field name               | (avoid; prefer bare names)   |
 | `*Factory`    | Builder-pattern factory that produces one type                      | `RequestFactory`             |

@@ -37,7 +37,6 @@ pub mod eviction;
 pub use allocator::{BlockAllocator, BlockAllocatorStats};
 pub use eviction::{EvictionPolicy, EvictionPolicyStats};
 
-use crate::scheduler::preemption::PreemptionManager;
 use crate::types::{BlockId, SchedulerConfig, Sequence, Status};
 
 #[cfg(feature = "multi-node")]
@@ -86,7 +85,6 @@ pub struct DistributedPrefixMatch {
 pub struct MemoryManager {
     allocator: BlockAllocator,
     eviction_policy: EvictionPolicy,
-    preemption_manager: PreemptionManager,
     /// Optional distributed KV-cache; when `Some`, every `allocate`
     /// registers new blocks and every `free` invalidates them so peer
     /// nodes can observe activity.
@@ -130,11 +128,10 @@ impl Default for MemoryManager {
 impl MemoryManager {
     /// Creates a new `MemoryManager` with the given scheduler configuration and number of blocks.
     #[must_use]
-    pub fn new(config: SchedulerConfig, num_blocks: usize) -> Self {
+    pub fn new(_config: SchedulerConfig, num_blocks: usize) -> Self {
         Self {
             allocator: BlockAllocator::new(num_blocks),
             eviction_policy: EvictionPolicy::new(),
-            preemption_manager: PreemptionManager::new(config),
             #[cfg(feature = "multi-node")]
             distributed_kv: None,
             #[cfg(feature = "multi-node")]
@@ -456,23 +453,6 @@ impl MemoryManager {
         self.allocator.total()
     }
 
-    /// Determines whether preemption should be triggered based on current system state.
-    #[must_use]
-    pub fn should_preempt(
-        &self,
-        running_len: usize,
-        waiting_len: usize,
-        blocks_needed: usize,
-        blocks_available: usize,
-    ) -> bool {
-        self.preemption_manager.should_preempt(
-            running_len,
-            waiting_len,
-            blocks_needed,
-            blocks_available,
-        )
-    }
-
     /// Executes preemption by selecting sequences to evict and freeing their blocks.
     /// Returns the list of preempted sequences.
     pub fn execute_preemption(
@@ -570,15 +550,6 @@ impl MemoryManager {
         }
 
         seq.num_computed_tokens = tokens_after_rollback;
-    }
-
-    /// Returns preemption statistics: (`preempted_count`, `rejected_count`).
-    #[must_use]
-    pub const fn preemption_stats(&self) -> (u64, u64) {
-        (
-            self.preemption_manager.preempted_count(),
-            self.preemption_manager.rejected_count(),
-        )
     }
 }
 

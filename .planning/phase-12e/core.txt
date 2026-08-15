@@ -960,7 +960,6 @@ pub const fn vllm_core::scheduler::memory::allocator::BlockAllocator::available(
 pub const fn vllm_core::scheduler::memory::allocator::BlockAllocator::bytes_per_block() -> usize
 pub const fn vllm_core::scheduler::memory::allocator::BlockAllocator::total(&self) -> usize
 pub const fn vllm_core::scheduler::memory::MemoryManager::available_blocks(&self) -> usize
-pub const fn vllm_core::scheduler::memory::MemoryManager::preemption_stats(&self) -> (u64, u64)
 pub const fn vllm_core::scheduler::memory::MemoryManager::total_blocks(&self) -> usize
 pub const fn vllm_core::scheduler::packing::SequencePacker::new(vllm_core::types::SequencePackingConfig) -> Self
 pub const fn vllm_core::scheduler::phase_scheduler::PhaseScheduler::current_phase(&self) -> vllm_core::types::Phase
@@ -1129,6 +1128,7 @@ pub fn vllm_core::EnhancedMetricsCollector::record_latency(&self, f64)
 pub fn vllm_core::EnhancedMetricsCollector::record_packing_efficiency(&self, f64)
 pub fn vllm_core::EnhancedMetricsCollector::record_per_request_acceptance(&self, vllm_traits::types::SeqId, usize, usize)
 pub fn vllm_core::EnhancedMetricsCollector::record_prefix_cache_hit(&self)
+pub fn vllm_core::EnhancedMetricsCollector::record_prefix_cache_nodes(&self, usize)
 pub fn vllm_core::EnhancedMetricsCollector::record_prefix_cache_request(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_request(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_speculative_adjustment(&self)
@@ -1166,6 +1166,7 @@ pub fn vllm_core::metrics::LockFreeMetrics::record_batch_size(&self, usize)
 pub fn vllm_core::metrics::LockFreeMetrics::record_kv_cache_usage(&self, u64, u64)
 pub fn vllm_core::metrics::LockFreeMetrics::record_latency(&self, f64)
 pub fn vllm_core::metrics::LockFreeMetrics::record_prefix_cache_hit(&self)
+pub fn vllm_core::metrics::LockFreeMetrics::record_prefix_cache_nodes(&self, usize)
 pub fn vllm_core::metrics::LockFreeMetrics::record_prefix_cache_request(&self)
 pub fn vllm_core::metrics::LockFreeMetrics::record_request(&self)
 pub fn vllm_core::metrics::LockFreeMetrics::record_tokens(&self, u64)
@@ -1253,11 +1254,13 @@ pub fn vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig::eq(&self, &vl
 pub fn vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig::supports_batch_size(&self, usize) -> bool
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::add_request(&mut self, vllm_core::Request) -> vllm_traits::types::SeqId
+pub fn vllm_core::scheduler::engine::state::SchedulerEngine::add_request_without_prefix_cache(&mut self, vllm_core::Request) -> vllm_traits::types::SeqId
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::build_batch(&mut self) -> vllm_traits::types::Batch
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::build_batch_with_graph(&mut self) -> vllm_core::scheduler::cuda_graph::GraphBatch
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::cancel_request(&mut self, vllm_traits::types::SeqId) -> bool
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::clear_finished(&mut self)
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::default() -> Self
+pub fn vllm_core::scheduler::engine::state::SchedulerEngine::ensure_blocks_for_tokens(&mut self, vllm_traits::types::SeqId, usize) -> usize
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::finished_sequences(&self) -> alloc::vec::Vec<vllm_core::types::Sequence>
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::finish_sequence(&mut self, vllm_traits::types::SeqId)
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1272,6 +1275,7 @@ pub fn vllm_core::scheduler::engine::state::SchedulerEngine::running(&self) -> a
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::schedule(&mut self) -> core::option::Option<vllm_traits::types::Batch>
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::set_policy(&mut self, alloc::boxed::Box<dyn vllm_core::scheduler::policy::trait_def::SchedulingPolicy>)
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::update(&mut self, &[vllm_traits::types::SeqId], &[vllm_traits::sampling::SampledToken], &[usize])
+pub fn vllm_core::scheduler::engine::state::SchedulerEngine::update_speculative(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::sampling::SampledToken>], &[usize])
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::waiting_count(&self) -> usize
 pub fn vllm_core::scheduler::memory::allocator::BlockAllocator::allocate(&mut self, usize) -> core::option::Option<alloc::vec::Vec<vllm_traits::types::BlockId>>
 pub fn vllm_core::scheduler::memory::allocator::BlockAllocator::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1299,12 +1303,12 @@ pub fn vllm_core::scheduler::memory::MemoryManager::default() -> Self
 pub fn vllm_core::scheduler::memory::MemoryManager::execute_preemption(&mut self, &mut alloc::vec::Vec<vllm_core::types::Sequence>, usize) -> alloc::vec::Vec<vllm_core::types::Sequence>
 pub fn vllm_core::scheduler::memory::MemoryManager::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::scheduler::memory::MemoryManager::free(&mut self, &[vllm_traits::types::BlockId])
+pub fn vllm_core::scheduler::memory::MemoryManager::get_block_ref_count(&self, vllm_traits::types::BlockId) -> usize
 pub fn vllm_core::scheduler::memory::MemoryManager::new(vllm_core::SchedulerConfig, usize) -> Self
 pub fn vllm_core::scheduler::memory::MemoryManager::record_blocks(&mut self, &[vllm_traits::types::BlockId])
 pub fn vllm_core::scheduler::memory::MemoryManager::release_blocks(&mut self, &[vllm_traits::types::BlockId])
 pub fn vllm_core::scheduler::memory::MemoryManager::rollback(&mut self, &mut vllm_core::types::Sequence, usize)
 pub fn vllm_core::scheduler::memory::MemoryManager::select_victims(&mut self, &[vllm_core::types::Sequence], usize) -> alloc::vec::Vec<vllm_traits::types::BlockId>
-pub fn vllm_core::scheduler::memory::MemoryManager::should_preempt(&self, usize, usize, usize, usize) -> bool
 pub fn vllm_core::scheduler::memory::MemoryManager::touch_blocks(&mut self, &[vllm_traits::types::BlockId])
 pub fn vllm_core::scheduler::observer::NoopSchedulerObserver::clone(&self) -> vllm_core::scheduler::observer::NoopSchedulerObserver
 pub fn vllm_core::scheduler::observer::NoopSchedulerObserver::default() -> vllm_core::scheduler::observer::NoopSchedulerObserver
@@ -1377,8 +1381,9 @@ pub fn vllm_core::scheduler::radix_cache::tree::PrefixMatchResult::clone(&self) 
 pub fn vllm_core::scheduler::radix_cache::tree::PrefixMatchResult::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::scheduler::radix_cache::tree::RadixTree::clear(&mut self)
 pub fn vllm_core::scheduler::radix_cache::tree::RadixTree::default() -> Self
+pub fn vllm_core::scheduler::radix_cache::tree::RadixTree::drain_blocks(&mut self) -> alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::BlockId>>
 pub fn vllm_core::scheduler::radix_cache::tree::RadixTree::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_core::scheduler::radix_cache::tree::RadixTree::insert(&mut self, &[vllm_traits::types::TokenId], alloc::vec::Vec<vllm_traits::types::BlockId>)
+pub fn vllm_core::scheduler::radix_cache::tree::RadixTree::insert(&mut self, &[vllm_traits::types::TokenId], alloc::vec::Vec<vllm_traits::types::BlockId>) -> core::option::Option<alloc::sync::Arc<alloc::vec::Vec<vllm_traits::types::BlockId>>>
 pub fn vllm_core::scheduler::radix_cache::tree::RadixTree::longest_prefix_match(&self, &[vllm_traits::types::TokenId]) -> core::option::Option<vllm_core::scheduler::radix_cache::tree::PrefixMatchResult>
 pub fn vllm_core::scheduler::radix_cache::tree::RadixTree::new() -> Self
 pub fn vllm_core::scheduler::request_queue::RequestQueue::default() -> Self
@@ -1488,6 +1493,7 @@ pub fn vllm_core::speculative::registry::DraftModelRegistry::is_loaded(&self, &v
 pub fn vllm_core::speculative::registry::DraftModelRegistry::len(&self) -> usize
 pub fn vllm_core::speculative::registry::DraftModelRegistry::lookup(&self, &vllm_core::speculative::DraftId) -> core::option::Option<vllm_core::speculative::DraftState>
 pub fn vllm_core::speculative::registry::DraftModelRegistry::new() -> Self
+pub fn vllm_core::speculative::registry::DraftModelRegistry::notify_sequence_finished(&self, vllm_traits::types::SeqId)
 pub fn vllm_core::speculative::registry::DraftModelRegistry::ref_count(&self, &vllm_core::speculative::DraftId) -> core::result::Result<usize, vllm_core::speculative::DraftRegistryError>
 pub fn vllm_core::speculative::registry::DraftModelRegistry::register(&self, vllm_core::DraftSpec) -> core::result::Result<(), vllm_core::speculative::DraftRegistryError>
 pub fn vllm_core::speculative::registry::DraftModelRegistry::unload(&self, &vllm_core::speculative::DraftId) -> core::result::Result<(), vllm_core::speculative::DraftRegistryError>
@@ -1577,7 +1583,6 @@ pub mod vllm_core::scheduler::policy::fcfs
 pub mod vllm_core::scheduler::policy::priority
 pub mod vllm_core::scheduler::policy::sjf
 pub mod vllm_core::scheduler::policy::trait_def
-pub mod vllm_core::scheduler::preemption
 pub mod vllm_core::scheduler::radix_cache
 pub mod vllm_core::scheduler::radix_cache::node
 pub mod vllm_core::scheduler::radix_cache::tree
@@ -1845,12 +1850,15 @@ pub vllm_core::metrics::MetricsSnapshot::avg_latency_ms: f64
 pub vllm_core::metrics::MetricsSnapshot::avg_scheduler_wait_time_ms: f64
 pub vllm_core::metrics::MetricsSnapshot::current_batch_size: usize
 pub vllm_core::metrics::MetricsSnapshot::decode_throughput: f64
+pub vllm_core::metrics::MetricsSnapshot::kv_cache_blocks_total: u64
+pub vllm_core::metrics::MetricsSnapshot::kv_cache_blocks_used: u64
 pub vllm_core::metrics::MetricsSnapshot::kv_cache_usage_percent: f64
 pub vllm_core::metrics::MetricsSnapshot::p50_latency_ms: f64
 pub vllm_core::metrics::MetricsSnapshot::p90_latency_ms: f64
 pub vllm_core::metrics::MetricsSnapshot::p99_latency_ms: f64
 pub vllm_core::metrics::MetricsSnapshot::prefill_throughput: f64
 pub vllm_core::metrics::MetricsSnapshot::prefix_cache_hit_rate: f64
+pub vllm_core::metrics::MetricsSnapshot::prefix_cache_nodes: usize
 pub vllm_core::metrics::MetricsSnapshot::requests_in_flight: u64
 pub vllm_core::metrics::MetricsSnapshot::requests_total: u64
 pub vllm_core::metrics::MetricsSnapshot::tokens_total: u64
@@ -1865,12 +1873,15 @@ pub vllm_core::MetricsSnapshot::avg_latency_ms: f64
 pub vllm_core::MetricsSnapshot::avg_scheduler_wait_time_ms: f64
 pub vllm_core::MetricsSnapshot::current_batch_size: usize
 pub vllm_core::MetricsSnapshot::decode_throughput: f64
+pub vllm_core::MetricsSnapshot::kv_cache_blocks_total: u64
+pub vllm_core::MetricsSnapshot::kv_cache_blocks_used: u64
 pub vllm_core::MetricsSnapshot::kv_cache_usage_percent: f64
 pub vllm_core::MetricsSnapshot::p50_latency_ms: f64
 pub vllm_core::MetricsSnapshot::p90_latency_ms: f64
 pub vllm_core::MetricsSnapshot::p99_latency_ms: f64
 pub vllm_core::MetricsSnapshot::prefill_throughput: f64
 pub vllm_core::MetricsSnapshot::prefix_cache_hit_rate: f64
+pub vllm_core::MetricsSnapshot::prefix_cache_nodes: usize
 pub vllm_core::MetricsSnapshot::requests_in_flight: u64
 pub vllm_core::MetricsSnapshot::requests_total: u64
 pub vllm_core::MetricsSnapshot::tokens_total: u64

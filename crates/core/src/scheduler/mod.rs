@@ -73,9 +73,6 @@
 //!   - Enables prompt reuse across requests
 //!
 //! ### Resource Management
-//! - `preemption` - Request preemption when memory is tight
-//!   - `PreemptionManager` decides victims
-//!   - Considers running/waiting ratio and memory shortage
 //! - `cuda_graph` - CUDA graph capture/replay optimization
 //!   - `SchedulerCudaGraphConfig`
 //!
@@ -107,8 +104,6 @@ pub mod packing;
 pub mod phase_scheduler;
 /// FCFS, SJF, and priority scheduling policies.
 pub mod policy;
-/// Sequence preemption when KV memory is exhausted.
-pub mod preemption;
 /// Radix-tree prefix cache for shared prompt blocks.
 pub mod radix_cache;
 /// Waiting, running, and finished request queues.
