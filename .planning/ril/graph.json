@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 65,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T00:43:50+00:00",
+  "updated_at": "2026-08-15T00:47:19+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4658,6 +4658,19 @@
       "source": "0aba08c7",
       "title": "Removal verified green",
       "summary": "cargo check -p vllm-core --all-features PASS; cargo check --workspace --all-features PASS; full 'just ci' (fmt-check/clippy/doc-check/doctest/nextest/public-api-check/doc-coverage) exit 0 on the removal tree; phase-12e baselines refreshed and re-verified 'OK'; grep confirms zero remaining references to PreemptionManager/should_preempt/preemption_stats across all crates (incl. multi-node cfg paths).",
+      "confidence": 1.0
+    },
+    "EV-087": {
+      "id": "EV-087",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T00:47:19+00:00",
+      "updated_at": "2026-08-15T00:47:19+00:00",
+      "touched_round": 65,
+      "source": "06e6b7c8 + rust-reviewer verdict",
+      "title": "rust-reviewer APPROVE; doc-staleness fixed",
+      "summary": "rust-reviewer: APPROVE (code clean/sound) — no dangling refs, removed pub items unconsumed, _config rename preserves signature, full test suite green (432 core unit tests). MEDIUM items addressed in 06e6b7c8: AGENTS.md module tree comment, ADR-012 four dead preemption.rs paths -> MemoryManager::execute_preemption, CHANGELOG 8-vs-9 test count, MemoryManager::new doc.",
       "confidence": 1.0
     }
   },
