@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 66,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T02:29:27+00:00",
+  "updated_at": "2026-08-15T02:34:31+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4676,10 +4676,10 @@
     "ISS-065": {
       "id": "ISS-065",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-15T02:22:52+00:00",
-      "updated_at": "2026-08-15T02:22:52+00:00",
+      "updated_at": "2026-08-15T02:34:08+00:00",
       "touched_round": 66,
       "severity": 7,
       "title": "Batch /v1/batches create_batch accepts unvalidated temperature + max_tokens, bypassing the ISS-048 (NaN/±inf/out-of-range temperature → silent garbage logits via sample_batch_with_params) and ISS-033 (max_tokens=0 still emits one token; negative silently coerced to 100 via usize::try_from(...).unwrap_or(100)) boundary contracts that chat/completions enforce with 400. Round 59 hardened the batch endpoint (rate-limit cost + ISS-044 context-length) but skipped these two float/int boundary validations — hardening-parity gap class.",
@@ -4688,10 +4688,10 @@
     "TASK-078": {
       "id": "TASK-078",
       "type": "task",
-      "status": "active",
-      "version": 3,
+      "status": "resolved",
+      "version": 5,
       "created_at": "2026-08-15T02:23:21+00:00",
-      "updated_at": "2026-08-15T02:24:24+00:00",
+      "updated_at": "2026-08-15T02:34:31+00:00",
       "touched_round": 66,
       "category": "correctness",
       "priority_score": 70,
@@ -4699,9 +4699,7 @@
       "description": "In create_batch handler, before BatchManager.create_job: reject req.temperature via validate_temperature (NaN/±inf/out-of-[0,2] → 400) and req.max_tokens<1 (0/negative → 400 invalid_request_error), mirroring chat/completions. TDD: handler tests for accepted valid values + rejected NaN/inf/negative/zero.",
       "severity": 7,
       "confidence": 1.0,
-      "effort": 1.0,
-      "lock_owner": "round66",
-      "lock_until": "2026-08-15T02:54:24+00:00"
+      "effort": 1.0
     },
     "ISS-066": {
       "id": "ISS-066",
@@ -4729,6 +4727,29 @@
       "effort": 3.0,
       "title": "Enforce batch job expiry: add stored expires_at to BatchJob + evict expired terminal jobs (lazy on get/list, document strategy) so the in-memory job map doesn't grow without bound (ISS-066)",
       "description": "Next-round candidate: decision-document eviction strategy (lazy-on-access vs periodic sweep), add expires_at storage, evict terminal jobs past TTL. TDD: manager tests for eviction of expired jobs + retention of young/in-flight jobs. Do NOT start this round (TASK-078 at 70 outranks 27.7 under the 1.5x switch rule)."
+    },
+    "CHG-075": {
+      "id": "CHG-075",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T02:33:44+00:00",
+      "updated_at": "2026-08-15T02:33:44+00:00",
+      "touched_round": 66,
+      "commit": "63e3fe6a",
+      "title": "create_batch boundary validation for temperature + max_tokens (ISS-048/ISS-033 hardening parity)"
+    },
+    "EV-088": {
+      "id": "EV-088",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T02:33:45+00:00",
+      "updated_at": "2026-08-15T02:33:45+00:00",
+      "touched_round": 66,
+      "source": "crates/server/src/openai/batch/handler.rs test_create_batch_{none,max_tokens,rejects_{nan,infinite,negative,out_of_range}_temperature,rejects_{zero,negative}_max_tokens}",
+      "confidence": 1.0,
+      "title": "9 new handler tests: batch rejects NaN/±inf/negative/out-of-range temperature + zero/negative max_tokens with 400 before persist; accepts None/boundary values. Full just ci green (2237 tests)."
     }
   },
   "edges": [
@@ -6705,6 +6726,18 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-08-15T02:29:27+00:00"
+    },
+    {
+      "from": "CHG-075",
+      "to": "TASK-078",
+      "type": "implements",
+      "created_at": "2026-08-15T02:34:08+00:00"
+    },
+    {
+      "from": "CHG-075",
+      "to": "ISS-065",
+      "type": "resolves",
+      "created_at": "2026-08-15T02:34:08+00:00"
     }
   ]
 }
