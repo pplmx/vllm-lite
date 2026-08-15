@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 70,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T06:28:21+00:00",
+  "updated_at": "2026-08-15T07:21:33+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 69,
+      "touched_round": 70,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -55,7 +55,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 0,
+      "touched_round": 70,
       "title": "vllm-dist",
       "role": "tensor parallel / KV transfer (multi-node feature)"
     },
@@ -5000,6 +5000,80 @@
       "touched_round": 69,
       "rationale": "Embeddings part (d) of ISS-068 (engine handle_get_embeddings swallows model.embed errors -> misleading retryable 503 engine_unavailable) is deferred as a public-API wire change: fixing the misclassification properly requires carrying a typed error on EngineMessage::GetEmbeddings response channel (UnboundedSender<Vec<Vec<f32>>> -> Result), which bumps the public-API baseline for a Low-Medium latent misclassification; the error is already logged server-side and the 503 is not silent data loss",
       "alternatives_rejected": "(a) Naive sentinel (e.g. send empty vec on error): would fabricate a zero-vector response indistinguishable from a real empty batch; (b) Wire Result type now: public-API baseline churn + dist/tests touch for an error the audit rated Low-Medium"
+    },
+    "DEC-048": {
+      "id": "DEC-048",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T06:41:46+00:00",
+      "updated_at": "2026-08-15T06:41:46+00:00",
+      "touched_round": 70,
+      "rationale": "Distributed/multi-node layer findings from the round-69 audit (C1 broadcast-storm loop non-prevention, H1 leader-election split-brain check-then-act, H2 no peer-RPC timeout, H3 chain_cursors per-SeqId leak, H4 non-deterministic KV block hash verification, H5 unauthenticated gRPC on 0.0.0.0:50051, H6 layer never wired) are all LATENT in the shipped server: build_engine_multi_node never installs with_distributed_kv, connect_peers has no production call site (tests only), and every chain_cursors write is inside #[cfg(feature = multi-node)] -- so none affect the default single-node binary. Same class as ISS-064/DEC-044: wiring would exercise all six defects at once (and regress hardened single-node paths); removal destroys a designed-but-incomplete feature. Therefore: documented deferral -- keep the layer inert, revisit as one coherent multi-node milestone, not piecemeal",
+      "alternatives_rejected": "(a) Wire the layer now: would activate C1/H2/H4/H5 defects (broadcast storm, hung RPCs, broken hash verify, open RPC port) in one release -- a net safety regression; (b) Remove the dist layer: destroys designed multi-node feature work + 3000+ lines of tested code; (c) Fix only H3 chain_cursors removal now: touches multi-node-gated code with zero production effect, exercises unused lines"
+    },
+    "ISS-071": {
+      "id": "ISS-071",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-15T07:11:16+00:00",
+      "updated_at": "2026-08-15T07:21:33+00:00",
+      "touched_round": 70,
+      "title": "RBAC/JWT security subsystem is declared but never enforced while docs claim it is mounted: security/mod.rs says 'Mounted into the server's axum router via security::install_middleware' (no such fn); auth_middleware inserts only AuthenticatedUser, never AuthenticatedRole (the value RBAC gates on); RbacMiddleware + JwtValidator have zero production mount/construct sites; /v1/models + /metrics are API-key-gated only, not role-gated -- docs misrepresent an unenforced control",
+      "severity": 2,
+      "confidence": 1.0
+    },
+    "DEC-049": {
+      "id": "DEC-049",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T07:11:16+00:00",
+      "updated_at": "2026-08-15T07:11:16+00:00",
+      "touched_round": 70,
+      "rationale": "Keep RBAC/JWT un-wired; correct the misleading module docs to state the true status (declared-but-unenforced, designed-but-deferred milestone). Wiring RBAC would require inserting AuthenticatedRole (a role source) into auth_middleware + mounting the middleware + a per-role policy -- a large behavioral change with fail-closed Anonymous default 403ing every endpoint, for no configured consumer of the tiers (API keys already gate all requests; no operator has a role mapping). Same deferral class as DEC-044 (ISS-064) and DEC-048 (dist layer): fix docs now, revisit as a coherent RBAC milestone",
+      "alternatives_rejected": "(a) Wire AuthenticatedRole + mount RbacMiddleware now: Anonymous-default would 403 all endpoints (breaking change) with no configured role source; (b) Remove RBAC/JWT modules: destroys designed-and-tested (12 rbac tests) capability; (c) Leave docs as-is: perpetuates a false security claim that could mislead an operator into believing endpoints are role-gated"
+    },
+    "TASK-084": {
+      "id": "TASK-084",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-08-15T07:11:26+00:00",
+      "updated_at": "2026-08-15T07:21:33+00:00",
+      "touched_round": 70,
+      "category": "maintainability",
+      "severity": 2,
+      "confidence": 1.0,
+      "effort": 1,
+      "priority_score": 6.0,
+      "title": "Correct RBAC/JWT docs to state the true (un-enforced) status: security/mod.rs no longer claims 'Mounted via security::install_middleware' and rbac.rs gains an 'IMPORTANT - not enforced in production' note (ISS-071, governed by DEC-049)",
+      "lock_owner": "loop-1",
+      "lock_until": "2026-08-15T07:43:50+00:00"
+    },
+    "CHG-081": {
+      "id": "CHG-081",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T07:14:58+00:00",
+      "updated_at": "2026-08-15T07:14:58+00:00",
+      "touched_round": 70,
+      "commit": "e6e26dfc",
+      "title": "Correct RBAC/JWT module docs to state true un-enforced status (security/mod.rs + rbac.rs): no false 'Mounted via install_middleware' claim, explicit not-enforced-in-production note"
+    },
+    "EV-094": {
+      "id": "EV-094",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T07:14:58+00:00",
+      "updated_at": "2026-08-15T07:14:58+00:00",
+      "touched_round": 70,
+      "source": "test",
+      "title": "VERIFY: cargo build -p vllm-server OK; 12 rbac unit tests pass; doc-only change (no behavior); full just ci green on prior commit",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -7102,6 +7176,42 @@
       "to": "ISS-068",
       "type": "resolves",
       "created_at": "2026-08-15T06:20:13+00:00"
+    },
+    {
+      "from": "DEC-048",
+      "to": "COMP-005",
+      "type": "governs",
+      "created_at": "2026-08-15T06:53:52+00:00"
+    },
+    {
+      "from": "TASK-084",
+      "to": "ISS-071",
+      "type": "addresses",
+      "created_at": "2026-08-15T07:11:26+00:00"
+    },
+    {
+      "from": "ISS-071",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-15T07:11:26+00:00"
+    },
+    {
+      "from": "DEC-049",
+      "to": "COMP-004",
+      "type": "governs",
+      "created_at": "2026-08-15T07:11:26+00:00"
+    },
+    {
+      "from": "CHG-081",
+      "to": "TASK-084",
+      "type": "implements",
+      "created_at": "2026-08-15T07:14:58+00:00"
+    },
+    {
+      "from": "CHG-081",
+      "to": "ISS-071",
+      "type": "resolves",
+      "created_at": "2026-08-15T07:14:58+00:00"
     }
   ]
 }
