@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 70,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T12:49:43+00:00",
+  "updated_at": "2026-08-15T13:10:53+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -5078,10 +5078,10 @@
     "ISS-072": {
       "id": "ISS-072",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-15T09:01:57+00:00",
-      "updated_at": "2026-08-15T09:01:57+00:00",
+      "updated_at": "2026-08-15T13:10:53+00:00",
       "touched_round": 70,
       "title": "CUDA-graph batch path (select_sequences_for_phase, engine/graph.rs) is missing the four memory-admission guards the regular build_batch path has: (1) ISS-055/056 additional-blocks preemption gate (graph.rs demands full block count -> over-preemption, self-preemption livelock under pressure), (2) filter_fully_allocated_prefills (short-table prefill admitted -> write_prefill_kv block-0 fallback -> cross-request KV corruption), (3) admit_decode_sequences (short-table decode forwarded -> read_decode_kv unwrap_or(0) -> block 0), (4) requeue_uncomposed_prefills. Active in --all-features CI (cuda-graph feature + build_batch_with_graph tests); latent in default prod build (feature off). Same defect class as the fixed ISS-052/055/056 regular path.",
       "severity": 4,
@@ -5126,17 +5126,19 @@
     "TASK-085": {
       "id": "TASK-085",
       "type": "task",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 3,
       "created_at": "2026-08-15T09:08:53+00:00",
-      "updated_at": "2026-08-15T09:08:53+00:00",
+      "updated_at": "2026-08-15T13:10:52+00:00",
       "touched_round": 70,
       "category": "correctness",
       "severity": 4,
       "confidence": 1.0,
       "effort": 3,
       "priority_score": 23.0,
-      "title": "Port the regular build_batch memory-admission guards into the CUDA-graph path select_sequences_for_phase (ISS-072): additional-blocks preemption gate (ISS-055/056), filter_fully_allocated_prefills, admit_decode_sequences, requeue_uncomposed_prefills -- closes block-0 KV corruption + over-preemption livelock on cuda-graph builds"
+      "title": "Port the regular build_batch memory-admission guards into the CUDA-graph path select_sequences_for_phase (ISS-072): additional-blocks preemption gate (ISS-055/056), filter_fully_allocated_prefills, admit_decode_sequences, requeue_uncomposed_prefills -- closes block-0 KV corruption + over-preemption livelock on cuda-graph builds",
+      "lock_owner": "loop-1",
+      "lock_until": "2026-08-15T13:50:04+00:00"
     },
     "TASK-086": {
       "id": "TASK-086",
@@ -5174,6 +5176,29 @@
       "touched_round": 70,
       "source": "test",
       "title": "TDD: 6 new tests (temperature + top_p mixed-NaN argmax, log_softmax + top_p logprobs finite for NaN rows); RED confirmed pre-fix (returned tail index), GREEN after; full vllm-core 436 tests pass, clippy clean",
+      "confidence": 1.0
+    },
+    "CHG-083": {
+      "id": "CHG-083",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T13:10:20+00:00",
+      "updated_at": "2026-08-15T13:10:20+00:00",
+      "touched_round": 70,
+      "commit": "1ed8adf8",
+      "title": "CUDA-graph select_sequences_for_phase mirrors build_batch memory-admission guards (additional-blocks gate, filter prefills, admit/grow decode tables, requeue uncomposed); helpers widened to pub(crate)"
+    },
+    "EV-096": {
+      "id": "EV-096",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T13:10:20+00:00",
+      "updated_at": "2026-08-15T13:10:20+00:00",
+      "touched_round": 70,
+      "source": "test",
+      "title": "TDD: 2 regression tests (short 13-block decode table grown to 14 before compose; full-table decode NOT preempted under pressure) — both RED pre-fix, GREEN post-fix; full vllm-core 438 (default) / 470 (all-features) tests pass; just ci green",
       "confidence": 1.0
     }
   },
@@ -7361,6 +7386,18 @@
       "to": "ISS-073",
       "type": "resolves",
       "created_at": "2026-08-15T12:49:29+00:00"
+    },
+    {
+      "from": "CHG-083",
+      "to": "TASK-085",
+      "type": "implements",
+      "created_at": "2026-08-15T13:10:20+00:00"
+    },
+    {
+      "from": "CHG-083",
+      "to": "ISS-072",
+      "type": "resolves",
+      "created_at": "2026-08-15T13:10:20+00:00"
     }
   ]
 }
