@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 67,
+  "round": 68,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T02:56:04+00:00",
+  "updated_at": "2026-08-15T03:01:07+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4789,10 +4789,10 @@
     "ISS-067": {
       "id": "ISS-067",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-15T02:55:59+00:00",
-      "updated_at": "2026-08-15T02:55:59+00:00",
+      "updated_at": "2026-08-15T03:00:35+00:00",
       "touched_round": 67,
       "severity": 3,
       "title": "Batch create_batch accepts empty prompt strings, bypassing the sync /v1/completions empty-prompt 400: batch worker passes each prompt.to_string() unguarded to tokenize/engine (a 0-token prefill the sync endpoint explicitly forbids), while sync completions validates req.prompt.is_empty() -> 400. Hardening-parity gap class (round-59 lesson)."
@@ -4800,18 +4800,39 @@
     "TASK-080": {
       "id": "TASK-080",
       "type": "task",
-      "status": "active",
-      "version": 2,
+      "status": "resolved",
+      "version": 4,
       "created_at": "2026-08-15T02:55:59+00:00",
-      "updated_at": "2026-08-15T02:56:04+00:00",
+      "updated_at": "2026-08-15T03:00:35+00:00",
       "touched_round": 67,
       "category": "correctness",
       "severity": 3,
       "confidence": 1.0,
       "effort": 1.0,
-      "title": "Reject empty prompt strings in batch create_batch (mirror sync completions req.prompt.is_empty() -> 400), so a 0-token prefill is never enqueued (ISS-067)",
-      "lock_owner": "round67",
-      "lock_until": "2026-08-15T03:26:04+00:00"
+      "title": "Reject empty prompt strings in batch create_batch (mirror sync completions req.prompt.is_empty() -> 400), so a 0-token prefill is never enqueued (ISS-067)"
+    },
+    "CHG-077": {
+      "id": "CHG-077",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T03:00:27+00:00",
+      "updated_at": "2026-08-15T03:00:27+00:00",
+      "touched_round": 67,
+      "commit": "39febcdd",
+      "title": "Reject empty batch prompt strings (mirror sync completions empty-prompt 400)"
+    },
+    "EV-090": {
+      "id": "EV-090",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T03:00:27+00:00",
+      "updated_at": "2026-08-15T03:00:27+00:00",
+      "touched_round": 67,
+      "source": "crates/server/src/openai/batch/handler.rs test_create_batch_rejects_empty_prompt_string, test_create_batch_rejects_batch_with_any_empty_prompt",
+      "confidence": 1.0,
+      "title": "2 new handler tests: single empty prompt + mixed-list fail-fast rejected with 400 before persist; full just ci green."
     }
   },
   "edges": [
@@ -6830,6 +6851,18 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-08-15T02:55:59+00:00"
+    },
+    {
+      "from": "CHG-077",
+      "to": "TASK-080",
+      "type": "implements",
+      "created_at": "2026-08-15T03:00:27+00:00"
+    },
+    {
+      "from": "CHG-077",
+      "to": "ISS-067",
+      "type": "resolves",
+      "created_at": "2026-08-15T03:00:27+00:00"
     }
   ]
 }
