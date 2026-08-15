@@ -37,7 +37,7 @@ Key implementation files:
 
 - `crates/core/src/scheduler/engine.rs` — the main scheduler engine.
 - `crates/core/src/scheduler/batch.rs` / `batch_planner.rs` / `batch_composer.rs` — batch construction from the running set.
-- `crates/core/src/scheduler/preemption.rs` — preemption policies when a high-priority request needs blocks a low-priority request is holding.
+- `crates/core/src/scheduler/memory/mod.rs` — preemption via `MemoryManager::execute_preemption` when a request needs more blocks than the fixed pool holds.
 - `crates/core/src/scheduler/phase_scheduler.rs` — Prefill/Decode/Mixed phase discrimination.
 - `crates/core/src/scheduler/predictive_batching.rs` — heuristic pre-admission based on predicted sequence length.
 - `crates/core/src/scheduler/policy/` — FCFS, SJF, Priority scheduling policies.
@@ -58,7 +58,7 @@ Static batching is **explicitly rejected** for production use. It may appear in 
 Alternatives considered:
 
 - **Static batching** — rejected; the throughput penalty is severe and only acceptable for offline batch jobs.
-- **Continuous batching with pre-emption only** — considered; pure continuous batching without preemption can deadlock when a request needs more blocks than are available and no sequence can be safely evicted. vllm-lite added preemption (`scheduler/preemption.rs`) to handle this.
+- **Continuous batching with pre-emption only** — considered; pure continuous batching without preemption can deadlock when a request needs more blocks than are available and no sequence can be safely evicted. vllm-lite added preemption (`MemoryManager::execute_preemption` in `scheduler/memory/mod.rs`) to handle this.
 - **Continuous batching with adaptive batching** — considered; predictive admission (`predictive_batching.rs`) uses length predictions to pre-admit requests whose blocks are likely to free up soon. This is an *enhancement* to continuous batching, not a replacement.
 - **Disaggregated prefill/decode** — orthogonal; vllm-lite has `enable_pd_separation` as a config flag, but it's an enhancement *on top of* continuous batching, not a replacement.
 
@@ -75,14 +75,14 @@ Alternatives considered:
 **Negative:**
 
 - **Complexity** — the scheduler has ~10 supporting modules, each non-trivial. New contributors need weeks to become productive.
-- **Preemption is hard** — when a high-priority request needs blocks held by a low-priority one, the low-priority sequence's KV blocks must be recomputed when it's resumed. The implementation (`preemption.rs`) must preserve correctness across the recompute.
+- **Preemption is hard** — when a high-priority request needs blocks held by a low-priority one, the low-priority sequence's KV blocks must be recomputed when it's resumed. The implementation (`MemoryManager::execute_preemption`) must preserve correctness across the recompute.
 - **Debugging is harder** — request-level traces must capture per-step state changes; static batching's "batch starts here, ends here" semantics don't apply.
 - **Memory fragmentation risk** — if finished sequences don't release blocks promptly (e.g. due to a bug), the allocator can deadlock. Block release is on the hot path and must be tested extensively.
 - **Sequence-length outliers can starve the scheduler** — a single 1M-token request can hold blocks indefinitely if no preemption policy fires.
 
 **Mitigations / migration paths:**
 
-- Preemption policies (`scheduler/preemption.rs`) handle block-exhaustion deadlocks.
+- Preemption policies (`MemoryManager::execute_preemption` in `scheduler/memory/mod.rs`) handle block-exhaustion deadlocks.
 - The scheduler emits DEBUG-level logs at every step (`running = N, waiting = M, free_blocks = K`) so operators can diagnose starvation.
 - `predictive_batching.rs` provides length-prediction-based admission as an opt-in enhancement.
 - For users who really want static batching (e.g. offline eval), the engine exposes a `step_until_done()` helper that drains the current batch before admitting new requests — but this is **not** the default.

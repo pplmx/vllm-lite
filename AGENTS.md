@@ -61,7 +61,7 @@ vllm-lite/
 │   ├── traits/             # Interface definitions (ModelBackend trait, kernel traits)
 │   ├── core/               # Engine, Scheduler, KV cache, Metrics
 │   │   └── src/
-│   │       ├── scheduler/  # Scheduler modules (queue, preemption, eviction, batch)
+│   │       ├── scheduler/  # Scheduler modules (queue, eviction, batch, memory)
 │   │       └── kv_cache/   # Logical KV cache (block_allocator, prefix_cache)
 │   ├── model/              # Model implementations
 │   │   └── src/

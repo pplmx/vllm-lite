@@ -126,7 +126,9 @@ impl Default for MemoryManager {
 }
 
 impl MemoryManager {
-    /// Creates a new `MemoryManager` with the given scheduler configuration and number of blocks.
+    /// Creates a new `MemoryManager` with the given number of blocks.
+    /// `SchedulerConfig` is accepted for public-API compatibility but not
+    /// consumed (`_config`) since the dead policy that used it was removed.
     #[must_use]
     pub fn new(_config: SchedulerConfig, num_blocks: usize) -> Self {
         Self {
