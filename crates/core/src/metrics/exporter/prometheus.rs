@@ -68,6 +68,17 @@ impl PrometheusExporter {
             self.collector.get_counter("requests_total")
         );
 
+        output.push_str(
+            "# HELP dropped_tokens_total Tokens dropped because the response \
+             channel was full (slow consumer)\n",
+        );
+        output.push_str("# TYPE dropped_tokens_total counter\n");
+        let _ = write!(
+            output,
+            "dropped_tokens_total {}\n",
+            self.collector.get_counter("dropped_tokens_total")
+        );
+
         // v18.0 multi-model speculative decoding metrics
         let draft_snap = self.collector.draft_metrics_snapshot();
         output.push_str(

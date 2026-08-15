@@ -69,6 +69,17 @@ impl EnhancedMetricsCollector {
         self.cuda_graph_misses.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Increment the dropped-token counter (RIL ISS-074 / TASK-089).
+    ///
+    /// Called when the engine's `try_send` of a sampled token into the
+    /// bounded response channel returns `TrySendError::Full` — the token is
+    /// lost to the client stream. The counter makes the otherwise-silent
+    /// loss visible on `/metrics` so operators can detect a consumer that
+    /// systematically drains slower than generation.
+    pub fn record_dropped_token(&self) {
+        self.dropped_tokens_total.fetch_add(1, Ordering::Relaxed);
+    }
+
     /// Increment completed-request counter.
     pub fn record_request(&self) {
         self.runtime.record_request();

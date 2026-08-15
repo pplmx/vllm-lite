@@ -134,6 +134,45 @@ fn test_engine_response_channel_cleanup() {
     assert!(!engine.has_pending());
 }
 
+/// RIL ISS-074 / TASK-089: a full token response channel must not silently
+/// lose the token. Pre-fix `send_and_collect_results` did `let _ =
+/// tx.try_send(...)` and ignored `TrySendError::Full`, so a handler that
+/// drained slower than generation got a permanent stream gap with zero
+/// observability. Post-fix the Full drop is logged AND counted in
+/// `dropped_tokens_total` on the metrics collector.
+#[test]
+fn test_engine_full_response_channel_records_dropped_token() {
+    use vllm_traits::SampledToken;
+
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+
+    // Capacity-1 channel, pre-filled and NOT drained: the receiver stays
+    // alive (so try_send gives Full, not Closed) but is never read.
+    let (tx, _rx) = mpsc::channel::<SampledToken>(1);
+    let _ = tx.try_send(SampledToken {
+        token: 999,
+        logprob: 0.0,
+        top_logprobs: Vec::new(),
+    });
+
+    engine.add_request(Request::new(1, vec![10], 1), tx);
+    // Drive requests to completion so `send_and_collect_results` fires with
+    // a generated token against the full channel.
+    for _ in 0..10 {
+        let _ = engine.step();
+        if !engine.has_pending() {
+            break;
+        }
+    }
+    assert!(!engine.has_pending());
+    assert_eq!(
+        engine.scheduler.metrics.get_counter("dropped_tokens_total"),
+        1,
+        "a Full try_send must be counted as a dropped token (RIL ISS-074)"
+    );
+}
+
 #[test]
 fn test_sleep_policy_immediate_work() {
     let mut policy = SleepPolicy::default();

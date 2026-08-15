@@ -177,7 +177,29 @@ impl crate::engine::Engine {
             }
             tracing::debug!(seq_id = %seq_id, token = %sampled.token, "Sending token to channel");
             if let Some(tx) = self.response_txs.get(seq_id) {
-                let _ = tx.try_send(sampled.clone());
+                // RIL ISS-074 / TASK-089: a Full channel means the consumer
+                // drains slower than generation — the token is lost to the
+                // client stream. Pre-fix the `let _ = try_send(...)` ignored
+                // the error, so the gap was a permanent silent hole. Now it
+                // is logged AND counted so operators can detect the loss on
+                // `/metrics`. `Closed` (receiver dropped — client gone /
+                // cancelled) stays a silent no-op: dropping is the intended
+                // behaviour there, and a warning would just be noise.
+                match tx.try_send(sampled.clone()) {
+                    Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                        tracing::warn!(
+                            seq_id = %seq_id,
+                            token = %sampled.token,
+                            "response channel full; dropped token from client stream (consumer too slow)"
+                        );
+                        self.scheduler.metrics.record_dropped_token();
+                    }
+                    // `Ok` and `Closed` (receiver dropped — client gone /
+                    // cancelled) both leave the token out of the stream with
+                    // no action: delivering succeeded, or the consumer chose
+                    // to stop reading (a warning there would be noise).
+                    Ok(()) | Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {}
+                }
             }
             results.push((*seq_id, sampled.clone()));
         }

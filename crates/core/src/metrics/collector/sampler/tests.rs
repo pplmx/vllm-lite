@@ -22,6 +22,21 @@ fn test_collector_records_cuda_graph_hit() {
     assert_eq!(hits, 1);
 }
 
+/// RIL ISS-074 / TASK-089: the engine must make token-channel drops
+/// observable. The token-send loop `try_send`s each sampled token into the
+/// bounded response channel and previously ignored the result — on
+/// `TrySendError::Full` the token vanished with no log, no counter, and no
+/// trace (a permanent gap in the client's stream). The counter lets
+/// operators detect silent loss on `/metrics`.
+#[test]
+fn test_collector_records_dropped_token() {
+    let collector = EnhancedMetricsCollector::new();
+    assert_eq!(collector.get_counter("dropped_tokens_total"), 0);
+    collector.record_dropped_token();
+    collector.record_dropped_token();
+    assert_eq!(collector.get_counter("dropped_tokens_total"), 2);
+}
+
 #[test]
 fn test_collector_records_packing_efficiency() {
     let collector = EnhancedMetricsCollector::new();

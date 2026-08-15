@@ -38,6 +38,11 @@ pub struct EnhancedMetricsCollector {
     cuda_graph_hits: AtomicU64,
     /// Total CUDA-Graph cache misses (re-captures) since process start.
     cuda_graph_misses: AtomicU64,
+    /// Total tokens dropped because their bounded response channel was full
+    /// (RIL ISS-074): the engine `try_send`s every sampled token and a slow
+    /// consumer fills the 64-slot buffer. This counter makes the resulting
+    /// stream gap visible on `/metrics` instead of silent.
+    dropped_tokens_total: AtomicU64,
     /// Total adaptive-speculation adjustments applied.
     speculative_adjustments: AtomicU64,
     /// Packing efficiency percentage × 100 (fixed-point).
@@ -78,6 +83,7 @@ impl EnhancedMetricsCollector {
             runtime: LockFreeMetrics::new(),
             cuda_graph_hits: AtomicU64::new(0),
             cuda_graph_misses: AtomicU64::new(0),
+            dropped_tokens_total: AtomicU64::new(0),
             speculative_adjustments: AtomicU64::new(0),
             packing_efficiency: AtomicU64::new(0),
             speculative_acceptance_rate: AtomicU64::new(0),
@@ -103,6 +109,7 @@ impl EnhancedMetricsCollector {
             "cuda_graph_misses_total" => self.cuda_graph_misses.load(Ordering::Relaxed),
             "speculative_adjustments_total" => self.speculative_adjustments.load(Ordering::Relaxed),
             "requests_total" => self.runtime.requests_total(),
+            "dropped_tokens_total" => self.dropped_tokens_total.load(Ordering::Relaxed),
             _ => 0,
         }
     }
