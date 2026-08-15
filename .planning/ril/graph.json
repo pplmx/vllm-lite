@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 71,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T13:54:25+00:00",
+  "updated_at": "2026-08-15T14:13:25+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 70,
+      "touched_round": 71,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -5290,6 +5290,58 @@
       "source": "test",
       "title": "TDD: counter test (0->2) + engine-level Full-channel drop test both RED (methods absent) -> GREEN; full vllm-core 440/472 (all-features) pass; clippy 0 warnings; just ci green; public API +1",
       "confidence": 1.0
+    },
+    "ISS-076": {
+      "id": "ISS-076",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-15T14:01:00+00:00",
+      "updated_at": "2026-08-15T14:13:25+00:00",
+      "touched_round": 71,
+      "title": "Engine handle_add_request leaks finish_reason_tx under key 0 on admission rejection: add_request returns 0 (rejected admission, e.g. empty prompt) and handle_add_request unconditionally inserts finish_reason_tx at key 0 (run.rs:156-159); no sequence is ever id 0 so finalize_finished never removes it -> the oneshot sender leaks forever and a direct engine caller awaiting finish_reason_rx hangs. Server layers reject empty prompts first so this is direct-engine-only reachable (low severity leak).",
+      "severity": 2,
+      "confidence": 1.0
+    },
+    "TASK-090": {
+      "id": "TASK-090",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-08-15T14:01:01+00:00",
+      "updated_at": "2026-08-15T14:13:25+00:00",
+      "touched_round": 71,
+      "category": "correctness",
+      "severity": 2,
+      "confidence": 1.0,
+      "effort": 1,
+      "priority_score": 8.0,
+      "title": "Skip inserting finish_reason_tx when add_request returns seq_id 0 (rejected admission) so no orphan oneshot leaks under key 0 (ISS-076); TDD regression test at engine level",
+      "lock_owner": "loop-1",
+      "lock_until": "2026-08-15T15:01:50+00:00"
+    },
+    "CHG-086": {
+      "id": "CHG-086",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T14:13:09+00:00",
+      "updated_at": "2026-08-15T14:13:09+00:00",
+      "touched_round": 71,
+      "commit": "330a34dd",
+      "title": "handle_add_request skips finish_reason_tx tracking for rejected (seq_id 0) admissions -- no orphaned oneshot leak"
+    },
+    "EV-098": {
+      "id": "EV-098",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T14:13:09+00:00",
+      "updated_at": "2026-08-15T14:13:09+00:00",
+      "touched_round": 71,
+      "source": "test",
+      "title": "TDD: regression test RED (map non-empty/leak), post-fix engine.finish_reason_txs.is_empty() GREEN; 473 core tests (all-features); clippy 0; just ci green",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -7524,6 +7576,30 @@
       "to": "ISS-074",
       "type": "resolves",
       "created_at": "2026-08-15T13:53:47+00:00"
+    },
+    {
+      "from": "TASK-090",
+      "to": "ISS-076",
+      "type": "addresses",
+      "created_at": "2026-08-15T14:01:01+00:00"
+    },
+    {
+      "from": "ISS-076",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-15T14:01:01+00:00"
+    },
+    {
+      "from": "CHG-086",
+      "to": "TASK-090",
+      "type": "implements",
+      "created_at": "2026-08-15T14:13:09+00:00"
+    },
+    {
+      "from": "CHG-086",
+      "to": "ISS-076",
+      "type": "resolves",
+      "created_at": "2026-08-15T14:13:09+00:00"
     }
   ]
 }
