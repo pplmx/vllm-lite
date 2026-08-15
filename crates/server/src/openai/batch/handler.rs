@@ -43,6 +43,22 @@ pub async fn create_batch(
         ));
     }
 
+    // RIL ISS-067 / TASK-080: inherit the sync `/v1/completions`
+    // empty-prompt contract (`req.prompt.is_empty()` → 400 "prompt is
+    // required"). An empty batch prompt would reach the worker as a
+    // zero-token prefill the sync endpoint explicitly forbids, so reject
+    // any empty string in the list before persisting (a single empty
+    // prompt poisons the whole batch).
+    if req.prompts.iter().any(|p| p.is_empty()) {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "prompt is required (batch prompts cannot be empty strings)",
+                "invalid_request_error",
+            )),
+        ));
+    }
+
     // RIL ISS-065 / TASK-078: inherit the same sampling-param boundary
     // validation the chat + completions endpoints enforce. `temperature`
     // is forwarded verbatim into `SamplingParams` by the worker, so NaN /
@@ -337,6 +353,59 @@ mod tests {
         let result = create_batch(State(state), Json(req)).await;
         assert!(result.is_err());
         let (status, _) = result.unwrap_err();
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    // RIL ISS-067 / TASK-080: batch prompts inherit the sync
+    // `/v1/completions` empty-prompt contract (`req.prompt.is_empty()` →
+    // 400 "prompt is required"). An empty batch prompt would reach the
+    // worker as a zero-token prefill the sync endpoint explicitly forbids;
+    // reject any empty string in the list before persisting.
+
+    #[tokio::test]
+    async fn test_create_batch_rejects_empty_prompt_string() {
+        let state = create_test_state();
+        let manager = std::sync::Arc::clone(&state.batch_manager);
+        let req = SimpleBatchRequest {
+            prompts: vec!["".to_string()],
+            endpoint: BatchEndpoint::Completion,
+            model: Some("test-model".to_string()),
+            max_tokens: Some(10),
+            temperature: None,
+        };
+        let result = create_batch(State(state), Json(req)).await;
+        let (status, body) = result.expect_err("an empty prompt string must be rejected");
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(body.0.error.error_type, "invalid_request_error");
+        assert!(
+            body.0.error.message.contains("prompt is required"),
+            "error should mirror the sync completions contract; got: {}",
+            body.0.error.message
+        );
+        assert!(
+            manager.get_all_jobs().await.is_empty(),
+            "rejected batch must not leave a pending job behind"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_rejects_batch_with_any_empty_prompt() {
+        // Fail-fast across the list: one empty prompt poisons the whole
+        // batch (any of them would enqueue a zero-token prefill).
+        let state = create_test_state();
+        let req = SimpleBatchRequest {
+            prompts: vec![
+                "valid".to_string(),
+                "".to_string(),
+                "also valid".to_string(),
+            ],
+            endpoint: BatchEndpoint::Chat,
+            model: Some("test-model".to_string()),
+            max_tokens: Some(10),
+            temperature: None,
+        };
+        let result = create_batch(State(state), Json(req)).await;
+        let (status, _) = result.expect_err("a batch containing an empty prompt must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
     }
 

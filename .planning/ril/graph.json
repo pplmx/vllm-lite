@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 67,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T02:52:39+00:00",
+  "updated_at": "2026-08-15T02:56:04+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 66,
+      "touched_round": 67,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -4785,6 +4785,33 @@
       "source": "crates/server/src/openai/batch/manager.rs tests create_job_sets_fixed_expires_at_one_retention_window_out, fresh_terminal_job_is_retained, expired_terminal_job_is_evicted_on_get, expired_in_flight_job_is_never_evicted, get_all_jobs_evicts_only_expired_terminal_jobs, create_job_sweeps_expired_terminal_jobs + handler test_create_batch_response_reports_fixed_stored_expires_at",
       "confidence": 1.0,
       "title": "7 new tests pin eviction semantics + fixed stored expiry; full just ci green (fmt/clippy/doc/nextest ~2239 tests, public-API baseline +2 covered by CHANGELOG [Unreleased])."
+    },
+    "ISS-067": {
+      "id": "ISS-067",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T02:55:59+00:00",
+      "updated_at": "2026-08-15T02:55:59+00:00",
+      "touched_round": 67,
+      "severity": 3,
+      "title": "Batch create_batch accepts empty prompt strings, bypassing the sync /v1/completions empty-prompt 400: batch worker passes each prompt.to_string() unguarded to tokenize/engine (a 0-token prefill the sync endpoint explicitly forbids), while sync completions validates req.prompt.is_empty() -> 400. Hardening-parity gap class (round-59 lesson)."
+    },
+    "TASK-080": {
+      "id": "TASK-080",
+      "type": "task",
+      "status": "active",
+      "version": 2,
+      "created_at": "2026-08-15T02:55:59+00:00",
+      "updated_at": "2026-08-15T02:56:04+00:00",
+      "touched_round": 67,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1.0,
+      "title": "Reject empty prompt strings in batch create_batch (mirror sync completions req.prompt.is_empty() -> 400), so a 0-token prefill is never enqueued (ISS-067)",
+      "lock_owner": "round67",
+      "lock_until": "2026-08-15T03:26:04+00:00"
     }
   },
   "edges": [
@@ -6791,6 +6818,18 @@
       "to": "TASK-079",
       "type": "governs",
       "created_at": "2026-08-15T02:51:37+00:00"
+    },
+    {
+      "from": "TASK-080",
+      "to": "ISS-067",
+      "type": "addresses",
+      "created_at": "2026-08-15T02:55:59+00:00"
+    },
+    {
+      "from": "ISS-067",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-15T02:55:59+00:00"
     }
   ]
 }
