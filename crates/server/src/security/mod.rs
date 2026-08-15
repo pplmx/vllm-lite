@@ -1,6 +1,22 @@
 //! Public API surface of the security subsystem: re-exports the JWT, RBAC, audit, TLS, CORS, and size-limit modules under one namespace.
 //!
-//! Mounted into the server's axum router via `security::install_middleware`.
+//! ## What is actually mounted (RIL ISS-071 / DEC-049)
+//!
+//! The request-path middlewares installed by `app::build_app` are: CORS,
+//! correlation-id, audit logging, the body-size limit, and — when API keys
+//! are configured — the API-key auth + rate-limit middleware (`auth.rs`).
+//! That auth layer is the **only** access control on the live router.
+//!
+//! The RBAC and JWT modules in this directory are **declared but not
+//! enforced**: `RbacMiddleware` has no production mount site, `auth_middleware`
+//! only ever inserts `AuthenticatedUser` (never `AuthenticatedRole`, the value
+//! RBAC gates on), and `JwtValidator` has no constructor call anywhere in
+//! `main.rs`/`app.rs`. An operator reading the old module doc would believe
+//! RBAC tiers (admin/operator/user/anonymous) protect `/v1/models` and
+//! `/metrics` — they do not; only API-key verification does. Treat these
+//! modules as the designed-but-deferred RBAC/JWT milestone, not as active
+//! controls. See `docs/technical-due-diligence/production-readiness.md` §2
+//! and RIL DEC-049 for the deferral rationale.
 /// Structured audit logging: in-memory ring buffer + `/debug/audit` export.
 pub mod audit;
 /// Audit-logging request-layer middleware.

@@ -3,6 +3,17 @@
 //! Default policy: `admin` > `operator` > `user` > `anonymous`. Roles and
 //! endpoint→role mappings are configured in [`AppConfig`](crate::config::AppConfig).
 //!
+//! ## IMPORTANT — not enforced in production (RIL ISS-071 / DEC-049)
+//!
+//! This middleware is **declared but never mounted**: `app::build_app` does
+//! not install it, `auth_middleware` only ever inserts `AuthenticatedUser`
+//! (never `AuthenticatedRole`, the request extension this middleware gates
+//! on), and the JWT path that would supply a role has no production
+//! constructor call. It ships as the designed-but-deferred RBAC milestone —
+//! an operator must not assume `/v1/models` / `/metrics` are role-gated;
+//! the only enforced access control is API-key auth. The `Role::from_str`
+//! doc's "fail-closed to `Anonymous`" contract is therefore also latent.
+//!
 //! ## SEC-01 (residual) — untrusted-header forgery closed
 //!
 //! The original `rbac_middleware` extracted the role from the
