@@ -154,7 +154,17 @@ impl Engine {
         // still takes Request by value). The caller treats seq_id 0 as
         // "do not bother cancelling" (rejection e.g. empty prompt).
         let seq_id = self.add_request(request, response_tx);
-        if let Some(tx) = finish_reason_tx {
+        if seq_id != 0
+            && let Some(tx) = finish_reason_tx
+        {
+            // RIL ISS-076 / TASK-090: only track the finish-reason sender for
+            // ADMITTED sequences. `add_request` rejects empty prompts by
+            // returning 0; no sequence is ever id 0, so an insert under key 0
+            // would never be removed by `finalize_finished` — a permanent
+            // oneshot leak (and a hang for a direct engine caller awaiting
+            // `finish_reason_rx`). The server layer rejects empty prompts
+            // first; this guard keeps the map clean for direct-engine callers
+            // too.
             self.finish_reason_txs.insert(seq_id, tx);
         }
         if let Some(tx) = seq_id_tx {
@@ -190,5 +200,44 @@ impl Engine {
     /// know whether calling [`Engine::step`] would do meaningful work.
     pub fn has_pending(&self) -> bool {
         self.scheduler.has_pending()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Request;
+    use tokio::sync::mpsc;
+    use vllm_testing::StubModel;
+
+    /// RIL ISS-076 / TASK-090: an admission-rejected request (empty prompt
+    /// -> `add_request` returns `seq_id` 0) must NOT leave an orphaned
+    /// `finish_reason_tx` in the engine's map. Pre-fix `handle_add_request`
+    /// inserted it at key 0 unconditionally, and no sequence is ever id 0,
+    /// so `finalize_finished` never removes it — the oneshot sender leaked
+    /// forever and a direct engine caller awaiting `finish_reason_rx` would
+    /// hang. Server layers reject empty prompts first, so this is a
+    /// direct-engine-only leak; keep it from poisoning the map regardless.
+    #[test]
+    fn test_handle_add_request_rejected_admission_leaks_no_finish_reason() {
+        let mut engine = Engine::new(StubModel::returning(42), None);
+        let (tx, _rx) = mpsc::channel(64);
+        let (reason_tx, _reason_rx) = tokio::sync::oneshot::channel();
+        let (seq_id_tx, _seq_id_rx) = tokio::sync::oneshot::channel();
+
+        // Empty prompt: `add_request` rejects it and returns 0.
+        engine.handle_add_request(
+            Request::new(7, vec![], 5),
+            tx,
+            Some(seq_id_tx),
+            Some(reason_tx),
+            None,
+        );
+
+        assert!(
+            engine.finish_reason_txs.is_empty(),
+            "a rejected admission must not leave an orphaned finish_reason_tx \
+             under key 0 (RIL ISS-076)"
+        );
     }
 }
