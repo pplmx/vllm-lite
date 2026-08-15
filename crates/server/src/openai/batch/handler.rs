@@ -239,7 +239,10 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchRespon
                 endpoint: job.endpoint,
                 status,
                 created_at: job.created_at,
-                expires_at: crate::util::time::unix_now_secs() + 86_400,
+                // Report the stored (fixed-at-creation) expiry, not a
+                // recomputed `now + window` that would extend retention on
+                // every read (RIL ISS-066 / TASK-079).
+                expires_at: job.expires_at,
                 completed_at: job.completed_at,
                 request_counts: Some(RequestCounts {
                     total: i32::try_from(job.prompts.len()).unwrap_or(i32::MAX),
@@ -272,7 +275,9 @@ where
         endpoint: job.endpoint,
         status,
         created_at: job.created_at,
-        expires_at: crate::util::time::unix_now_secs() + 86_400,
+        // Stored expiry — fixed at creation, not `now + window` (RIL
+        // ISS-066 / TASK-079).
+        expires_at: job.expires_at,
         completed_at: job.completed_at,
         request_counts: Some(RequestCounts {
             total: i32::try_from(job.prompts.len()).unwrap_or(i32::MAX),
@@ -388,7 +393,9 @@ mod tests {
         let state = create_test_state();
         let req = batch_request(None, None);
         let result = create_batch(State(state), Json(req)).await;
-        result.expect("None temperature / max_tokens must pass (engine defaults)");
+        // `Json` is `#[must_use]` — an explicit `let _ =` signals we only
+        // care that creation succeeded.
+        let _ = result.expect("None temperature / max_tokens must pass (engine defaults)");
     }
 
     #[tokio::test]
@@ -399,7 +406,7 @@ mod tests {
             let state = create_test_state();
             let req = batch_request(temperature, Some(1));
             let result = create_batch(State(state), Json(req)).await;
-            result.unwrap_or_else(|(_, j)| {
+            let _ = result.unwrap_or_else(|(_, j)| {
                 panic!(
                     "boundary temperature {temperature:?} + max_tokens=1 must pass: {}",
                     j.0.error.message
@@ -476,6 +483,23 @@ mod tests {
         assert!(
             manager.get_all_jobs().await.is_empty(),
             "rejected batch must not leave a pending job behind"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_response_reports_fixed_stored_expires_at() {
+        // RIL ISS-066 / TASK-079: the response's `expires_at` must come
+        // from the stored job (fixed at creation), not be synthesised as
+        // `now + 86_400` — the old behaviour reported a moving target that
+        // extended the retention window on every read.
+        let state = create_test_state();
+        let req = batch_request(None, Some(10));
+        let result = create_batch(State(state), Json(req)).await;
+        let response = result.expect("valid batch must be created");
+        assert_eq!(
+            response.expires_at - response.created_at,
+            crate::openai::batch::types::DEFAULT_BATCH_RETENTION_SECS,
+            "expires_at must be a fixed retention window from creation, not now+window per read"
         );
     }
 

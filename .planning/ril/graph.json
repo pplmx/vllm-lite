@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 66,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T02:34:31+00:00",
+  "updated_at": "2026-08-15T02:50:09+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4717,16 +4717,18 @@
       "id": "TASK-079",
       "type": "task",
       "status": "active",
-      "version": 1,
+      "version": 2,
       "created_at": "2026-08-15T02:29:27+00:00",
-      "updated_at": "2026-08-15T02:29:27+00:00",
+      "updated_at": "2026-08-15T02:35:16+00:00",
       "touched_round": 66,
       "category": "stability",
       "severity": 6,
       "confidence": 1.0,
       "effort": 3.0,
       "title": "Enforce batch job expiry: add stored expires_at to BatchJob + evict expired terminal jobs (lazy on get/list, document strategy) so the in-memory job map doesn't grow without bound (ISS-066)",
-      "description": "Next-round candidate: decision-document eviction strategy (lazy-on-access vs periodic sweep), add expires_at storage, evict terminal jobs past TTL. TDD: manager tests for eviction of expired jobs + retention of young/in-flight jobs. Do NOT start this round (TASK-078 at 70 outranks 27.7 under the 1.5x switch rule)."
+      "description": "Next-round candidate: decision-document eviction strategy (lazy-on-access vs periodic sweep), add expires_at storage, evict terminal jobs past TTL. TDD: manager tests for eviction of expired jobs + retention of young/in-flight jobs. Do NOT start this round (TASK-078 at 70 outranks 27.7 under the 1.5x switch rule).",
+      "lock_owner": "round66",
+      "lock_until": "2026-08-15T03:05:16+00:00"
     },
     "CHG-075": {
       "id": "CHG-075",
@@ -4750,6 +4752,18 @@
       "source": "crates/server/src/openai/batch/handler.rs test_create_batch_{none,max_tokens,rejects_{nan,infinite,negative,out_of_range}_temperature,rejects_{zero,negative}_max_tokens}",
       "confidence": 1.0,
       "title": "9 new handler tests: batch rejects NaN/±inf/negative/out-of-range temperature + zero/negative max_tokens with 400 before persist; accepts None/boundary values. Full just ci green (2237 tests)."
+    },
+    "DEC-046": {
+      "id": "DEC-046",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T02:50:09+00:00",
+      "updated_at": "2026-08-15T02:50:09+00:00",
+      "touched_round": 66,
+      "rationale": "Batch job retention must be bounded and match the documented expires_at contract (ISS-066). Chose lazy-on-access eviction in BatchManager over a background sweeper: the batch API is far lower-traffic than the inference path, so sweeping on manager entry points (create/get/get_all/update) costs nothing noticeable, needs no server-lifecycle chore (interval task, shutdown drain), and any access reliably returns 404 for an expired job. Responses now report the stored fixed expires_at (created at creation) instead of a per-read now+window. Invariant: only terminal (Completed/Failed/Cancelled) jobs are evicted; in-flight jobs are never evicted because a live worker must not lose its results.",
+      "alternatives_rejected": "(a) Background periodic sweeper task - rejected: adds a tokio lifecycle chore (interval, shutdown coordination) into the server for a low-traffic manager that access points already bound to ~one window; (b) Sweep only on write paths (create/add_result) - rejected: an expired job would still be retrievable between writes, violating the documented 'results retrievable until then' (i.e. 404 after expiry) contract.",
+      "title": "Batch job expiry eviction: lazy-on-access sweep of terminal jobs with fixed stored expires_at (DEFAULT_BATCH_RETENTION_SECS=86400)"
     }
   },
   "edges": [

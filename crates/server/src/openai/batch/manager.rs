@@ -25,6 +25,20 @@ impl BatchManager {
         }
     }
 
+    /// Evict terminal jobs whose `expires_at` has passed, bounding the
+    /// in-memory job map to ~one retention window (RIL ISS-066 / TASK-079,
+    /// DEC-046). Called from every public access point so an expired batch
+    /// reliably returns `None` (404) rather than lingering forever.
+    ///
+    /// Only **terminal** (`Completed`/`Failed`/`Cancelled`) jobs are
+    /// evicted — a `Pending`/`InProgress` job's worker may still be running
+    /// and must not lose its results, so such a job is retained regardless
+    /// of how far past `expires_at` it is.
+    fn sweep_expired(jobs: &mut HashMap<String, BatchJob>) {
+        let now = crate::util::time::unix_now_secs();
+        jobs.retain(|_, job| !job.is_terminal() || job.expires_at > now);
+    }
+
     pub async fn create_job(
         &self,
         endpoint: BatchEndpoint,
@@ -42,20 +56,30 @@ impl BatchManager {
             max_tokens,
             temperature,
         );
-        self.jobs.write().await.insert(id.clone(), job);
+        let mut jobs = self.jobs.write().await;
+        // Creation is the natural tick point — sweep before inserting so a
+        // new batch also clears any terminal batches from the prior window.
+        Self::sweep_expired(&mut jobs);
+        jobs.insert(id.clone(), job);
         id
     }
 
     pub async fn get_job(&self, id: &str) -> Option<BatchJob> {
-        self.jobs.read().await.get(id).cloned()
+        let mut jobs = self.jobs.write().await;
+        Self::sweep_expired(&mut jobs);
+        jobs.get(id).cloned()
     }
 
     pub async fn get_all_jobs(&self) -> Vec<BatchJob> {
-        self.jobs.read().await.values().cloned().collect()
+        let mut jobs = self.jobs.write().await;
+        Self::sweep_expired(&mut jobs);
+        jobs.values().cloned().collect()
     }
 
     pub async fn update_job(&self, job: BatchJob) {
-        self.jobs.write().await.insert(job.id.clone(), job);
+        let mut jobs = self.jobs.write().await;
+        Self::sweep_expired(&mut jobs);
+        jobs.insert(job.id.clone(), job);
     }
 
     pub async fn add_result(&self, job_id: &str, result: BatchResultItem) {
@@ -438,5 +462,135 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         assert!(!rt.block_on(mgr.request_cancel("nonexistent")));
         assert!(!rt.block_on(mgr.is_cancelled("nonexistent")));
+    }
+
+    // RIL ISS-066 / TASK-079: the in-memory job map must not grow without
+    // bound. Every job carries a fixed `expires_at` (created_at +
+    // DEFAULT_BATCH_RETENTION_SECS); terminal (Completed/Failed/Cancelled)
+    // jobs past expiry are evicted lazily on every manager access. In-flight
+    // (Pending/InProgress) jobs are NEVER evicted — their worker may still be
+    // running and must not lose its results.
+
+    #[test]
+    fn create_job_sets_fixed_expires_at_one_retention_window_out() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id = rt.block_on(mgr.create_job(
+            BatchEndpoint::Chat,
+            vec!["expiry".into()],
+            None,
+            None,
+            None,
+        ));
+        let job = rt.block_on(mgr.get_job(&id)).unwrap();
+        assert_eq!(
+            job.expires_at - job.created_at,
+            crate::openai::batch::types::DEFAULT_BATCH_RETENTION_SECS,
+            "expires_at must be a fixed retention window from creation"
+        );
+    }
+
+    #[test]
+    fn fresh_terminal_job_is_retained() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["f".into()], None, None, None));
+        rt.block_on(mgr.set_completed(&id));
+        assert!(
+            rt.block_on(mgr.get_job(&id)).is_some(),
+            "a terminal job within its retention window must be retrievable"
+        );
+    }
+
+    #[test]
+    fn expired_terminal_job_is_evicted_on_get() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["e".into()], None, None, None));
+        rt.block_on(mgr.set_completed(&id));
+        // Simulate retention lapse: backdate the stored expiry into the past.
+        let now = crate::util::time::unix_now_secs();
+        let mut stale = rt.block_on(mgr.get_job(&id)).unwrap();
+        stale.expires_at = now - 3600;
+        rt.block_on(mgr.update_job(stale));
+
+        assert!(
+            rt.block_on(mgr.get_job(&id)).is_none(),
+            "an expired terminal job must be evicted (None = 404) on access"
+        );
+    }
+
+    #[test]
+    fn expired_in_flight_job_is_never_evicted() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["p".into()], None, None, None));
+        // Pending (never started) with a backdated expiry — still not terminal.
+        let now = crate::util::time::unix_now_secs();
+        let mut stale = rt.block_on(mgr.get_job(&id)).unwrap();
+        stale.expires_at = now - 3600;
+        rt.block_on(mgr.update_job(stale));
+
+        assert!(
+            rt.block_on(mgr.get_job(&id)).is_some(),
+            "an in-flight (non-terminal) job must never be evicted"
+        );
+        rt.block_on(mgr.mark_in_progress(&id));
+        assert!(
+            rt.block_on(mgr.get_job(&id)).is_some(),
+            "an in-progress job past its nominal expiry must still be retrievable"
+        );
+    }
+
+    #[test]
+    fn get_all_jobs_evicts_only_expired_terminal_jobs() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // Expired terminal job.
+        let id1 =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["a".into()], None, None, None));
+        rt.block_on(mgr.set_completed(&id1));
+        let now = crate::util::time::unix_now_secs();
+        let mut s1 = rt.block_on(mgr.get_job(&id1)).unwrap();
+        s1.expires_at = now - 3600;
+        rt.block_on(mgr.update_job(s1));
+        // Fresh terminal job.
+        let id2 =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["b".into()], None, None, None));
+        rt.block_on(mgr.set_completed(&id2));
+
+        let ids: Vec<String> = rt
+            .block_on(mgr.get_all_jobs())
+            .into_iter()
+            .map(|j| j.id)
+            .collect();
+        assert_eq!(ids, vec![id2], "only the non-expired terminal job survives");
+    }
+
+    #[test]
+    fn create_job_sweeps_expired_terminal_jobs() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let stale =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["s".into()], None, None, None));
+        rt.block_on(mgr.set_completed(&stale));
+        let now = crate::util::time::unix_now_secs();
+        let mut s = rt.block_on(mgr.get_job(&stale)).unwrap();
+        s.expires_at = now - 3600;
+        rt.block_on(mgr.update_job(s));
+
+        // The next create is the natural tick point; the expired terminal
+        // job must be swept before the new one is inserted.
+        let fresh =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["n".into()], None, None, None));
+        let ids: Vec<String> = rt
+            .block_on(mgr.get_all_jobs())
+            .into_iter()
+            .map(|j| j.id)
+            .collect();
+        assert_eq!(ids, vec![fresh], "create must sweep expired terminal jobs");
     }
 }

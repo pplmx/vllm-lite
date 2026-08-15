@@ -158,6 +158,13 @@ pub enum BatchStatus {
     Cancelled,
 }
 
+/// How long a batch (and its retrievable results) is retained in memory
+/// after creation. `GET /v1/batches/{id}` and `/results` report
+/// `expires_at = created_at + DEFAULT_BATCH_RETENTION_SECS`; terminal
+/// jobs beyond this window are evicted by the manager's lazy sweep. The
+/// 24h figure matches the retention the `OpenAI` Batch `API` documents.
+pub(crate) const DEFAULT_BATCH_RETENTION_SECS: i64 = 86_400;
+
 /// Background job: scheduled for execution by the worker pool. Carries the work payload plus retry / cancellation metadata.
 #[derive(Debug, Clone)]
 pub struct BatchJob {
@@ -179,6 +186,13 @@ pub struct BatchJob {
     pub results: Vec<BatchResultItem>,
     /// Unix timestamp at batch creation.
     pub created_at: i64,
+    /// Unix timestamp at which the job's retrievability expires
+    /// (`created_at + DEFAULT_BATCH_RETENTION_SECS`). Fixed at creation;
+    /// [`super::manager::BatchManager`] evicts **terminal** jobs past this
+    /// window on access so the in-memory job map stays bounded (RIL
+    /// ISS-066). Responses report this stored value rather than
+    /// recomputing `now + window` per read.
+    pub expires_at: i64,
     /// Unix timestamp at which the batch reached a terminal state, if any.
     pub completed_at: Option<i64>,
     /// Cooperative cancellation signal shared with the worker. Set by
@@ -215,9 +229,21 @@ impl BatchJob {
             status: BatchStatus::Pending,
             results: Vec::new(),
             created_at: now,
+            expires_at: now + DEFAULT_BATCH_RETENTION_SECS,
             completed_at: None,
             cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    /// Whether the job reached a terminal state (no worker will touch it
+    /// again). Only terminal jobs are eligible for expiry eviction — an
+    /// in-flight job's worker must never lose its scope.
+    #[must_use]
+    pub const fn is_terminal(&self) -> bool {
+        matches!(
+            self.status,
+            BatchStatus::Completed | BatchStatus::Failed | BatchStatus::Cancelled
+        )
     }
 }
 
