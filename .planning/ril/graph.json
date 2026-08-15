@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 70,
+  "round": 71,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T13:10:53+00:00",
+  "updated_at": "2026-08-15T13:27:18+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -99,7 +99,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 70,
+      "touched_round": 71,
       "title": "core/sampling",
       "role": "sampler pipeline, temperature/top-p/top-k, stop sequences"
     },
@@ -5118,7 +5118,7 @@
       "version": 1,
       "created_at": "2026-08-15T09:04:09+00:00",
       "updated_at": "2026-08-15T09:04:09+00:00",
-      "touched_round": 70,
+      "touched_round": 71,
       "title": "No EOS-stop detection anywhere: the engine never stops a sequence on the model's end-of-sentence token -- every 'short' answer burns the full max_tokens budget, the EOS token is streamed to the client, and finish_reason reports 'length' instead of 'stop'. FinishReason doc (traits/types.rs:51-53) explicitly promises 'Model emitted an end-of-sentence token' but no code implements it.",
       "severity": 4,
       "confidence": 1.0
@@ -5200,6 +5200,58 @@
       "source": "test",
       "title": "TDD: 2 regression tests (short 13-block decode table grown to 14 before compose; full-table decode NOT preempted under pressure) — both RED pre-fix, GREEN post-fix; full vllm-core 438 (default) / 470 (all-features) tests pass; just ci green",
       "confidence": 1.0
+    },
+    "DEC-050": {
+      "id": "DEC-050",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T13:20:47+00:00",
+      "updated_at": "2026-08-15T13:20:47+00:00",
+      "touched_round": 71,
+      "rationale": "EOS-stop detection (ISS-075, sev 4) is deferred as a coherent feature, not fixable as a small bug: (1) no eos_token_id exists anywhere in the crate graph and the stub tokenizer cannot map EOS special strings (<|endoftext|>, <|im_end|>) to stable ids (both encode to id 1), so there is no reliable per-model EOS id to compare against without real tokenizer plumbing; (2) the fix threads through Request->Sequence, both step paths (regular graph.rs + CUDA-graph graph_step.rs) AND the speculative dispatch, plus every Sequence literal in layer tests -- a multi-hundred-line change to the most central correctness code with no testable trigger from the stub/mock backends (neither emits an EOS id); (3) the server already strips EOS token TEXT from output (should_skip_token_text/clean_completion_text), so the user-visible symptom is wasted max_tokens budget and finish_reason=length, not corrupted output. Recorded as documented-deferral with the FinishReason::Stop doc corrected to stop claiming EOS-stop is implemented",
+      "alternatives_rejected": "(a) Implement now on the regular path only: inconsistent with the graph + speculative paths, risks a half-supported feature (the same class of divergence ISS-072 just fixed); (b) Implement regular+graph+spec now: >300-line diff across the most bug-dense code (update.rs, batch.rs, dispatch.rs) with unpatchable stub-tokenizer ids -- high regression risk at session tail; (c) Leave the doc as-is: perpetuates a false claim that an implemented EOS-stop exists"
+    },
+    "TASK-087": {
+      "id": "TASK-087",
+      "type": "task",
+      "status": "abandoned",
+      "version": 2,
+      "created_at": "2026-08-15T13:21:17+00:00",
+      "updated_at": "2026-08-15T13:22:55+00:00",
+      "touched_round": 71,
+      "category": "core-feature",
+      "severity": 4,
+      "confidence": 1.0,
+      "effort": 8,
+      "priority_score": 8.0,
+      "title": "EOS-stop detection (ISS-075) — DEFERRED via DEC-050 to a coherent future feature (needs real per-model eos_token_id plumbing through Request->Sequence + all 3 step paths); tracked by active issue ISS-075 + DEC-050"
+    },
+    "CHG-084": {
+      "id": "CHG-084",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T13:21:17+00:00",
+      "updated_at": "2026-08-15T13:21:17+00:00",
+      "touched_round": 71,
+      "commit": "DOC",
+      "title": "Correct FinishReason::Stop doc to stop claiming EOS-stop is implemented (state the ISS-075/DEC-050 deferral honestly)"
+    },
+    "TASK-088": {
+      "id": "TASK-088",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-15T13:23:33+00:00",
+      "updated_at": "2026-08-15T13:25:51+00:00",
+      "touched_round": 71,
+      "category": "docs",
+      "severity": 2,
+      "confidence": 1.0,
+      "effort": 1,
+      "priority_score": 2.0,
+      "title": "Correct FinishReason::Stop doc to stop claiming EOS-stop is implemented (state ISS-075/DEC-050 deferral honestly); no behavior change"
     }
   },
   "edges": [
@@ -7398,6 +7450,30 @@
       "to": "ISS-072",
       "type": "resolves",
       "created_at": "2026-08-15T13:10:20+00:00"
+    },
+    {
+      "from": "DEC-050",
+      "to": "COMP-009",
+      "type": "governs",
+      "created_at": "2026-08-15T13:22:55+00:00"
+    },
+    {
+      "from": "TASK-088",
+      "to": "ISS-075",
+      "type": "addresses",
+      "created_at": "2026-08-15T13:23:33+00:00"
+    },
+    {
+      "from": "CHG-084",
+      "to": "TASK-088",
+      "type": "implements",
+      "created_at": "2026-08-15T13:23:33+00:00"
+    },
+    {
+      "from": "TASK-087",
+      "to": "ISS-075",
+      "type": "addresses",
+      "created_at": "2026-08-15T13:27:18+00:00"
     }
   ]
 }
