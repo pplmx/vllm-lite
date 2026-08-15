@@ -543,3 +543,118 @@ fn test_build_batch_with_graph_preallocates_prefill_kv_blocks() {
         "prefill KV blocks must be distinct allocations, not the block-0 fallback"
     );
 }
+
+/// Regression (RIL ISS-072 / TASK-085): the CUDA-Graph decode selection
+/// must NOT forward a `Decoding` sequence whose KV table is short of its
+/// token count. The regular path's `admit_decode_sequences` (RIL ISS-052)
+/// grows each running decode table to cover its `tokens` before composing
+/// (or defers it); `select_sequences_for_phase` previously cloned every
+/// `Decoding` sequence as-is — a short table (e.g. from an earlier
+/// boundary-crossing allocation failure) would be forwarded and its next
+/// token's KV write would fall back to block 0 (`unwrap_or(0)`), corrupting
+/// a live block owned by another sequence.
+#[test]
+fn test_build_batch_with_graph_grows_short_decode_table() {
+    use crate::types::{Priority, SamplingParams, Sequence, Status};
+
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    // Pool large enough that the table CAN be grown (admit, not defer).
+    let mut engine = create_test_engine(config, 1024);
+
+    // A running decode sequence at 224 tokens needs ceil(224/16) = 14
+    // blocks but only holds 13 (a short table — the exact state `update()`'s
+    // boundary-crossing allocation failure would leave behind).
+    let short_table = engine.memory.allocate(13).expect("pool has 13 blocks");
+    engine.memory.record_blocks(&short_table);
+    engine.running.push(Sequence {
+        id: 1,
+        tokens: vec![0; 224],
+        kv_blocks: Arc::new(short_table),
+        num_computed_tokens: 224,
+        prompt_len: 16,
+        status: Status::Decoding,
+        max_tokens: 100,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    });
+
+    let graph_batch = engine.build_batch_with_graph();
+    let batch = graph_batch.into_regular();
+    assert_eq!(batch.len(), 1, "the decode sequence must be composed");
+    assert_eq!(
+        batch.kv_block_ids[0].len(),
+        14,
+        "select_sequences_for_phase must grow the short decode table before \
+         forwarding (got {} blocks, need 14 for 224 tokens) (RIL ISS-072)",
+        batch.kv_block_ids[0].len()
+    );
+}
+
+/// Regression (RIL ISS-072 / TASK-085): the CUDA-Graph preemption gate must
+/// demand only the ADDITIONAL blocks a sequence still needs, not its
+/// full-prompt block count (the ISS-055/056 fix that `build_batch` has was
+/// never applied to `select_sequences_for_phase`). Pre-fix a running decode
+/// sequence holding its full table re-charged itself for the whole 14-block
+/// table (14 > 6 free), so `execute_preemption` selected it as the victim
+/// and preempted it to `Waiting` with `num_computed = 0` — and on the next
+/// round it re-admitted and re-demanded its full count again, self-
+/// preempting forever: a livelock that makes zero decode progress under
+/// memory pressure. Post-fix the gate demands `additional = 0` (it already
+/// owns its table), so the sequence is composed normally.
+#[test]
+fn test_build_batch_with_graph_does_not_over_preempt_full_table_decode() {
+    use crate::types::{Priority, SamplingParams, Sequence, Status};
+
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    // Pool 20: a running decode holds a full 14-block table (needs 14,
+    // holds all 14), leaving only 6 free. Pre-fix the gate compared the
+    // full 14 against the 6 free and preempted this exact sequence.
+    let mut engine = create_test_engine(config, 20);
+
+    let blocks = engine.memory.allocate(14).expect("pool has 14 blocks");
+    engine.memory.record_blocks(&blocks);
+    engine.running.push(Sequence {
+        id: 1,
+        tokens: vec![0; 224], // 14 blocks needed AND held
+        kv_blocks: Arc::new(blocks),
+        num_computed_tokens: 224,
+        prompt_len: 16,
+        status: Status::Decoding,
+        max_tokens: 100,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    });
+
+    let graph_batch = engine.build_batch_with_graph();
+    let batch = graph_batch.into_regular();
+    assert_eq!(
+        batch.len(),
+        1,
+        "the running decode must be composed; it owns its full table so it \
+         demands zero ADDITIONAL blocks and must not be preempted (RIL ISS-072)"
+    );
+    // The decode sequence must NOT have been preempted back to the queue —
+    // it still owns its full table and stays running.
+    assert_eq!(batch.seq_ids[0], 1);
+    assert_eq!(engine.running.len(), 1);
+    assert_eq!(engine.running[0].id, 1);
+    assert_eq!(engine.waiting_count(), 0, "no sequence should be preempted");
+}

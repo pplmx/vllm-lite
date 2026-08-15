@@ -227,7 +227,7 @@ impl SchedulerEngine {
     /// partial blocks, reset to Waiting-Prefill, and re-queue so it retries
     /// once memory frees. Only prefill needs the whole table up front; decode
     /// sequences grow blocks incrementally in `update()`.
-    fn filter_fully_allocated_prefills(
+    pub(crate) fn filter_fully_allocated_prefills(
         &mut self,
         new_sequences: Vec<Sequence>,
         phase: Phase,
@@ -257,7 +257,7 @@ impl SchedulerEngine {
     /// pre-allocated KV blocks. Release and re-queue the overflow so it is
     /// retried on a later round. Decode overflow is harmless because
     /// `Decoding` sequences are re-included on the next decode round.
-    fn requeue_uncomposed_prefills(
+    pub(crate) fn requeue_uncomposed_prefills(
         &mut self,
         admitted: &HashSet<SeqId>,
         batch: &vllm_traits::Batch,
@@ -322,7 +322,7 @@ impl SchedulerEngine {
     /// still cannot obtain its growth block is deferred — it stays
     /// `Decoding` in `running` and is re-included on a later round — rather
     /// than being forwarded with a short table.
-    fn admit_decode_sequences(&mut self) -> Vec<Sequence> {
+    pub(crate) fn admit_decode_sequences(&mut self) -> Vec<Sequence> {
         let mut admitted = Vec::with_capacity(self.running.len());
         let mut i = 0;
         while i < self.running.len() {
@@ -352,7 +352,7 @@ impl SchedulerEngine {
     /// to defer the sequence. Mirrors `preallocate_kv_blocks`'s
     /// allocate + `record_blocks` + extend pattern (and its multi-node
     /// token-hash recording) for the running-decode case.
-    fn grow_running_table(&mut self, idx: usize, have: usize, needed: usize) {
+    pub(crate) fn grow_running_table(&mut self, idx: usize, have: usize, needed: usize) {
         let mut additions: Vec<BlockId> = Vec::with_capacity(needed - have);
         while additions.len() < needed - have {
             match self.memory.allocate(1) {
@@ -400,7 +400,7 @@ impl SchedulerEngine {
     /// contention round (ISS-041 overflow) or every transient forward error
     /// (ISS-045) — work-loss thrashing under load. Only never-advanced
     /// sequences (fresh admission whose preallocation failed) are reset.
-    fn requeue_seq(&mut self, mut seq: Sequence) {
+    pub(crate) fn requeue_seq(&mut self, mut seq: Sequence) {
         if seq.num_computed_tokens > 0 {
             tracing::debug!(
                 seq_id = seq.id,
