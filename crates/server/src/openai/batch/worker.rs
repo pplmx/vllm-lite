@@ -22,6 +22,15 @@ use crate::ApiState;
 use crate::openai::chat_template::ChatTemplate;
 use crate::openai::types::ChatMessage;
 
+/// Bounded wait for the engine's assigned `seq_id` (RIL ISS-070 / TASK-083).
+///
+/// The batch worker is background work (no interactive client), so this is
+/// intentionally a little more generous than the 1s bound the sync
+/// streaming paths use (`completions.rs:932`) — enough headroom for a real
+/// engine mid-forward while still bounding a wedged engine's stall so the
+/// job cannot hang `InProgress` forever.
+const SEQ_ID_TIMEOUT_SECS: u64 = 3;
+
 /// Spawn a background task that drives `job` to a terminal state.
 ///
 /// The spawned task borrows clones of the engine handle, tokenizer,
@@ -208,7 +217,40 @@ async fn execute_one(
 
     // Learn the engine-assigned seq_id so a cancellation can cancel this
     // specific sequence (not just skip the next prompt).
-    let seq_id = seq_id_rx.await.unwrap_or(0);
+    //
+    // RIL ISS-070 / TASK-083: the wait is BOUNDED. The sync streaming paths
+    // (`completions.rs:932`, `chat.rs:1403`) cap the seq_id await at 1s and
+    // fail the request on timeout; without an equivalent bound here, a
+    // stalled engine (long/wedged forward before it drains the mailbox and
+    // replies) would hang this background worker on `seq_id_rx.await`
+    // forever, leaving the batch job `InProgress` indefinitely — and
+    // `BatchManager::sweep_expired` only evicts terminal jobs, so the
+    // retention is permanent. We use a slightly longer bound than the HTTP
+    // paths (3s vs 1s) because the batch worker is background work, not a
+    // client-facing stream — the extra headroom tolerates a real engine
+    // mid-forward without a spurious failure. On timeout (or a closed
+    // channel — engine dropped `seq_id_tx` without sending, e.g. panic
+    // between AddRequest processing and the seq_id send) the item fails
+    // with a clear message and the worker moves on to the next prompt.
+    let seq_id = match tokio::time::timeout(
+        std::time::Duration::from_secs(SEQ_ID_TIMEOUT_SECS),
+        seq_id_rx,
+    )
+    .await
+    {
+        Ok(Ok(seq_id)) => seq_id,
+        Ok(Err(_)) => {
+            return Err(
+                "engine dropped the sequence-id channel before assigning one (stalled or failed)"
+                    .to_string(),
+            );
+        }
+        Err(_) => {
+            return Err(format!(
+                "engine did not assign a sequence id within {SEQ_ID_TIMEOUT_SECS}s"
+            ));
+        }
+    };
 
     let mut tokens = Vec::new();
     while let Some(sampled) = response_rx.recv().await {
@@ -235,6 +277,35 @@ mod tests {
 
     fn create_state_with_mock_engine() -> (ApiState, tokio::task::JoinHandle<()>) {
         test_fixtures::api_state_with_mock_engine(Architecture::Qwen3, vec![1, 2, 3])
+    }
+
+    /// [`ApiState`] whose engine drains the mailbox but **never** replies on
+    /// `seq_id_tx` — simulating the engine that assigned a `seq_id`
+    /// synchronously in the real run loop but is stalled (long forward /
+    /// wedged) so the reply is delayed past the worker's bound. Without the
+    /// ISS-070 / TASK-083 `seq_id` timeout, this would hang the batch job in
+    /// `InProgress` forever.
+    fn create_state_with_stalled_engine() -> ApiState {
+        let mut state = test_fixtures::api_state(Architecture::Qwen3);
+        let (engine_tx, mut engine_rx) =
+            tokio::sync::mpsc::channel::<vllm_core::types::EngineMessage>(256);
+        tokio::spawn(async move {
+            // Deliberately leak each received message (and with it its
+            // `seq_id_tx` / `response_tx` senders) WITHOUT sending — the
+            // faithful stalled-engine behaviour. The real engine holds
+            // `seq_id_tx` until it drains the mailbox after a (possibly
+            // long/wedged) forward; only when it sends does the worker's
+            // `seq_id_rx` resolve. Draining the channel but never replying
+            // keeps `seq_id_rx` pending, so the worker awaits it forever
+            // without a timeout. `mem::forget` keeps the senders alive for
+            // the test's lifetime (released at process teardown).
+            // SAFETY-free by design: intentional leak, no unsafe.
+            while let Some(msg) = engine_rx.recv().await {
+                std::mem::forget(msg);
+            }
+        });
+        state.engine_tx = engine_tx;
+        state
     }
 
     #[tokio::test]
@@ -345,5 +416,48 @@ mod tests {
         assert_eq!(finished.results.len(), 1);
         assert_eq!(finished.results[0].status, "failed");
         assert!(finished.results[0].error.is_some());
+    }
+
+    /// RIL ISS-070 / TASK-083: a stalled engine must not hang the batch job
+    /// in `InProgress` forever. Pre-fix `execute_one` awaited `seq_id_rx`
+    /// with no timeout (worker.rs:211); if the engine never replied (stalled
+    /// modelling a long/wedged forward), the worker awaited indefinitely,
+    /// and `BatchManager` never evicts in-progress jobs — unbounded
+    /// retention (the terminal-only sweep makes it permanent). The worker
+    /// now bounds the wait and fails the item instead.
+    #[tokio::test]
+    async fn worker_fails_item_when_engine_stalls_on_seq_id() {
+        let state = create_state_with_stalled_engine();
+        let job = state
+            .batch_manager
+            .create_job(
+                BatchEndpoint::Completion,
+                vec!["ping".to_string()],
+                None,
+                Some(5),
+                None,
+            )
+            .await;
+
+        // The worker must terminate within a bounded window even though the
+        // engine never replies. 30s hard ceiling is generous vs the 3s bound;
+        // a pre-fix hang would time out here and fail the test.
+        let handle = spawn_batch_worker(&state, state.batch_manager.get_job(&job).await.unwrap());
+        tokio::time::timeout(std::time::Duration::from_secs(30), handle)
+            .await
+            .expect("worker must not hang forever on a stalled engine")
+            .expect("worker task must not panic");
+
+        let finished = state.batch_manager.get_job(&job).await.unwrap();
+        assert_eq!(finished.status, BatchStatus::Failed);
+        assert_eq!(finished.results.len(), 1);
+        assert_eq!(finished.results[0].status, "failed");
+        let error = finished.results[0].error.as_deref().unwrap_or("");
+        assert!(
+            error.contains("sequence id")
+                || error.contains("seq_id")
+                || error.contains("timed out"),
+            "error should describe the seq-id timeout; got: {error}"
+        );
     }
 }

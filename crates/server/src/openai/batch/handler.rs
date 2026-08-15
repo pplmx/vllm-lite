@@ -12,6 +12,19 @@ use crate::ApiState;
 use crate::openai::sampling_validation::validate_temperature;
 use crate::openai::types::ErrorResponse;
 
+/// Hard cap on the number of prompts a single `create_batch` request may
+/// carry (RIL ISS-070 / TASK-083).
+///
+/// Each prompt is a full engine generation, so an unbounded inline
+/// `prompts` array packs N× work into one request (sync completions: 1
+/// generation/request, `n` ≤ 8) and the rate-limit cost clamp at
+/// `100_000` makes prompts beyond the saturation point effectively free
+/// (round-59 cost-bypass class). The `OpenAI` Batch API documents a
+/// 50,000-request cap per file; the inline endpoint is stricter by design
+/// (1/5 of that) since the whole batch is spawned from a single request
+/// body. Rejected with a 400 before the job is persisted.
+const MAX_BATCH_PROMPTS: usize = 10_000;
+
 /// Create batch.
 ///
 /// API-01 (technical due diligence): this endpoint used to return
@@ -54,6 +67,22 @@ pub async fn create_batch(
             axum::http::StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(
                 "prompt is required (batch prompts cannot be empty strings)",
+                "invalid_request_error",
+            )),
+        ));
+    }
+
+    // RIL ISS-070 / TASK-083: bound the batch size. Each prompt is a full
+    // engine generation; without a cap a single request packs unbounded
+    // work (and unbounded in-memory job/results retention) and the
+    // rate-limit clamp makes prompts past the ~1,000-prompt saturation
+    // point free. Reject over-limit batches before persisting — a
+    // MAX_BATCH_PROMPTS + 1 prompt batch must never spawn a worker.
+    if req.prompts.len() > MAX_BATCH_PROMPTS {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "too many prompts in batch (maximum is 10,000)",
                 "invalid_request_error",
             )),
         ));
@@ -407,6 +436,50 @@ mod tests {
         let result = create_batch(State(state), Json(req)).await;
         let (status, _) = result.expect_err("a batch containing an empty prompt must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_accepts_up_to_max_prompts() {
+        let state = create_test_state();
+        let prompts: Vec<String> = (0..MAX_BATCH_PROMPTS).map(|i| format!("p{i}")).collect();
+        assert_eq!(prompts.len(), MAX_BATCH_PROMPTS);
+        let req = SimpleBatchRequest {
+            prompts,
+            endpoint: BatchEndpoint::Chat,
+            model: Some("test-model".to_string()),
+            max_tokens: Some(10),
+            temperature: None,
+        };
+        let result = create_batch(State(state), Json(req)).await;
+        let response = result.expect("a batch of exactly MAX_BATCH_PROMPTS must be accepted");
+        assert_eq!(response.status, "pending");
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_rejects_over_max_prompts() {
+        let state = create_test_state();
+        let manager = std::sync::Arc::clone(&state.batch_manager);
+        let prompts: Vec<String> = (0..=MAX_BATCH_PROMPTS).map(|i| format!("p{i}")).collect();
+        assert_eq!(prompts.len(), MAX_BATCH_PROMPTS + 1);
+        let req = SimpleBatchRequest {
+            prompts,
+            endpoint: BatchEndpoint::Chat,
+            model: Some("test-model".to_string()),
+            max_tokens: Some(10),
+            temperature: None,
+        };
+        let result = create_batch(State(state), Json(req)).await;
+        let (status, body) = result.expect_err("a batch over MAX_BATCH_PROMPTS must be rejected");
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        assert!(
+            body.0.error.message.contains("10,000"),
+            "error should name the cap; got: {}",
+            body.0.error.message
+        );
+        assert!(
+            manager.get_all_jobs().await.is_empty(),
+            "rejected batch must not leave a pending job behind"
+        );
     }
 
     #[tokio::test]
