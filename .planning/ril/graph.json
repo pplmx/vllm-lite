@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 65,
+  "round": 66,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T00:47:19+00:00",
+  "updated_at": "2026-08-15T02:29:27+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 56,
+      "touched_round": 66,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -4672,6 +4672,63 @@
       "title": "rust-reviewer APPROVE; doc-staleness fixed",
       "summary": "rust-reviewer: APPROVE (code clean/sound) — no dangling refs, removed pub items unconsumed, _config rename preserves signature, full test suite green (432 core unit tests). MEDIUM items addressed in 06e6b7c8: AGENTS.md module tree comment, ADR-012 four dead preemption.rs paths -> MemoryManager::execute_preemption, CHANGELOG 8-vs-9 test count, MemoryManager::new doc.",
       "confidence": 1.0
+    },
+    "ISS-065": {
+      "id": "ISS-065",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T02:22:52+00:00",
+      "updated_at": "2026-08-15T02:22:52+00:00",
+      "touched_round": 66,
+      "severity": 7,
+      "title": "Batch /v1/batches create_batch accepts unvalidated temperature + max_tokens, bypassing the ISS-048 (NaN/±inf/out-of-range temperature → silent garbage logits via sample_batch_with_params) and ISS-033 (max_tokens=0 still emits one token; negative silently coerced to 100 via usize::try_from(...).unwrap_or(100)) boundary contracts that chat/completions enforce with 400. Round 59 hardened the batch endpoint (rate-limit cost + ISS-044 context-length) but skipped these two float/int boundary validations — hardening-parity gap class.",
+      "description": "create_batch -> BatchManager.create_job stores req.temperature/req.max_tokens verbatim; worker.execute_one assigns temperature straight into SamplingParams and coerces max_tokens with unwrap_or(100). No validate_temperature / validate_penalty / max_tokens>=1 call anywhere in the batch module. Silent 200 OK with garbage output."
+    },
+    "TASK-078": {
+      "id": "TASK-078",
+      "type": "task",
+      "status": "active",
+      "version": 3,
+      "created_at": "2026-08-15T02:23:21+00:00",
+      "updated_at": "2026-08-15T02:24:24+00:00",
+      "touched_round": 66,
+      "category": "correctness",
+      "priority_score": 70,
+      "title": "Validate batch create_batch temperature (validate_temperature, ISS-048) + max_tokens>=1 (ISS-033) at the HTTP boundary to match chat/completions hardening parity",
+      "description": "In create_batch handler, before BatchManager.create_job: reject req.temperature via validate_temperature (NaN/±inf/out-of-[0,2] → 400) and req.max_tokens<1 (0/negative → 400 invalid_request_error), mirroring chat/completions. TDD: handler tests for accepted valid values + rejected NaN/inf/negative/zero.",
+      "severity": 7,
+      "confidence": 1.0,
+      "effort": 1.0,
+      "lock_owner": "round66",
+      "lock_until": "2026-08-15T02:54:24+00:00"
+    },
+    "ISS-066": {
+      "id": "ISS-066",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T02:29:07+00:00",
+      "updated_at": "2026-08-15T02:29:07+00:00",
+      "touched_round": 66,
+      "severity": 6,
+      "title": "BatchManager retains completed/cancelled jobs + full result arrays in-memory forever: no stored expires_at on BatchJob, no eviction sweep, yet every response synthesizes expires_at = created_at + 86_400 ('results still retrievable until then'). Documented 24h expiry is unimplemented; under sustained batch usage on a long-running server the jobs HashMap grows without bound. Same documented-contract drift class as ISS-063/ISS-064.",
+      "description": "BatchJob::new stores created_at only (no expires_at); BatchManager.jobs: HashMap is append-only. handler.rs response builders compute expires_at on the fly. GET /v1/batches lists all jobs via get_all_jobs. Candidates: add stored expires_at + lazy eviction on get/list (drop expired terminal jobs), or background sweeper; document chosen strategy in a decision."
+    },
+    "TASK-079": {
+      "id": "TASK-079",
+      "type": "task",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T02:29:27+00:00",
+      "updated_at": "2026-08-15T02:29:27+00:00",
+      "touched_round": 66,
+      "category": "stability",
+      "severity": 6,
+      "confidence": 1.0,
+      "effort": 3.0,
+      "title": "Enforce batch job expiry: add stored expires_at to BatchJob + evict expired terminal jobs (lazy on get/list, document strategy) so the in-memory job map doesn't grow without bound (ISS-066)",
+      "description": "Next-round candidate: decision-document eviction strategy (lazy-on-access vs periodic sweep), add expires_at storage, evict terminal jobs past TTL. TDD: manager tests for eviction of expired jobs + retention of young/in-flight jobs. Do NOT start this round (TASK-078 at 70 outranks 27.7 under the 1.5x switch rule)."
     }
   },
   "edges": [
@@ -6624,6 +6681,30 @@
       "to": "ISS-063",
       "type": "resolves",
       "created_at": "2026-08-15T00:42:16+00:00"
+    },
+    {
+      "from": "TASK-078",
+      "to": "ISS-065",
+      "type": "addresses",
+      "created_at": "2026-08-15T02:23:57+00:00"
+    },
+    {
+      "from": "ISS-065",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-15T02:23:57+00:00"
+    },
+    {
+      "from": "TASK-079",
+      "to": "ISS-066",
+      "type": "addresses",
+      "created_at": "2026-08-15T02:29:27+00:00"
+    },
+    {
+      "from": "ISS-066",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-15T02:29:27+00:00"
     }
   ]
 }

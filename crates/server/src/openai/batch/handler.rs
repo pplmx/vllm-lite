@@ -9,6 +9,7 @@ use super::types::{
     SimpleBatchRequest,
 };
 use crate::ApiState;
+use crate::openai::sampling_validation::validate_temperature;
 use crate::openai::types::ErrorResponse;
 
 /// Create batch.
@@ -37,6 +38,27 @@ pub async fn create_batch(
             axum::http::StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(
                 "At least one prompt is required to create a batch",
+                "invalid_request_error",
+            )),
+        ));
+    }
+
+    // RIL ISS-065 / TASK-078: inherit the same sampling-param boundary
+    // validation the chat + completions endpoints enforce. `temperature`
+    // is forwarded verbatim into `SamplingParams` by the worker, so NaN /
+    // ±inf / out-of-[0,2] values would silently corrupt sampling
+    // (ISS-048); `max_tokens` is coerced with `unwrap_or(100)` in the
+    // worker, so `0` would still emit one token and a negative value
+    // would silently become 100 (ISS-033). Reject before persisting so an
+    // invalid batch never spawns a worker over garbage params.
+    validate_temperature(req.temperature)?;
+    if let Some(max_tokens) = req.max_tokens
+        && max_tokens < 1
+    {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "max_tokens must be a positive integer (max_tokens >= 1)",
                 "invalid_request_error",
             )),
         ));
@@ -332,6 +354,129 @@ mod tests {
         // The job should be visible to the manager immediately.
         let job = manager.get_job(&response.id).await;
         assert!(job.is_some());
+    }
+
+    /// Build a `SimpleBatchRequest` with the given `temperature` /
+    /// `max_tokens` and the rest at valid defaults — mirrors the
+    /// `chat_request_with_n` / `completion_request_with_n` helpers in
+    /// `sampling_validation.rs` so the batch tests read the same way.
+    fn batch_request(temperature: Option<f32>, max_tokens: Option<i64>) -> SimpleBatchRequest {
+        SimpleBatchRequest {
+            prompts: vec!["Hello".to_string()],
+            endpoint: BatchEndpoint::Completion,
+            model: Some("test-model".to_string()),
+            max_tokens,
+            temperature,
+        }
+    }
+
+    // RIL ISS-065 / TASK-078: the batch endpoint must inherit the same
+    // boundary validation the chat + completions endpoints enforce —
+    // `validate_temperature` (ISS-048: NaN / ±inf / out-of-[0,2] would
+    // silently corrupt sampling) and `max_tokens >= 1` (ISS-033: 0 still
+    // emits one token, negative silently coerces to 100). Round 59
+    // hardened the batch endpoint for rate-limit cost + the ISS-044
+    // context-length ceiling; the float/int sampling-param boundary
+    // checks were the remaining hardening-parity gap. Rejection must
+    // happen BEFORE `create_job` so an invalid request never leaves a
+    // phantom pending job.
+
+    #[tokio::test]
+    async fn test_create_batch_none_temperature_and_max_tokens_pass() {
+        // Omitted fields are the default path — must be accepted
+        // (worker falls back to the engine defaults).
+        let state = create_test_state();
+        let req = batch_request(None, None);
+        let result = create_batch(State(state), Json(req)).await;
+        result.expect("None temperature / max_tokens must pass (engine defaults)");
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_boundary_temperature_and_min_max_tokens_pass() {
+        // temperature = 0.0 / 2.0 (inclusive OpenAI bounds) and
+        // max_tokens = 1 (the minimum) must pass like the sync endpoints.
+        for temperature in [Some(0.0_f32), Some(2.0_f32)] {
+            let state = create_test_state();
+            let req = batch_request(temperature, Some(1));
+            let result = create_batch(State(state), Json(req)).await;
+            result.unwrap_or_else(|(_, j)| {
+                panic!(
+                    "boundary temperature {temperature:?} + max_tokens=1 must pass: {}",
+                    j.0.error.message
+                )
+            });
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_rejects_nan_temperature() {
+        let state = create_test_state();
+        let req = batch_request(Some(f32::NAN), None);
+        let result = create_batch(State(state), Json(req)).await;
+        let (status, body) = result.expect_err("NaN temperature must be rejected");
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(body.0.error.error_type, "invalid_request_error");
+        assert!(body.0.error.message.contains("temperature"));
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_rejects_infinite_temperature() {
+        for t in [f32::INFINITY, f32::NEG_INFINITY] {
+            let state = create_test_state();
+            let req = batch_request(Some(t), None);
+            let result = create_batch(State(state), Json(req)).await;
+            let (status, _) = result.expect_err("±inf temperature must be rejected");
+            assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_rejects_negative_temperature() {
+        let state = create_test_state();
+        let req = batch_request(Some(-1.0), None);
+        let result = create_batch(State(state), Json(req)).await;
+        let (status, _) = result.expect_err("negative temperature must be rejected");
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_rejects_out_of_range_temperature() {
+        let state = create_test_state();
+        let req = batch_request(Some(3.0), None);
+        let result = create_batch(State(state), Json(req)).await;
+        let (status, body) = result.expect_err("temperature > 2 must be rejected");
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        assert!(body.0.error.message.contains("temperature"));
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_rejects_zero_max_tokens() {
+        let state = create_test_state();
+        let manager = std::sync::Arc::clone(&state.batch_manager);
+        let req = batch_request(None, Some(0));
+        let result = create_batch(State(state), Json(req)).await;
+        let (status, body) = result.expect_err("max_tokens = 0 must be rejected");
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        assert!(body.0.error.message.contains("max_tokens"));
+        // Rejection must happen before persist — no phantom pending job.
+        assert!(
+            manager.get_all_jobs().await.is_empty(),
+            "rejected batch must not leave a pending job behind"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_rejects_negative_max_tokens() {
+        let state = create_test_state();
+        let manager = std::sync::Arc::clone(&state.batch_manager);
+        let req = batch_request(None, Some(-5));
+        let result = create_batch(State(state), Json(req)).await;
+        let (status, _) = result.expect_err("negative max_tokens must be rejected");
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        assert!(
+            manager.get_all_jobs().await.is_empty(),
+            "rejected batch must not leave a pending job behind"
+        );
     }
 
     #[tokio::test]
