@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 63,
+  "round": 65,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-14T14:43:44+00:00",
+  "updated_at": "2026-08-15T00:43:50+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -288,7 +288,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:35:59+00:00",
       "updated_at": "2026-08-02T14:35:59+00:00",
-      "touched_round": 0,
+      "touched_round": 64,
       "title": "preemption: promote partial victim loss to whole-sequence recompute",
       "rationale": "A sequence's block table is positional (block i <-> tokens i*BLOCK_SIZE..); interior removal shifts every later position onto the wrong physical block and silently corrupts attention, while num_computed_tokens overstates intact KV. Whole-sequence recompute reuses the proven Phase-2 recovery path and keeps priority-weighted victim ranking.",
       "alternatives_rejected": [
@@ -3871,7 +3871,7 @@
       "version": 1,
       "created_at": "2026-08-11T08:04:56+00:00",
       "updated_at": "2026-08-11T08:04:56+00:00",
-      "touched_round": 51,
+      "touched_round": 64,
       "rationale": "Incremental KV preallocation for chunked prefill is rejected as not worth pursuing. The capacity limit is not a bug: the full prompt's KV table must physically fit in the pool to decode at all (the sum over the sequence's lifetime is identical whether allocated up front or incrementally), and vLLM itself pre-allocates the full KV at admission. Incremental allocation would add a mid-prompt OOM failure mode (the sequence runs out of blocks partway through, requiring self-preemption), and preemption of prefills is already a full reset, so no work would be saved. The fail-fast 'defer at admission' design (ISS-042 filter) is the correct behaviour for an over-capacity prompt; the preemption-gate double-count (the one real defect, ISS-056) was fixed separately in CHG-058.",
       "alternatives_rejected": "Incremental preallocation keyed to the frontier (adds a mid-prompt OOM failure mode, no total-capacity gain, contradicts vLLM's full-KV-at-admission model); keeping the full-prompt preemption gate (double-counted held blocks, ISS-056 fixed); serving an over-capacity prompt anyway (block-0 write risk, ISS-028 class)"
     },
@@ -4430,11 +4430,11 @@
     "ISS-063": {
       "id": "ISS-063",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-14T13:26:14+00:00",
-      "updated_at": "2026-08-14T13:26:14+00:00",
-      "touched_round": 59,
+      "updated_at": "2026-08-15T00:42:26+00:00",
+      "touched_round": 64,
       "severity": "low",
       "title": "PreemptionManager is production-dead policy: preemption.rs (152 lines + 9 tests, allow(dead_code)) implements a config-driven surge-preemption policy (should_preempt gating on min_batch_size/max_num_seqs + memory-shortage ratio) but has ZERO production callers; its MemoryManager::should_preempt wrapper is likewise never invoked. Engine bypasses it with a direct available-blocks comparison in engine/state/batch.rs:78-84 calling execute_preemption (where ISS-052/055/056 hardening landed). min_batch_size-driven surge policy is thus a config knob that does nothing at runtime; module doc \"planned for admission-path wiring\" never happened. Candidate actions: (a) delete dead policy module + wrapper (maintainability win, but MemoryManager::should_preempt is pub -> public-API check + CHANGELOG), or (b) wire into admission gate (risks regressing hardened ISS-052/055/056). Decision-document before acting."
     },
@@ -4584,6 +4584,81 @@
       "touched_round": 62,
       "severity": "low",
       "title": "Sequence-packing config is inert in production: SequencePackingConfig (env-driven via VLLM_SEQ_PACKING_*) is plumbed into BatchComposer and gates compose()-dispatch (compose_prefill_with_packing when enabled), but compose_prefill_with_packing delegates to the plain compose_prefill_batch and ignores packing_config entirely; the real BFD implementation (SequencePacker::pack_sequences, packing.rs, with similarity_threshold/target/max-batch) is never called. So the config changes nothing at runtime. Differs from ISS-063 (dead policy with misleading planned doc) in that prefill.rs explicitly documents the deferral and no user-facing CLI flag exists — but an operator setting VLLM_SEQ_PACKING_* gets zero effect. Candidates: wire pack_sequences into compose_prefill_with_packing, or remove the inert gate + document. Decision-document before acting."
+    },
+    "TASK-076": {
+      "id": "TASK-076",
+      "type": "task",
+      "status": "abandoned",
+      "version": 2,
+      "created_at": "2026-08-15T00:25:40+00:00",
+      "updated_at": "2026-08-15T00:35:33+00:00",
+      "touched_round": 64,
+      "category": "maintainability",
+      "severity": "low",
+      "title": "Remove production-dead PreemptionManager policy + MemoryManager::should_preempt (ISS-063)",
+      "summary": "Accidental duplicate of TASK-077 created by a failed first attempt (node written, then CLI errored on non-numeric severity='low' before assigning TASK-077). The real work lives under TASK-077; TASK-076 is abandoned to preserve audit trail (DEC-045 governs TASK-077)."
+    },
+    "TASK-077": {
+      "id": "TASK-077",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-15T00:25:46+00:00",
+      "updated_at": "2026-08-15T00:43:02+00:00",
+      "touched_round": 64,
+      "category": "maintainability",
+      "severity": 0.3,
+      "title": "Remove production-dead PreemptionManager policy + should_preempt (ISS-063)",
+      "summary": "resolves ISS-063 candidate (a): delete dead scheduler/preemption.rs (+tests), the preemption_manager field/init in MemoryManager, and the pub should_preempt wrapper; rename unused config param to _config. Internal 0.1.0 crate, no server/testing callers; CHANGELOG entry + AGENTS.md suffix-example swap to BatchManager + scheduler/mod.rs doc update."
+    },
+    "DEC-044": {
+      "id": "DEC-044",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T00:29:14+00:00",
+      "updated_at": "2026-08-15T00:29:14+00:00",
+      "touched_round": 64,
+      "title": "ISS-064: keep sequence-packing config as documented-deferral (neither wire nor remove)",
+      "rationale": "Both candidate actions are worse than the status quo. (a) Wiring SequencePacker::pack_sequences into compose_prefill_with_packing changes batch composition by similarity/limit-reordering: it reorders/merges sequences before prefill, which would interact with the ISS-051 chunked-prefill path, the hardened ISS-052/055/056 preemption + decode-growth paths, and prefill admission ordering (shorter-first sort) — high regression risk for an optimization whose measured benefit is unproven. (b) Removing the inert gate deletes a complete designed feature surface (SequencePackingConfig + from_env + builder + SchedulerConfig.packing + BatchComposer::with_packing + SequencePacker in scheduler/packing.rs) that represents a plausible future optimization; unlike PreemptionManager (misleading 'planned' doc + conflicting policy), prefill.rs explicitly documents the deferral and no CLI flag exposes it. Decision: leave the config plumbed but inert, with the existing explicit deferral documentation; re-evaluate if/when a measured throughput gap justifies the wiring risk. Contrasts with ISS-063 where removal (not deferral) was correct because the dead policy conflicted with the verified path and misled.",
+      "alternatives_rejected": "(a) wire pack_sequences into compose_prefill_with_packing [rejected: regresses ISS-051/052/055/056 paths, unproven benefit]; (b) remove inert gate + config surface [rejected: destroys designed feature, honest doc already exists]"
+    },
+    "DEC-045": {
+      "id": "DEC-045",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T00:34:30+00:00",
+      "updated_at": "2026-08-15T00:34:30+00:00",
+      "touched_round": 64,
+      "title": "ISS-063: remove production-dead PreemptionManager instead of wiring it into admission",
+      "rationale": "The min_batch_size surge policy has zero production callers; the real preemption path is MemoryManager::execute_preemption driven by the available-blocks comparison in engine/state/batch.rs (hardened by ISS-052/055/056 and verified sound round 62). PreemptionManager's module doc claimed 'planned for admission-path wiring' which never happened, and its select_victim picks by consecutive_decode_rounds — a policy that diverges from and would regress the verified path if wired. Its preempted_count/rejected_count stats fed no metric. Removing 152 lines + 9 isolation tests + the MemoryManager field/wrappers reduces confusing surface without changing runtime behavior. Public-API impact is acceptable: internal 0.1.0 workspace crate with no server/testing callers; shrinking is baseline-recorded per phase-12e policy; CHANGELOG documents the removal.",
+      "alternatives_rejected": "(b) wire the surge policy into the admission gate [rejected: conflicts with ISS-052/055/056-hardened execute_preemption flow, selects victims by a criterion the real engine does not use, high regression risk for a policy with no measured benefit]; (c) keep and mark deprecated [rejected: the misleading 'planned' doc actively invites a future engineer to wire a conflicting policy; delete-only is cleaner for internal 0.x API]"
+    },
+    "CHG-074": {
+      "id": "CHG-074",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T00:42:05+00:00",
+      "updated_at": "2026-08-15T00:42:05+00:00",
+      "touched_round": 64,
+      "commit": "0aba08c7",
+      "title": "Remove production-dead PreemptionManager + MemoryManager::should_preempt/preemption_stats",
+      "summary": "Deletes scheduler/preemption.rs (+tests), the preemption_manager field/init and the should_preempt/preemption_stats wrappers in MemoryManager; renames unused config param to _config. CHANGELOG public-api entry; phase-12e core baseline refreshed; AGENTS.md suffix example -> BatchManager. Commits 0aba08c7 (removal) + 96c37f5b (stale baseline sync)."
+    },
+    "EV-086": {
+      "id": "EV-086",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-15T00:42:16+00:00",
+      "updated_at": "2026-08-15T00:42:16+00:00",
+      "touched_round": 64,
+      "source": "0aba08c7",
+      "title": "Removal verified green",
+      "summary": "cargo check -p vllm-core --all-features PASS; cargo check --workspace --all-features PASS; full 'just ci' (fmt-check/clippy/doc-check/doctest/nextest/public-api-check/doc-coverage) exit 0 on the removal tree; phase-12e baselines refreshed and re-verified 'OK'; grep confirms zero remaining references to PreemptionManager/should_preempt/preemption_stats across all crates (incl. multi-node cfg paths).",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -6506,6 +6581,36 @@
       "to": "COMP-007",
       "type": "located_in",
       "created_at": "2026-08-14T14:43:25+00:00"
+    },
+    {
+      "from": "TASK-077",
+      "to": "ISS-063",
+      "type": "addresses",
+      "created_at": "2026-08-15T00:25:56+00:00"
+    },
+    {
+      "from": "DEC-045",
+      "to": "TASK-077",
+      "type": "governs",
+      "created_at": "2026-08-15T00:34:36+00:00"
+    },
+    {
+      "from": "DEC-045",
+      "to": "TASK-076",
+      "type": "governs",
+      "created_at": "2026-08-15T00:35:58+00:00"
+    },
+    {
+      "from": "CHG-074",
+      "to": "TASK-077",
+      "type": "implements",
+      "created_at": "2026-08-15T00:42:16+00:00"
+    },
+    {
+      "from": "CHG-074",
+      "to": "ISS-063",
+      "type": "resolves",
+      "created_at": "2026-08-15T00:42:16+00:00"
     }
   ]
 }
