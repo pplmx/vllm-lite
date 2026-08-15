@@ -198,6 +198,120 @@ fn test_validate_chat_request_empty_messages() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
+/// RIL ISS-069 / TASK-082: an empty message content must be rejected,
+/// mirroring sync completions' `req.prompt.is_empty()` -> 400. Pre-fix
+/// `validate_chat_request` never inspected `content`, so
+/// `messages: [{role:"user", content:""}]` passed validation and yielded
+/// a 200 with an empty assistant message (silent empty output the sync
+/// endpoint's empty-prompt contract forbids).
+#[test]
+fn test_validate_chat_request_rejects_empty_content() {
+    let req = create_test_request(
+        "test-model",
+        vec![ChatMessage {
+            role: "user".to_string(),
+            content: String::new(),
+            name: None,
+        }],
+    );
+    let result = validate_chat_request(&req);
+    assert!(result.is_err());
+    let (status, _) = result.unwrap_err();
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+/// RIL ISS-069 / TASK-082: an empty content anywhere in the list must
+/// fail the whole request (a single empty message poisons the prompt —
+/// same all-or-nothing contract as the batch empty-prompt rejection).
+#[test]
+fn test_validate_chat_request_rejects_any_empty_content_in_list() {
+    let req = create_test_request(
+        "test-model",
+        vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: "You are helpful".to_string(),
+                name: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                name: None,
+            },
+        ],
+    );
+    let result = validate_chat_request(&req);
+    assert!(result.is_err());
+    let (status, _) = result.unwrap_err();
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+/// RIL ISS-069 / TASK-082: the `role` field is a free `String` today, and
+/// every chat template silently drops any role outside
+/// {system, user, assistant, tool} (`_ => {}` in `chat_template.rs`).
+/// An unknown role is therefore silent data loss wrapped in a 200 OK — the
+/// caller believes their message participated in the prompt. Reject at the
+/// boundary so nothing is silently dropped.
+#[test]
+fn test_validate_chat_request_rejects_unknown_role() {
+    let req = create_test_request(
+        "test-model",
+        vec![ChatMessage {
+            role: "developer".to_string(),
+            content: "Please be nice".to_string(),
+            name: None,
+        }],
+    );
+    let result = validate_chat_request(&req);
+    assert!(result.is_err());
+    let (status, _) = result.unwrap_err();
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+/// RIL ISS-069 / TASK-082: malformed roles like a typo (`"syste"`) or an
+/// injected space (`"user "`) must be caught at the boundary — they would
+/// otherwise render as nothing (silent drop) or, worse, text-injection into
+/// the rendered prompt shape.
+#[test]
+fn test_validate_chat_request_rejects_malformed_role() {
+    for role in ["user ", "SYSTEM", "syste", "assist"] {
+        let req = create_test_request(
+            "test-model",
+            vec![ChatMessage {
+                role: role.to_string(),
+                content: "hi".to_string(),
+                name: None,
+            }],
+        );
+        let result = validate_chat_request(&req);
+        assert!(
+            result.is_err(),
+            "role {role:?} must be rejected, got accepted"
+        );
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+}
+
+/// RIL ISS-069 / TASK-082: the four OpenAI roles must remain accepted.
+#[test]
+fn test_validate_chat_request_accepts_valid_roles() {
+    for role in ["system", "user", "assistant", "tool"] {
+        let req = create_test_request(
+            "test-model",
+            vec![ChatMessage {
+                role: role.to_string(),
+                content: "hi".to_string(),
+                name: None,
+            }],
+        );
+        assert!(
+            validate_chat_request(&req).is_ok(),
+            "role {role:?} must be accepted"
+        );
+    }
+}
+
 #[test]
 fn test_build_prompt_from_messages_user_only() {
     let messages = vec![ChatMessage {

@@ -76,6 +76,100 @@ async fn test_chat_completions_rejects_empty_model() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
+/// RIL ISS-069 / TASK-082: `stream=true` must apply the same
+/// model/messages non-empty validation as the non-streaming path. Pre-fix
+/// `validate_chat_request` ran only in `handle_chat` (the n=1 non-stream
+/// path); the streaming dispatch never validated, so `messages: []` with
+/// `stream: true` yielded a 200 SSE stream of an empty completion instead
+/// of the 400 the non-stream path and sync completions both produce
+/// (sync completions validates the empty prompt pre-dispatch at
+/// completions.rs:1402).
+#[tokio::test]
+async fn test_chat_streaming_rejects_empty_messages() {
+    let state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [],
+        "stream": true
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+/// RIL ISS-069 / TASK-082: same streaming validation-parity gap for an
+/// empty model id — `stream: true` with `model: ""` must 400.
+#[tokio::test]
+async fn test_chat_streaming_rejects_empty_model() {
+    let state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stream": true
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+/// RIL ISS-069 / TASK-082: stream=true with an empty message content must
+/// 400 (parity with the sync completions empty-prompt contract), not emit a
+/// clean-looking 200 SSE of nothing.
+#[tokio::test]
+async fn test_chat_streaming_rejects_empty_message_content() {
+    let state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": ""}],
+        "stream": true
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
 #[tokio::test]
 async fn test_chat_completions_non_streaming_with_mock_engine() {
     let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);

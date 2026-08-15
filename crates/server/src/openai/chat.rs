@@ -201,6 +201,10 @@ pub fn build_prompt_from_messages(template: ChatTemplate, messages: &[ChatMessag
 pub(crate) fn validate_chat_request(
     req: &ChatRequest,
 ) -> Result<(), (axum::http::StatusCode, Json<ErrorResponse>)> {
+    // The four OpenAI roles the chat templates render (see the loop
+    // below).
+    const VALID_ROLES: [&str; 4] = ["system", "user", "assistant", "tool"];
+
     if req.model.is_empty() {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
@@ -219,6 +223,41 @@ pub(crate) fn validate_chat_request(
             )),
         ));
     }
+
+    // RIL ISS-069 / TASK-082: validate every message at the boundary.
+    //
+    // Empty content mirrors the sync completions empty-prompt contract
+    // (`req.prompt.is_empty()` -> 400); an empty message would otherwise
+    // render a template with an empty assistant turn and return a clean 200.
+    //
+    // Role is a free `String` today and every chat template silently drops
+    // any role outside {system, user, assistant, tool} (`_ => {}` in
+    // chat_template.rs). An unknown / misspelled role is therefore silent
+    // data loss wrapped in a 200 OK — reject it here so nothing is silently
+    // omitted from the rendered prompt (and no arbitrary text is injected
+    // into the role position of the prompt shape). Whitespace-padded or
+    // case-mangled variants of the four OpenAI roles are also rejected.
+    for msg in &req.messages {
+        if msg.content.is_empty() {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "message content must not be empty",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if !VALID_ROLES.contains(&msg.role.as_str()) {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "message role must be one of: system, user, assistant, tool",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -945,6 +984,17 @@ pub async fn chat_completions(
     // "ChatRequest declares top-p, n, stop etc but handler/engine
     // does not fully apply them." Honest 400 > silent degradation.
     validate_chat_request_fields(&req)?;
+
+    // RIL ISS-069 / TASK-082: structural validation (model/messages
+    // non-empty, per-message role + content) runs here — BEFORE the
+    // stream / n>1 dispatch — so every path shares the same gate.
+    // Pre-fix `validate_chat_request` ran only inside `handle_chat`
+    // (the n=1 non-stream path); the streaming and n>1 dispatches
+    // (`stream_chat_completion`, `run_n_parallel_chat`,
+    // `stream_n_parallel_chat`) never validated, so `messages: []` with
+    // `stream: true` produced a 200 SSE of nothing instead of the 400
+    // sync completions returns for an empty prompt (completions.rs:1402).
+    validate_chat_request(&req)?;
 
     // Production-readiness §6: the correlation_id middleware
     // (mounted as the OUTERMOST layer in main.rs) installs a
