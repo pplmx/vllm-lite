@@ -869,6 +869,7 @@ pub async fn vllm_server::debug::trace_status(axum::extract::state::State<vllm_s
 pub async fn vllm_server::health_handlers::health_handler(axum::extract::state::State<vllm_server::ApiState>) -> axum_core::response::Response
 pub async fn vllm_server::health_handlers::metrics_handler(axum::extract::state::State<vllm_server::ApiState>) -> axum_core::response::Response
 pub async fn vllm_server::health_handlers::ready_handler(axum::extract::state::State<vllm_server::ApiState>) -> axum_core::response::Response
+pub async fn vllm_server::openai::batch::handler::cancel_batch(axum::extract::state::State<vllm_server::ApiState>, axum::extract::path::Path<alloc::string::String>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResponse>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub async fn vllm_server::openai::batch::handler::create_batch(axum::extract::state::State<vllm_server::ApiState>, axum::json::Json<vllm_server::openai::batch::types::SimpleBatchRequest>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResponse>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub async fn vllm_server::openai::batch::handler::get_batch(axum::extract::state::State<vllm_server::ApiState>, axum::extract::path::Path<alloc::string::String>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResponse>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub async fn vllm_server::openai::batch::handler::get_batch_results(axum::extract::state::State<vllm_server::ApiState>, axum::extract::path::Path<alloc::string::String>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResults>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
@@ -877,7 +878,11 @@ pub async fn vllm_server::openai::batch::manager::BatchManager::add_result(&self
 pub async fn vllm_server::openai::batch::manager::BatchManager::create_job(&self, vllm_server::openai::batch::types::BatchEndpoint, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<i64>, core::option::Option<f32>) -> alloc::string::String
 pub async fn vllm_server::openai::batch::manager::BatchManager::get_all_jobs(&self) -> alloc::vec::Vec<vllm_server::openai::batch::types::BatchJob>
 pub async fn vllm_server::openai::batch::manager::BatchManager::get_job(&self, &str) -> core::option::Option<vllm_server::openai::batch::types::BatchJob>
+pub async fn vllm_server::openai::batch::manager::BatchManager::is_cancelled(&self, &str) -> bool
+pub async fn vllm_server::openai::batch::manager::BatchManager::mark_in_progress(&self, &str) -> bool
+pub async fn vllm_server::openai::batch::manager::BatchManager::request_cancel(&self, &str) -> bool
 pub async fn vllm_server::openai::batch::manager::BatchManager::set_completed(&self, &str)
+pub async fn vllm_server::openai::batch::manager::BatchManager::set_failed(&self, &str)
 pub async fn vllm_server::openai::batch::manager::BatchManager::update_job(&self, vllm_server::openai::batch::types::BatchJob)
 pub async fn vllm_server::openai::chat::chat_completions(axum::extract::state::State<vllm_server::ApiState>, axum::extension::Extension<vllm_server::security::correlation::CorrelationId>, axum::json::Json<vllm_server::openai::types::ChatRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub async fn vllm_server::openai::completions::completions(axum::extract::state::State<vllm_server::ApiState>, axum::extension::Extension<vllm_server::security::correlation::CorrelationId>, axum::json::Json<vllm_server::openai::types::CompletionRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
@@ -940,7 +945,7 @@ pub fn vllm_server::api::HealthResponse::fmt(&self, &mut core::fmt::Formatter<'_
 pub fn vllm_server::api::HealthResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_server::ApiState::clone(&self) -> vllm_server::ApiState
 pub fn vllm_server::ApiState::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_server::app::build_app(vllm_server::ApiState, core::option::Option<alloc::sync::Arc<vllm_server::auth::AuthMiddleware>>, alloc::sync::Arc<vllm_server::security::audit::AuditLogger>, vllm_server::security::cors::CorsConfig) -> axum::routing::Router
+pub fn vllm_server::app::build_app(vllm_server::ApiState, core::option::Option<alloc::sync::Arc<vllm_server::auth::AuthMiddleware>>, alloc::sync::Arc<vllm_server::security::audit::AuditLogger>, &vllm_server::security::cors::CorsConfig) -> axum::routing::Router
 pub fn vllm_server::auth::AuthMiddleware::api_keys(&self) -> &[alloc::string::String]
 pub fn vllm_server::auth::AuthMiddleware::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::auth::AuthMiddleware::new(alloc::vec::Vec<alloc::string::String>, usize, u64) -> Self
@@ -1038,6 +1043,7 @@ pub fn vllm_server::logging::init_logging(core::option::Option<std::path::PathBu
 pub fn vllm_server::openai::batch::manager::BatchManager::default() -> Self
 pub fn vllm_server::openai::batch::manager::BatchManager::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::openai::batch::manager::BatchManager::new() -> Self
+pub fn vllm_server::openai::batch::spawn_batch_worker(&vllm_server::ApiState, vllm_server::openai::batch::types::BatchJob) -> tokio::runtime::task::join::JoinHandle<()>
 pub fn vllm_server::openai::batch::types::BatchEndpoint::clone(&self) -> vllm_server::openai::batch::types::BatchEndpoint
 pub fn vllm_server::openai::batch::types::BatchEndpoint::eq(&self, &vllm_server::openai::batch::types::BatchEndpoint) -> bool
 pub fn vllm_server::openai::batch::types::BatchEndpoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1069,6 +1075,7 @@ pub fn vllm_server::openai::batch::types::SimpleBatchRequest::clone(&self) -> vl
 pub fn vllm_server::openai::batch::types::SimpleBatchRequest::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub fn vllm_server::openai::batch::types::SimpleBatchRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::openai::batch::types::SimpleBatchRequest::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn vllm_server::openai::batch::worker::spawn_batch_worker(&vllm_server::ApiState, vllm_server::openai::batch::types::BatchJob) -> tokio::runtime::task::join::JoinHandle<()>
 pub fn vllm_server::openai::chat::build_prompt_from_messages(vllm_server::openai::chat_template::ChatTemplate, &[vllm_server::openai::types::ChatMessage]) -> alloc::string::String
 pub fn vllm_server::openai::chat_template::ChatTemplate::clone(&self) -> vllm_server::openai::chat_template::ChatTemplate
 pub fn vllm_server::openai::chat_template::ChatTemplate::eq(&self, &vllm_server::openai::chat_template::ChatTemplate) -> bool
@@ -1084,6 +1091,7 @@ pub fn vllm_server::openai::sampling_validation::validate_logit_bias<S: core::ha
 pub fn vllm_server::openai::sampling_validation::validate_penalty(core::option::Option<f32>, &str) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_sampling_params(&vllm_traits::sampling::SamplingParams) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_stop_sequences(core::option::Option<&[alloc::string::String]>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub fn vllm_server::openai::sampling_validation::validate_temperature(core::option::Option<f32>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_top_p(core::option::Option<f32>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::types::ChatChoice::clone(&self) -> vllm_server::openai::types::ChatChoice
 pub fn vllm_server::openai::types::ChatChoice::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
@@ -1250,6 +1258,7 @@ pub fn vllm_server::security::rbac::Role::fmt(&self, &mut core::fmt::Formatter<'
 pub fn vllm_server::security::rbac::Role::from_str(&str) -> Self
 pub fn vllm_server::security::size_limit::with_body_size_limit(axum::routing::Router, usize) -> axum::routing::Router
 pub fn vllm_server::security::size_limit::with_default_body_limit(axum::routing::Router) -> axum::routing::Router
+pub fn vllm_server::security::timing::constant_time_eq(&str, &str) -> bool
 pub fn vllm_server::security::tls::TlsConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::security::tls::TlsConfig::load(&self) -> core::result::Result<rustls::server::server_conn::ServerConfig, vllm_server::security::tls::TlsError>
 pub fn vllm_server::security::tls::TlsConfig::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
@@ -1275,6 +1284,7 @@ pub mod vllm_server::openai::batch
 pub mod vllm_server::openai::batch::handler
 pub mod vllm_server::openai::batch::manager
 pub mod vllm_server::openai::batch::types
+pub mod vllm_server::openai::batch::worker
 pub mod vllm_server::openai::chat
 pub mod vllm_server::openai::chat_template
 pub mod vllm_server::openai::completions
@@ -1290,6 +1300,7 @@ pub mod vllm_server::security::cors
 pub mod vllm_server::security::jwt
 pub mod vllm_server::security::rbac
 pub mod vllm_server::security::size_limit
+pub mod vllm_server::security::timing
 pub mod vllm_server::security::tls
 pub mod vllm_server::util
 pub mod vllm_server::util::time
@@ -1460,6 +1471,7 @@ pub vllm_server::config::EngineConfig::engine_mailbox_capacity: usize
 pub vllm_server::config::EngineConfig::kv_quantization: bool
 pub vllm_server::config::EngineConfig::max_batch_size: usize
 pub vllm_server::config::EngineConfig::max_draft_tokens: usize
+pub vllm_server::config::EngineConfig::max_model_len: core::option::Option<usize>
 pub vllm_server::config::EngineConfig::max_waiting_batches: usize
 pub vllm_server::config::EngineConfig::num_kv_blocks: usize
 pub vllm_server::config::EngineConfig::tensor_parallel_size: usize
@@ -1509,6 +1521,7 @@ pub vllm_server::openai::batch::BatchResponse::request_counts: core::option::Opt
 pub vllm_server::openai::batch::BatchResponse::status: alloc::string::String
 pub vllm_server::openai::batch::types::BatchEndpoint::Chat
 pub vllm_server::openai::batch::types::BatchEndpoint::Completion
+pub vllm_server::openai::batch::types::BatchJob::cancel_requested: alloc::sync::Arc<core::sync::atomic::AtomicBool>
 pub vllm_server::openai::batch::types::BatchJob::completed_at: core::option::Option<i64>
 pub vllm_server::openai::batch::types::BatchJob::created_at: i64
 pub vllm_server::openai::batch::types::BatchJob::endpoint: vllm_server::openai::batch::types::BatchEndpoint
@@ -1534,6 +1547,7 @@ pub vllm_server::openai::batch::types::BatchResultItem::status: alloc::string::S
 pub vllm_server::openai::batch::types::BatchResults::batch_id: alloc::string::String
 pub vllm_server::openai::batch::types::BatchResults::results: alloc::vec::Vec<vllm_server::openai::batch::types::BatchResultItem>
 pub vllm_server::openai::batch::types::BatchResults::status: alloc::string::String
+pub vllm_server::openai::batch::types::BatchStatus::Cancelled
 pub vllm_server::openai::batch::types::BatchStatus::Completed
 pub vllm_server::openai::batch::types::BatchStatus::Failed
 pub vllm_server::openai::batch::types::BatchStatus::InProgress

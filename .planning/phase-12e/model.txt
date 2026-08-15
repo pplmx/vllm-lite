@@ -1186,7 +1186,9 @@ pub fn vllm_model::causal_lm::HybridLm<B, Norm, C>::forward_with_cache(&mut self
 pub fn vllm_model::causal_lm::HybridLm<B, Norm, C>::from_parts(C, candle_nn::embedding::Embedding, alloc::vec::Vec<B>, Norm, core::option::Option<candle_nn::linear::Linear>, alloc::sync::Arc<parking_lot::mutex::Mutex<vllm_model::paged_tensor::tensor_store::PagedKvCache>>, candle_core::device::Device) -> Self
 pub fn vllm_model::causal_lm::HybridLm<B, Norm, C>::num_heads(&self) -> usize
 pub fn vllm_model::causal_lm::HybridLm<B, Norm, C>::num_layers(&self) -> usize
+pub fn vllm_model::causal_lm::HybridLm<B, Norm, C>::on_sequence_finished(&mut self, vllm_traits::types::SeqId)
 pub fn vllm_model::causal_lm::HybridLm<B, Norm, C>::paged_kv_cache(&self) -> alloc::sync::Arc<parking_lot::mutex::Mutex<vllm_model::paged_tensor::tensor_store::PagedKvCache>>
+pub fn vllm_model::causal_lm::HybridLm<B, Norm, C>::supports_prefix_caching(&self) -> bool
 pub fn vllm_model::causal_lm::HybridLm<B, Norm, C>::vocab_size(&self) -> usize
 pub fn vllm_model::causal_lm::HybridLmConfig::hidden_size(&self) -> usize
 pub fn vllm_model::causal_lm::HybridLmConfig::num_kv_heads(&self) -> usize
@@ -1599,7 +1601,7 @@ pub fn vllm_model::paged_tensor::quant::QuantizedWeights::clone(&self) -> vllm_m
 pub fn vllm_model::paged_tensor::quant::QuantizedWeights::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_model::paged_tensor::tensor_store::PagedKvCache::compute_block_hash_from_slice(&[f32]) -> u64
 pub fn vllm_model::paged_tensor::tensor_store::PagedKvCache::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_model::paged_tensor::tensor_store::PagedKvCache::get_scale(&self, usize) -> f32
+pub fn vllm_model::paged_tensor::tensor_store::PagedKvCache::get_scale(&self, usize, usize) -> f32
 pub fn vllm_model::paged_tensor::tensor_store::PagedKvCache::new(usize, usize, usize, usize, candle_core::device::Device, bool) -> candle_core::error::Result<Self>
 pub fn vllm_model::paged_tensor::tensor_store::PagedKvCache::num_blocks(&self) -> usize
 pub fn vllm_model::paged_tensor::tensor_store::PagedKvCache::read_kv(&self, usize, &[usize], usize) -> candle_core::error::Result<(candle_core::tensor::Tensor, candle_core::tensor::Tensor)>
@@ -2315,7 +2317,7 @@ pub vllm_model::ModelConfig::use_double_wide_mlp: bool
 pub vllm_model::ModelConfig::vocab_size: usize
 pub vllm_model::paged_tensor::PagedKvCache::block_hashes: alloc::vec::Vec<std::collections::hash::map::HashMap<u64, usize>>
 pub vllm_model::paged_tensor::PagedKvCache::quantized: bool
-pub vllm_model::paged_tensor::PagedKvCache::scales: alloc::vec::Vec<f32>
+pub vllm_model::paged_tensor::PagedKvCache::scales: alloc::vec::Vec<alloc::vec::Vec<f32>>
 pub vllm_model::paged_tensor::QuantizationConfig::bits: usize
 pub vllm_model::paged_tensor::QuantizationConfig::group_size: core::option::Option<usize>
 pub vllm_model::paged_tensor::QuantizationConfig::quant_type: vllm_model::paged_tensor::quant::QuantizationType
@@ -2354,7 +2356,7 @@ pub vllm_model::paged_tensor::quant::QuantizedWeights::scales: candle_core::tens
 pub vllm_model::paged_tensor::quant::QuantizedWeights::zeros: core::option::Option<candle_core::tensor::Tensor>
 pub vllm_model::paged_tensor::tensor_store::PagedKvCache::block_hashes: alloc::vec::Vec<std::collections::hash::map::HashMap<u64, usize>>
 pub vllm_model::paged_tensor::tensor_store::PagedKvCache::quantized: bool
-pub vllm_model::paged_tensor::tensor_store::PagedKvCache::scales: alloc::vec::Vec<f32>
+pub vllm_model::paged_tensor::tensor_store::PagedKvCache::scales: alloc::vec::Vec<alloc::vec::Vec<f32>>
 pub vllm_model::QuantizationConfig::block_size: usize
 pub vllm_model::QuantizationConfig::format: vllm_model::quantize::types::QuantizationFormat
 pub vllm_model::QuantizationConfig::group_size: usize

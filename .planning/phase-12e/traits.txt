@@ -200,12 +200,16 @@ pub fn vllm_traits::ModelBackend::forward(&mut self, &[vllm_traits::types::SeqId
 pub fn vllm_traits::ModelBackend::forward_to_layer(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool], usize) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
 pub fn vllm_traits::ModelBackend::num_heads(&self) -> usize
 pub fn vllm_traits::ModelBackend::num_layers(&self) -> usize
+pub fn vllm_traits::ModelBackend::on_sequence_finished(&mut self, vllm_traits::types::SeqId)
+pub fn vllm_traits::ModelBackend::supports_prefix_caching(&self) -> bool
 pub fn vllm_traits::model::ModelBackend::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
 pub fn vllm_traits::model::ModelBackend::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
 pub fn vllm_traits::model::ModelBackend::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
 pub fn vllm_traits::model::ModelBackend::forward_to_layer(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool], usize) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
 pub fn vllm_traits::model::ModelBackend::num_heads(&self) -> usize
 pub fn vllm_traits::model::ModelBackend::num_layers(&self) -> usize
+pub fn vllm_traits::model::ModelBackend::on_sequence_finished(&mut self, vllm_traits::types::SeqId)
+pub fn vllm_traits::model::ModelBackend::supports_prefix_caching(&self) -> bool
 pub fn vllm_traits::model::ModelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_traits::model::ModelError::from(core::io::error::Error) -> Self
 pub fn vllm_traits::model::ModelError::new(impl core::convert::Into<alloc::string::String>) -> Self
@@ -219,6 +223,8 @@ pub fn vllm_traits::model::StubModelBackend::forward(&mut self, &[vllm_traits::t
 pub fn vllm_traits::model::StubModelBackend::forward_to_layer(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool], usize) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
 pub fn vllm_traits::model::StubModelBackend::num_heads(&self) -> usize
 pub fn vllm_traits::model::StubModelBackend::num_layers(&self) -> usize
+pub fn vllm_traits::model::StubModelBackend::on_sequence_finished(&mut self, vllm_traits::types::SeqId)
+pub fn vllm_traits::model::StubModelBackend::supports_prefix_caching(&self) -> bool
 pub fn vllm_traits::sampling::argmax_logits(&[f32]) -> vllm_traits::types::TokenId
 pub fn vllm_traits::sampling::SampledToken::clone(&self) -> vllm_traits::sampling::SampledToken
 pub fn vllm_traits::sampling::SampledToken::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
