@@ -430,11 +430,20 @@ pub fn sample_batch(
 /// so they remain independent.
 ///
 /// `params_list`, `seen_tokens`, and `logits_list` must have the same
-/// length. The returned `Vec<SampledToken>` has length
-/// `logits_list.len()`. Each [`SampledToken`] carries the sampled
-/// token alongside its `logprob` (and top-K logprobs when
-/// `params.top_logprobs.is_some()`) under the post-filter
-/// distribution (P36 v0.3 wire-type follow-up engine wire-through).
+/// length *for production batches*; a **missing** entry in a shorter
+/// `params_list` / `seen_tokens` degrades to `SamplingParams::default()`
+/// (greedy) / an empty seen set — honoring the
+/// [`vllm_traits::Batch::sampling_params`] doc contract that an empty
+/// `sampling_params` is "equivalent to greedy decoding" (synthetic test
+/// batches carry `vec![]`). Pre-fix this function zipped the three
+/// slices, so an empty `params_list` truncated the result to zero
+/// sampled tokens and the engine silently emitted nothing for the batch
+/// (sequences stalled with pinned KV blocks). The returned
+/// `Vec<SampledToken>` has length `logits_list.len()`. Each
+/// [`SampledToken`] carries the sampled token alongside its `logprob`
+/// (and top-K logprobs when `params.top_logprobs.is_some()`) under the
+/// post-filter distribution (P36 v0.3 wire-type follow-up engine
+/// wire-through).
 ///
 /// Beam search (`beam_width > 1`) is not implemented here — callers
 /// must intercept those requests before they reach this function.
@@ -446,9 +455,12 @@ pub fn sample_batch_with_params(
 ) -> Vec<SampledToken> {
     logits_list
         .iter()
-        .zip(params_list.iter())
-        .zip(seen_tokens.iter())
-        .map(|((logits, params), seen)| sample_one_with_params(logits, params, seen))
+        .enumerate()
+        .map(|(i, logits)| {
+            let params = params_list.get(i).cloned().unwrap_or_default();
+            let seen: &[TokenId] = seen_tokens.get(i).map_or(&[], Vec::as_slice);
+            sample_one_with_params(logits, &params, seen)
+        })
         .collect()
 }
 

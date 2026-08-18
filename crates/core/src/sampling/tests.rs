@@ -608,6 +608,25 @@ fn test_sample_batch_with_params_greedy_default() {
 }
 
 #[test]
+fn test_sample_batch_with_params_empty_params_falls_back_to_greedy() {
+    // The `Batch.sampling_params` doc contract (vllm_traits::types):
+    // "an empty sampling_params (e.g. on a synthetic test batch) is
+    // equivalent to greedy decoding." Pre-fix `sample_batch_with_params`
+    // iterated `logits_list.zip(params_list).zip(seen_tokens)`, so an
+    // empty params slice truncated the result to ZERO sampled tokens
+    // even though real per-sequence logits were present — the engine
+    // then emitted nothing for the batch and every sequence stalled
+    // (no advance, KV blocks pinned) instead of decoding greedily.
+    let logits = vec![vec![0.1, 0.9, 0.3], vec![0.8, 0.1, 0.1]];
+    let seen = vec![vec![], vec![]];
+    let empty_params: Vec<SamplingParams> = vec![];
+    let tokens = sample_batch_with_params(&logits, &empty_params, &seen);
+    let token_ids: Vec<TokenId> = tokens.iter().map(|s| s.token).collect();
+    // Greedy per sequence, mirroring `test_sample_batch_with_params_greedy_default`.
+    assert_eq!(token_ids, vec![1, 0]);
+}
+
+#[test]
 fn test_sample_batch_with_params_per_sequence_divergence() {
     // Two sequences with different `top_k` must restrict independently.
     let logits = vec![vec![0.1, 0.9, 0.3, 0.05, 0.05]; 2];
