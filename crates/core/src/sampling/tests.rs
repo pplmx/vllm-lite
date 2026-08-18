@@ -1084,6 +1084,38 @@ fn test_seed_greedy_path_bypasses_rng() {
 }
 
 #[test]
+fn test_temperature_zero_forces_greedy_across_top_p() {
+    // `SamplingParams::temperature` doc: "0.0 selects greedy argmax"
+    // (unconditional), and the seed doc promises that `temperature = 0`
+    // paths "bypass the RNG entirely (deterministic argmax)". Pre-fix the
+    // `top_p < 1.0` branch was checked BEFORE temperature, so a request
+    // with `temperature = 0` + `top_p < 1` (a common client combination)
+    // ran `top_p_sample` on the raw logits with a random seeded threshold:
+    // non-greedy AND non-reproducible across seeds, contradicting the
+    // documented contract.
+    //
+    // `[10.0, 10.0, ...]` (a two-way tie for argmax): greedy argmax =
+    // token 0 (first-wins). The `top_p = 0.5` nucleus on the raw softmax
+    // is `{0, 1}` — P(token₀) ≈ 0.499 ≤ 0.5, so the next token joins the
+    // cutoff — and a top-p draw with a seeded threshold ~50% of the time
+    // returns token 1. Pre-fix, half the seeds below violate the contract;
+    // post-fix every seed yields the argmax.
+    let logits = vec![10.0f32, 10.0, 0.0, 0.0, 0.0];
+    for seed in (0..256u64).map(|i| i * 37 + 12345) {
+        let params = SamplingParams::builder()
+            .with_temperature(0.0)
+            .with_top_p(0.5)
+            .with_seed(seed)
+            .build();
+        let out = sample_one_with_params(&logits, &params, &[]);
+        assert_eq!(
+            out.token, 0,
+            "temperature=0 must force greedy argmax regardless of top_p (seed {seed})"
+        );
+    }
+}
+
+#[test]
 fn test_seed_per_sequence_independence_in_batch() {
     // `sample_batch_with_params` carries per-sequence SamplingParams.
     // Each sequence must use its own RNG seeded from its own

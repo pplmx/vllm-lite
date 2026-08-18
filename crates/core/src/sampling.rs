@@ -343,8 +343,9 @@ pub fn top_k_sample(logits: &[f32], k: usize, random_threshold: f32) -> TokenId 
 /// 3. **Top-K truncation** — zero out (set to `-inf`) all logits below the
 ///    `k`-th largest, when `top_k > 0`.
 /// 4. **Top-P / temperature / greedy** — choose the final sampler based on the
-///    remaining parameters: `top_p < 1.0` ⇒ nucleus, `temperature > 0.0`
-///    ⇒ temperature sampling, otherwise greedy argmax.
+///    remaining parameters: `temperature <= 0.0` ⇒ greedy argmax
+///    (the `SamplingParams::temperature` contract, taken unconditionally),
+///    else `top_p < 1.0` ⇒ nucleus, else temperature sampling.
 ///
 /// `logits_list` and `seen_tokens` must have the same length. Returned vector
 /// has length `logits_list.len()`.
@@ -392,13 +393,17 @@ pub fn sample_batch(
                 }
             }
 
-            if top_p < 1.0 {
+            if temperature <= 0.0 {
+                // RIL ISS-078: `temperature = 0` 'selects greedy argmax'
+                // regardless of `top_p`. Pre-fix the `top_p < 1.0` branch
+                // was checked first, so a "greedy" request with `top_p < 1.0`
+                // drew from the RNG — non-greedy and non-reproducible.
+                greedy_sample(&logits)
+            } else if top_p < 1.0 {
                 top_p_sample(&logits, top_p, random_f32())
-            } else if temperature > 0.0 {
+            } else {
                 // Logits are already temperature-scaled above; pass 1.0 to avoid double-scaling.
                 temperature_sample(&logits, 1.0, random_f32())
-            } else {
-                greedy_sample(&logits)
             }
         })
         .collect()
@@ -477,9 +482,9 @@ pub fn sample_batch_with_params(
 /// deterministic stream derived from `(s, seen.len())` — the seen-set
 /// length is the step index, so the stream advances each step while
 /// staying reproducible; `None` reads from the thread-local default
-/// RNG. Greedy paths (`temperature = 0`, `top_p = 1.0`, `top_k = 0`)
-/// bypass the RNG entirely — `seed` has no observable effect in those
-/// modes.
+/// RNG. The greedy path (`temperature <= 0` — RIL ISS-078, taken
+/// unconditionally regardless of `top_p`) bypasses the RNG entirely —
+/// `seed` has no observable effect there.
 ///
 /// **Return type (P36 v0.3 wire-type follow-up engine wire-through):**
 /// returns a [`SampledToken`] carrying the sampled `token` alongside
@@ -549,24 +554,33 @@ pub fn sample_one_with_params(
     let step = seen.len();
     let random_threshold = sample_random_threshold(params.seed, step);
 
-    let token = if params.top_p < 1.0 {
+    let token = if params.temperature <= 0.0 {
+        // RIL ISS-078: `SamplingParams::temperature` doc "0.0 selects
+        // greedy argmax" is unconditional — temperature = 0 must force
+        // greedy even when `top_p < 1.0`. Pre-fix the `top_p < 1.0`
+        // branch was checked first, so a "greedy" request with
+        // `top_p < 1.0` drew a seeded/thread random threshold
+        // (non-greedy, non-reproducible across seeds), contradicting the
+        // documented contract. Temperature scaling above is skipped for
+        // `temperature <= 0`, so the raw post-filter logits reach
+        // `greedy_sample` unchanged.
+        greedy_sample(&logits)
+    } else if params.top_p < 1.0 {
         top_p_sample(&logits, params.top_p, random_threshold)
-    } else if params.temperature > 0.0 {
+    } else {
         // Logits are already temperature-scaled above; pass 1.0 to avoid double-scaling.
         temperature_sample(&logits, 1.0, random_threshold)
-    } else {
-        greedy_sample(&logits)
     };
 
     // Compute the log-probabilities under the ACTUAL sampling
     // distribution (the same one the sampler drew `token` from).
-    // For `top_p < 1.0` this is the nucleus-renormalized
-    // distribution; otherwise it's the full log-softmax over the
-    // post-filter (post-bias/penalty/temperature/top-k) logits.
-    let sampling_logprobs = if params.top_p < 1.0 {
-        renormalized_top_p_logprobs(&logits, params.top_p)
-    } else {
+    // The greedy branch (temperature <= 0) draws from the full
+    // post-filter softmax; only a `top_p < 1.0` draw is
+    // nucleus-renormalized.
+    let sampling_logprobs = if params.temperature <= 0.0 || params.top_p >= 1.0 {
         log_softmax(&logits)
+    } else {
+        renormalized_top_p_logprobs(&logits, params.top_p)
     };
 
     let logprob = sampling_logprobs
