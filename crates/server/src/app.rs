@@ -41,6 +41,7 @@ use axum::routing::{get, post};
 use crate::ApiState;
 use crate::api;
 use crate::auth::AuthMiddleware;
+use crate::config::AuthConfig;
 use crate::debug;
 use crate::health_handlers;
 use crate::openai::batch::handler::{
@@ -55,6 +56,37 @@ use crate::security::audit_middleware::audit_middleware;
 use crate::security::correlation::correlation_id_middleware;
 use crate::security::cors::{CorsConfig, with_cors};
 use crate::security::size_limit::with_default_body_limit;
+use std::collections::HashMap;
+
+/// Build the auth middleware from the *effective* API keys — all three
+/// configured sources (inline `api_keys`, the `api_keys_env` var, and the
+/// `api_keys_file` file), per [`AuthConfig::resolve_api_keys`]. Returns
+/// `None` only when no key is configured anywhere.
+///
+/// (RIL ISS-080: the production binary previously gated the middleware on
+/// the inline `api_keys` list alone, so an operator using
+/// `--api-key-file` / `VLLM_API_KEYS_FILE` / `api_keys_env` got a
+/// non-empty SEC-01 posture — no startup warning — while the middleware
+/// stayed `None` and the inference API ran **completely unauthenticated**.
+/// Enforcement must use exactly what the auth posture computes.)
+pub fn build_auth_middleware(auth: &AuthConfig) -> Option<Arc<AuthMiddleware>> {
+    let keys = auth.resolve_api_keys();
+    if keys.is_empty() {
+        return None;
+    }
+    // Convert RateLimitOverride into (max_requests, window_secs) pairs.
+    let overrides: HashMap<String, (usize, u64)> = auth
+        .rate_limit_overrides
+        .iter()
+        .map(|(k, v)| (k.clone(), (v.max_requests, v.rate_limit_window_secs)))
+        .collect();
+    Some(Arc::new(AuthMiddleware::new_with_overrides(
+        keys,
+        auth.rate_limit_requests,
+        auth.rate_limit_window_secs,
+        overrides,
+    )))
+}
 
 /// Build the production HTTP router.
 ///
@@ -127,4 +159,52 @@ pub fn build_app(
     // CORS: outermost overall so even 413/401 responses carry the
     // Access-Control-Allow-Origin header for browser-direct callers.
     with_cors(app, cors)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AuthConfig;
+
+    #[test]
+    fn build_auth_middleware_none_when_no_keys_anywhere() {
+        let auth = AuthConfig::default();
+        assert!(build_auth_middleware(&auth).is_none());
+    }
+
+    #[test]
+    fn build_auth_middleware_uses_inline_keys() {
+        let auth = AuthConfig {
+            api_keys: vec!["sk-inline".to_string()],
+            ..AuthConfig::default()
+        };
+        let mw = build_auth_middleware(&auth).expect("inline key must yield a middleware");
+        assert_eq!(mw.api_keys(), &["sk-inline".to_string()]);
+    }
+
+    #[test]
+    fn build_auth_middleware_enforces_file_keys() {
+        // RIL ISS-080 regression: a config carrying ONLY file keys must
+        // still produce a middleware. Pre-fix the binary gated on the
+        // inline `api_keys` list alone, so `--api-key-file` /
+        // `VLLM_API_KEYS_FILE` deployments saw no SEC-01 warning (the
+        // resolved posture looked configured) yet the middleware stayed
+        // `None` -- the inference API ran completely unauthenticated.
+        // Enforcement must use the same all-source key set the posture
+        // computes.
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("keys.txt");
+        std::fs::write(&file, "# comment\nsk-file-key-1\nsk-file-key-2\n").unwrap();
+        let auth = AuthConfig {
+            api_keys: vec![],
+            api_keys_env: None,
+            api_keys_file: Some(file.to_string_lossy().into_owned()),
+            ..AuthConfig::default()
+        };
+        let mw = build_auth_middleware(&auth).expect("file keys must yield a middleware");
+        assert_eq!(
+            mw.api_keys(),
+            &["sk-file-key-1".to_string(), "sk-file-key-2".to_string()]
+        );
+    }
 }

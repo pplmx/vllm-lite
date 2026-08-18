@@ -10,13 +10,11 @@ mod bootstrap;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::mpsc;
 use vllm_core::types::EngineMessage;
-use vllm_server::auth::AuthMiddleware;
 use vllm_server::openai::batch::BatchManager;
 use vllm_server::{ApiState, cli, health::HealthChecker, logging};
 
@@ -219,23 +217,12 @@ async fn main() -> Result<()> {
     let tokenizer = bootstrap::tokenizer::load_tokenizer(cli.model_path());
     let batch_manager = Arc::new(BatchManager::new());
 
-    let auth_middleware = if app_config.auth.api_keys.is_empty() {
-        None
-    } else {
-        // Convert RateLimitOverride into (max_requests, window_secs) pairs.
-        let overrides: HashMap<String, (usize, u64)> = app_config
-            .auth
-            .rate_limit_overrides
-            .iter()
-            .map(|(k, v)| (k.clone(), (v.max_requests, v.rate_limit_window_secs)))
-            .collect();
-        Some(Arc::new(AuthMiddleware::new_with_overrides(
-            app_config.auth.api_keys.clone(),
-            app_config.auth.rate_limit_requests,
-            app_config.auth.rate_limit_window_secs,
-            overrides,
-        )))
-    };
+    // RIL ISS-080: enforce auth from ALL resolved key sources (inline +
+    // env + file), matching the SEC-01 posture computed above. Pre-fix this
+    // gated on the inline `api_keys` list only, so `--api-key-file` /
+    // `VLLM_API_KEYS_FILE` deployments saw no startup warning while the
+    // middleware stayed None and the inference API ran unauthenticated.
+    let auth_middleware = vllm_server::app::build_auth_middleware(&app_config.auth);
 
     // Initialize health checker
     let health_checker = Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true)));
