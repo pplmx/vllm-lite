@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 72,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-18T22:03:33+00:00",
+  "updated_at": "2026-08-18T23:55:28+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -5566,11 +5566,11 @@
     "ISS-083": {
       "id": "ISS-083",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-18T21:31:40+00:00",
-      "updated_at": "2026-08-18T21:31:40+00:00",
-      "touched_round": 71,
+      "updated_at": "2026-08-18T23:36:57+00:00",
+      "touched_round": 72,
       "severity": 3,
       "confidence": 1.0,
       "title": "tokens_total (Prometheus 'Total tokens generated') counts different quantities per step path: scheduler/batch.rs:236-243 records sum of per-seq input_tokens lengths (INPUT tokens -- full prompt on prefill, 1 per seq on decode) while engine/graph_step.rs:249 records results.len() (OUTPUT tokens); on prefill it over-counts by the full prompt length and a graph-replay engine reports output counts while a non-graph engine reports input counts -- the same counter measures different units depending on build/path, inflating throughput dashboards"
@@ -5634,6 +5634,43 @@
       "severity": 3,
       "confidence": 0.7,
       "title": "Distributed KV gRPC has no timeouts: Endpoint created without .timeout(), fetch_from_peers waits every peer in a JoinSet with no deadline (a half-open TCP / silent HTTP-2 peer stalls the fetch indefinitely), and put/invalidate broadcasts spawn fire-and-forget tasks with no deadline/retry/backpressure -> a wedged peer leaks unbounded pending requests. Latent multi-node (DEC-048 context)"
+    },
+    "TASK-095": {
+      "id": "TASK-095",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-18T23:05:21+00:00",
+      "updated_at": "2026-08-18T23:55:28+00:00",
+      "touched_round": 72,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Make tokens_total count emitted output tokens consistently across regular + speculative + CUDA-graph step paths (ISS-083); TDD engine-level regression (40-token prompt, max_tokens=5 -> 5 not ~44)"
+    },
+    "CHG-091": {
+      "id": "CHG-091",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T23:15:09+00:00",
+      "updated_at": "2026-08-18T23:15:09+00:00",
+      "touched_round": 72,
+      "commit": "6e1b8f95",
+      "summary": "tokens_total counts emitted output tokens on regular + speculative + CUDA-graph paths (finalize_and_record + dispatch.rs now record results.len()); engine regression test"
+    },
+    "EV-103": {
+      "id": "EV-103",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T23:15:09+00:00",
+      "updated_at": "2026-08-18T23:15:09+00:00",
+      "touched_round": 72,
+      "source": "crates/core/src/engine/tests.rs test_tokens_total_counts_generated_not_input",
+      "confidence": 1.0,
+      "summary": "40-token prompt + max_tokens=5: post-fix tokens_total=5 (was ~44 input-length sum pre-fix); 444 core lib tests green"
     }
   },
   "edges": [
@@ -8042,6 +8079,24 @@
       "to": "COMP-005",
       "type": "located_in",
       "created_at": "2026-08-18T21:59:07+00:00"
+    },
+    {
+      "from": "TASK-095",
+      "to": "ISS-083",
+      "type": "addresses",
+      "created_at": "2026-08-18T23:32:18+00:00"
+    },
+    {
+      "from": "CHG-091",
+      "to": "ISS-083",
+      "type": "resolves",
+      "created_at": "2026-08-18T23:36:48+00:00"
+    },
+    {
+      "from": "CHG-091",
+      "to": "TASK-095",
+      "type": "implements",
+      "created_at": "2026-08-18T23:36:51+00:00"
     }
   ]
 }
