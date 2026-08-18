@@ -174,6 +174,37 @@ fn test_engine_full_response_channel_records_dropped_token() {
 }
 
 #[test]
+fn test_tokens_total_counts_generated_not_input() {
+    // RIL ISS-083: `tokens_total` ("Total tokens generated") must count
+    // the emitted OUTPUT tokens, not the sum of input (prompt) token
+    // lengths. Pre-fix the regular path (`scheduler/batch.rs`) summed
+    // `input_tokens.len()` per step — the full 40-token prompt on the
+    // prefill step — and the speculative path (`spec_dispatch`) did the
+    // same; only the CUDA-graph path (`graph_step.rs`) counted emitted
+    // results. A 40-token prompt with `max_tokens = 5` therefore
+    // accumulated ~44 pre-fix (40 + 4 decode steps) instead of exactly 5
+    // generated tokens.
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![7; 40], 5), tx);
+    for _ in 0..40 {
+        let _ = engine.step();
+        if !engine.has_pending() {
+            break;
+        }
+    }
+    assert!(!engine.has_pending());
+    let generated = engine.scheduler.metrics.runtime_snapshot().tokens_total;
+    assert_eq!(
+        generated, 5,
+        "tokens_total must count the 5 generated tokens (max_tokens budget), \
+         not the ~44 input-token length sum the pre-fix code recorded \
+         (got {generated})"
+    );
+}
+
+#[test]
 fn test_sleep_policy_immediate_work() {
     let mut policy = SleepPolicy::default();
     let interval = policy.next_interval(true);

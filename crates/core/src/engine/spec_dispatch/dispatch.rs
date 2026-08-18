@@ -162,10 +162,13 @@ impl crate::engine::Engine {
         self.scheduler.clear_finished();
 
         if !batch.seq_ids.is_empty() {
-            let total_tokens: usize = batch.input_tokens.iter().map(std::vec::Vec::len).sum();
+            // RIL ISS-083: count generated (output) tokens — the emitted
+            // verified results — not the input token sum. `tokens_total`
+            // ("Total tokens generated") must agree with the regular and
+            // CUDA-graph step paths, which both count emitted results.
             self.scheduler
                 .metrics
-                .record_tokens(u64::try_from(total_tokens).unwrap_or(0));
+                .record_tokens(u64::try_from(results.len()).unwrap_or(0));
             self.scheduler
                 .metrics
                 .record_batch_size(batch.seq_ids.len());

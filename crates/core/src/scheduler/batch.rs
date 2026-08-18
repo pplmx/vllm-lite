@@ -146,7 +146,7 @@ impl crate::engine::Engine {
         // Keep `logits_per_seq` alive through this point for structural
         // symmetry with the CUDA-Graph path (P36); it is not consumed.
         let _ = logits_per_seq;
-        self.finalize_and_record(&batch, total_tokens, start);
+        self.finalize_and_record(&batch, &results, start);
 
         Ok(results)
     }
@@ -208,10 +208,19 @@ impl crate::engine::Engine {
 
     /// Finalize stop-sequence and length-completed sequences, clear finished
     /// entries, and record batch metrics + latency.
+    ///
+    /// `results` is the emitted per-sequence token list (stale mid-chunk
+    /// prefill predictions already masked out) — its length is the number of
+    /// tokens actually generated this step, which is what `tokens_total`
+    /// ("Total tokens generated") counts (RIL ISS-083). Pre-fix the
+    /// regular and speculative paths recorded the sum of *input* token
+    /// lengths instead, so a prefill over-counted the metric by the full
+    /// prompt length and the CUDA-graph path (which correctly counted
+    /// emitted results) disagreed with them for the same workload.
     pub(crate) fn finalize_and_record(
         &mut self,
         batch: &vllm_traits::Batch,
-        total_tokens: usize,
+        results: &[(vllm_traits::SeqId, vllm_traits::SampledToken)],
         start: std::time::Instant,
     ) {
         // P38 v0.3 wire-type engine wire-through: stop-sequence
@@ -234,9 +243,10 @@ impl crate::engine::Engine {
         self.scheduler.clear_finished();
 
         if !batch.seq_ids.is_empty() {
+            // RIL ISS-083: count generated (output) tokens, not input tokens.
             self.scheduler
                 .metrics
-                .record_tokens(u64::try_from(total_tokens).unwrap_or(0));
+                .record_tokens(u64::try_from(results.len()).unwrap_or(0));
             self.scheduler
                 .metrics
                 .record_batch_size(batch.seq_ids.len());
