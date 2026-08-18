@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 71,
+  "round": 72,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-18T17:41:00+00:00",
+  "updated_at": "2026-08-18T22:03:33+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 70,
+      "touched_round": 71,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -55,7 +55,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 70,
+      "touched_round": 71,
       "title": "vllm-dist",
       "role": "tensor parallel / KV transfer (multi-node feature)"
     },
@@ -88,7 +88,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 2,
+      "touched_round": 71,
       "title": "core/kv-cache-memory",
       "role": "block allocator, prefix cache, memory manager refcounts"
     },
@@ -1821,7 +1821,7 @@
       "version": 1,
       "created_at": "2026-08-10T10:39:57+00:00",
       "updated_at": "2026-08-10T10:39:57+00:00",
-      "touched_round": 52,
+      "touched_round": 71,
       "title": "vllm-core engine/speculative dispatch + scheduler update",
       "role": "speculative decoding step orchestration and scheduler state fold"
     },
@@ -5391,6 +5391,249 @@
       "touched_round": 71,
       "commit": 36236327,
       "summary": "sample_batch_with_params honors empty sampling_params==greedy per row (missing params/seen degrade to default/empty); 1 unit test"
+    },
+    "ISS-078": {
+      "id": "ISS-078",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-18T21:13:58+00:00",
+      "updated_at": "2026-08-18T21:28:02+00:00",
+      "touched_round": 71,
+      "severity": 4,
+      "confidence": 1.0,
+      "title": "temperature=0 no longer forces greedy when top_p<1.0: sample_one_with_params and sample_batch check the top_p<1.0 branch BEFORE temperature, so a request with temperature=0 + top_p<1 (both forwarded verbatim by the HTTP layer) runs top_p_sample on the raw un-scaled logits with a seeded/thread random threshold -- a greedy request draws from the RNG, is non-reproducible even with a seed, and can emit tokens the argmax would never pick. Contradicts the unconditional SamplingParams::temperature doc ('0.0 selects greedy argmax') and the seed doc's greedy-bypasses-RNG promise."
+    },
+    "TASK-092": {
+      "id": "TASK-092",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-18T21:13:59+00:00",
+      "updated_at": "2026-08-18T21:28:03+00:00",
+      "touched_round": 71,
+      "category": "correctness",
+      "severity": 4,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Reorder sampler branch selection so temperature<=0 forces greedy argmax regardless of top_p (ISS-078), keeping logprob computation on the same precedence; TDD regression over spread seeds"
+    },
+    "ISS-079": {
+      "id": "ISS-079",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-18T21:14:33+00:00",
+      "updated_at": "2026-08-18T21:28:05+00:00",
+      "touched_round": 71,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "/debug/metrics divides fixed-point ratio gauges by 1000 instead of the 100_000 storage scale: record_packing_efficiency(0.85)/record_speculative_acceptance store ratio*100_000 and the Prometheus exporter restores by /100_000, but the JSON admin snapshot divides by 1000 -- every recorded ratio shows 100x inflated (0.85 -> 85.0) on /debug/metrics; two exporters of the same collector disagree by two orders of magnitude"
+    },
+    "TASK-093": {
+      "id": "TASK-093",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-18T21:14:34+00:00",
+      "updated_at": "2026-08-18T21:28:06+00:00",
+      "touched_round": 71,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Fix /debug/metrics fixed_ratio_to_f64 divisor to 100_000 (matching the storage scale + Prometheus exporter) (ISS-079); shared helper + regression test"
+    },
+    "ISS-080": {
+      "id": "ISS-080",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-18T21:17:43+00:00",
+      "updated_at": "2026-08-18T21:28:07+00:00",
+      "touched_round": 71,
+      "severity": 5,
+      "confidence": 1.0,
+      "title": "SECURITY: API keys from file/env are resolved but never enforced -- server runs unauthenticated: resolve_api_keys() merges inline + env + file and gates only the SEC-01 startup warning (main.rs:96), while AuthMiddleware is constructed iff the RAW INLINE api_keys is non-empty (main.rs:222); --api-key-file / VLLM_API_KEYS_FILE / api_keys_env map into api_keys_file, so an operator using those gets a non-empty posture (no warning) but auth_middleware=None: the inference API accepts any request"
+    },
+    "TASK-094": {
+      "id": "TASK-094",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-18T21:18:19+00:00",
+      "updated_at": "2026-08-18T21:28:08+00:00",
+      "touched_round": 71,
+      "category": "security",
+      "severity": 5,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Build the auth middleware from resolve_api_keys() (all three sources), not just the inline api_keys list, so file/env key deployments actually enforce auth (ISS-080); extract vllm_server::app::build_auth_middleware + regression tests"
+    },
+    "CHG-088": {
+      "id": "CHG-088",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:18:20+00:00",
+      "updated_at": "2026-08-18T21:18:20+00:00",
+      "touched_round": 71,
+      "commit": "a9cd4d21",
+      "summary": "temperature<=0 forces greedy regardless of top_p in both sampler entry points; logprob follows same precedence"
+    },
+    "CHG-089": {
+      "id": "CHG-089",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:18:20+00:00",
+      "updated_at": "2026-08-18T21:18:20+00:00",
+      "touched_round": 71,
+      "commit": "653f9d30",
+      "summary": "/debug/metrics uses fixed_ratio_to_f64 at x100000 scale matching the Prometheus exporter"
+    },
+    "CHG-090": {
+      "id": "CHG-090",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:18:20+00:00",
+      "updated_at": "2026-08-18T21:18:20+00:00",
+      "touched_round": 71,
+      "commit": "51e9fed6",
+      "summary": "build_auth_middleware derives enforcement keys from resolve_api_keys(); main.rs uses it (security)"
+    },
+    "EV-100": {
+      "id": "EV-100",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:20:54+00:00",
+      "updated_at": "2026-08-18T21:20:54+00:00",
+      "touched_round": 71,
+      "source": "crates/core/src/sampling/tests.rs test_temperature_zero_forces_greedy_across_top_p",
+      "confidence": 1.0,
+      "summary": "RED confirmed: temperature=0 + top_p=0.5 on a two-way argmax tie returned token 1 for many spread seeds (RNG draw); post-fix 256 seeds all yield argmax 0; 443 core lib tests green"
+    },
+    "EV-101": {
+      "id": "EV-101",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:20:55+00:00",
+      "updated_at": "2026-08-18T21:20:55+00:00",
+      "touched_round": 71,
+      "source": "crates/server/src/debug.rs test_ratio_gauges_use_the_prometheus_scale",
+      "confidence": 1.0,
+      "summary": "record_packing_efficiency(0.85) fixed=85000; pref-fix /1000.0 -> 85.0 vs Prometheus /100_000 -> 0.850; post-fix helper restores 0.85"
+    },
+    "EV-102": {
+      "id": "EV-102",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:20:55+00:00",
+      "updated_at": "2026-08-18T21:20:55+00:00",
+      "touched_round": 71,
+      "source": "crates/server/src/app.rs build_auth_middleware_enforces_file_keys; verified main.rs:222 gate + args.rs:260-261 mapping",
+      "confidence": 1.0,
+      "summary": "AuthConfig with ONLY api_keys_file resolves to the file keys; build_auth_middleware returns Some carrying them (pre-fix gate on inline api_keys alone -> None + unauthenticated API)"
+    },
+    "ISS-081": {
+      "id": "ISS-081",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:31:38+00:00",
+      "updated_at": "2026-08-18T21:31:38+00:00",
+      "touched_round": 71,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "to_app_config clobbers the entire YAML config file with clap defaults: every non-Option flag has a hardcoded default_value (host 0.0.0.0, port 8000, log_level info, kv_blocks 1024, tensor_parallel 1, max_batch 256, max_waiting 10, max_draft 8, kv_quantization false, adaptive false) so clap always fills them and to_app_config (args.rs:238-281) unconditionally overwrites the values just parsed from --config / VLLM_CONFIG_PATH -- the documented YAML server/engine layer is inert for ten knobs and AppConfig::validate never sees them; --tensor-parallel-size / --max-batch-size / --max-waiting-batches are also parsed+validated+stored but never consumed by build_engine (SchedulerConfig::default() everywhere); VLLM_ADAPTIVE_SPECULATIVE default (false) is also inverted vs the config default (true)"
+    },
+    "ISS-082": {
+      "id": "ISS-082",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:31:39+00:00",
+      "updated_at": "2026-08-18T21:31:39+00:00",
+      "touched_round": 71,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "requests_in_flight is never updated in production and its decrement is a non-saturating fetch_sub: the only writers record_request_start/record_request_end live in a #[cfg(test)] impl (lock_free.rs:331-341), so the Prometheus gauge and OTLP inflight_requests are pinned at 0 under load; when wired, record_request_end's raw fetch_sub(1) would wrap to u64::MAX on any unbalanced end (double-finalize or cancel-without-start), poisoning dashboards"
+    },
+    "ISS-083": {
+      "id": "ISS-083",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:31:40+00:00",
+      "updated_at": "2026-08-18T21:31:40+00:00",
+      "touched_round": 71,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "tokens_total (Prometheus 'Total tokens generated') counts different quantities per step path: scheduler/batch.rs:236-243 records sum of per-seq input_tokens lengths (INPUT tokens -- full prompt on prefill, 1 per seq on decode) while engine/graph_step.rs:249 records results.len() (OUTPUT tokens); on prefill it over-counts by the full prompt length and a graph-replay engine reports output counts while a non-graph engine reports input counts -- the same counter measures different units depending on build/path, inflating throughput dashboards"
+    },
+    "ISS-084": {
+      "id": "ISS-084",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:31:42+00:00",
+      "updated_at": "2026-08-18T21:31:42+00:00",
+      "touched_round": 71,
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "speculative_efficiency is computed on the wrong formula and the acceptance-rate gauge is never recorded: spec_dispatch/dispatch.rs:137 records efficiency = total_draft/(total_draft+total_accepted) -- the fraction of steps that were drafts -- into the metric documented as 'efficiency (accepted / drafted)', while record_speculative_acceptance(accepted,total) (the real acceptance-rate recorder surfaced as speculative_acceptance_rate) has zero production callers, so that gauge stays 0 while the per-request DashMap is updated instead"
+    },
+    "ISS-085": {
+      "id": "ISS-085",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:49:41+00:00",
+      "updated_at": "2026-08-18T21:49:41+00:00",
+      "touched_round": 71,
+      "severity": 4,
+      "confidence": 0.8,
+      "title": "Multi-node KV handoff block-id aliasing can corrupt live blocks: each node's BlockAllocator starts at 0, the dist cache keys on the raw local block_id; fetch_block prechecks then installs peer bytes; a collision passes because grpc.rs echoes the caller's own hash; peer bytes land in a live block of a different sequence. Latent (DEC-048 context)"
+    },
+    "ISS-086": {
+      "id": "ISS-086",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:54:06+00:00",
+      "updated_at": "2026-08-18T21:54:06+00:00",
+      "touched_round": 71,
+      "severity": 3,
+      "confidence": 0.8,
+      "title": "Default IdentityHasher makes every multi-node prefix lookup a full false hit and content-hash keys are never invalidated: MemoryManager defaults to IdentityHasher (memory/mod.rs:142), so from parent 0 every block's content hash is 0 and lookup hits on the first key once any block is recorded; XorShiftHasher must be installed explicitly and no production caller does. Latent multi-node (DEC-048 context)"
+    },
+    "ISS-087": {
+      "id": "ISS-087",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:57:25+00:00",
+      "updated_at": "2026-08-18T21:57:25+00:00",
+      "touched_round": 71,
+      "severity": 3,
+      "confidence": 0.7,
+      "title": "chain_cursors is never seeded/cleared on prefix-cache adoption, preemption reset, or rollback, so parent_hash chains diverge from canonical; record_block_tokens also writes self.chain_cursor, poisoning the manager-wide cursor used by subsequent allocate placeholder puts -> wrong distributed-prefix matches/misses. Latent multi-node (DEC-048 context)"
+    },
+    "ISS-088": {
+      "id": "ISS-088",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T21:58:09+00:00",
+      "updated_at": "2026-08-18T21:58:09+00:00",
+      "touched_round": 71,
+      "severity": 3,
+      "confidence": 0.7,
+      "title": "Distributed KV gRPC has no timeouts: Endpoint created without .timeout(), fetch_from_peers waits every peer in a JoinSet with no deadline (a half-open TCP / silent HTTP-2 peer stalls the fetch indefinitely), and put/invalidate broadcasts spawn fire-and-forget tasks with no deadline/retry/backpressure -> a wedged peer leaks unbounded pending requests. Latent multi-node (DEC-048 context)"
     }
   },
   "edges": [
@@ -7679,6 +7922,126 @@
       "to": "TASK-091",
       "type": "implements",
       "created_at": "2026-08-18T17:41:00+00:00"
+    },
+    {
+      "from": "TASK-092",
+      "to": "ISS-078",
+      "type": "addresses",
+      "created_at": "2026-08-18T21:23:40+00:00"
+    },
+    {
+      "from": "ISS-078",
+      "to": "COMP-009",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:23:40+00:00"
+    },
+    {
+      "from": "TASK-093",
+      "to": "ISS-079",
+      "type": "addresses",
+      "created_at": "2026-08-18T21:23:40+00:00"
+    },
+    {
+      "from": "ISS-079",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:23:40+00:00"
+    },
+    {
+      "from": "TASK-094",
+      "to": "ISS-080",
+      "type": "addresses",
+      "created_at": "2026-08-18T21:23:40+00:00"
+    },
+    {
+      "from": "ISS-080",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:23:40+00:00"
+    },
+    {
+      "from": "CHG-088",
+      "to": "ISS-078",
+      "type": "resolves",
+      "created_at": "2026-08-18T21:23:40+00:00"
+    },
+    {
+      "from": "CHG-088",
+      "to": "TASK-092",
+      "type": "implements",
+      "created_at": "2026-08-18T21:23:40+00:00"
+    },
+    {
+      "from": "CHG-089",
+      "to": "ISS-079",
+      "type": "resolves",
+      "created_at": "2026-08-18T21:23:40+00:00"
+    },
+    {
+      "from": "CHG-089",
+      "to": "TASK-093",
+      "type": "implements",
+      "created_at": "2026-08-18T21:23:41+00:00"
+    },
+    {
+      "from": "CHG-090",
+      "to": "ISS-080",
+      "type": "resolves",
+      "created_at": "2026-08-18T21:23:41+00:00"
+    },
+    {
+      "from": "CHG-090",
+      "to": "TASK-094",
+      "type": "implements",
+      "created_at": "2026-08-18T21:23:41+00:00"
+    },
+    {
+      "from": "ISS-081",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:34:22+00:00"
+    },
+    {
+      "from": "ISS-082",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:34:23+00:00"
+    },
+    {
+      "from": "ISS-083",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:34:24+00:00"
+    },
+    {
+      "from": "ISS-084",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:34:25+00:00"
+    },
+    {
+      "from": "ISS-085",
+      "to": "COMP-005",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:59:04+00:00"
+    },
+    {
+      "from": "ISS-086",
+      "to": "COMP-008",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:59:05+00:00"
+    },
+    {
+      "from": "ISS-087",
+      "to": "COMP-008",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:59:06+00:00"
+    },
+    {
+      "from": "ISS-088",
+      "to": "COMP-005",
+      "type": "located_in",
+      "created_at": "2026-08-18T21:59:07+00:00"
     }
   ]
 }
