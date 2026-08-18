@@ -104,6 +104,17 @@ pub struct MetricsSnapshotResponse {
     pub cuda_graph_hit_rate: f64,
 }
 
+/// Convert a fixed-point ratio gauge (stored × 100_000 — see
+/// `vllm_core::metrics::collector::sampler`, e.g.
+/// `record_packing_efficiency`) back to its float ratio for the JSON
+/// snapshot. The divisor must match the storage scale: `/debug/metrics`
+/// previously divided by 1000, inflating every ratio gauge 100×
+/// (0.85 recorded → 85.0 shown) while the Prometheus exporter correctly
+/// divides by 100_000 (RIL ISS-079).
+fn fixed_ratio_to_f64(fixed: u64) -> f64 {
+    fixed as f64 / 100_000.0
+}
+
 /// Admin-only endpoint: return a JSON snapshot of key metrics counters and gauges.
 #[allow(clippy::unused_async)]
 pub async fn metrics_snapshot(
@@ -146,20 +157,22 @@ pub async fn metrics_snapshot(
     let gauges: HashMap<String, f64> = [
         // invariant: gauge values are bounded counts/ratios; u64 -> f64 precision
         // loss is acceptable for snapshot display.
-        (
-            "packing_efficiency".to_string(),
+        ("packing_efficiency".to_string(), {
+            // invariant: gauge values are fixed-point ratios (× 100_000);
+            // u64 -> f64 precision loss is acceptable for snapshot display.
             #[allow(clippy::cast_precision_loss)]
             {
-                metrics.get_gauge("packing_efficiency") as f64 / 1000.0
-            },
-        ),
-        (
-            "speculative_acceptance_rate".to_string(),
+                fixed_ratio_to_f64(metrics.get_gauge("packing_efficiency"))
+            }
+        }),
+        ("speculative_acceptance_rate".to_string(), {
+            // invariant: gauge values are fixed-point ratios (× 100_000);
+            // u64 -> f64 precision loss is acceptable for snapshot display.
             #[allow(clippy::cast_precision_loss)]
             {
-                metrics.get_gauge("speculative_acceptance_rate") as f64 / 1000.0
-            },
-        ),
+                fixed_ratio_to_f64(metrics.get_gauge("speculative_acceptance_rate"))
+            }
+        }),
     ]
     .into_iter()
     .collect();
@@ -347,6 +360,34 @@ mod tests {
         assert!(json.contains("requests_total"));
         assert!(json.contains("active_sequences"));
         assert!(json.contains("cuda_graph_hit_rate"));
+    }
+
+    #[test]
+    fn test_ratio_gauges_use_the_prometheus_scale() {
+        // RIL ISS-079 regression: `/debug/metrics` restored the
+        // fixed-point ratio gauges (stored ×100_000 by the sampler) by
+        // dividing by 1000.0, so every recorded ratio showed 100× too
+        // large on the debug snapshot (0.85 → 85.0) while the Prometheus
+        // exporter correctly divided by 100_000 (0.850). The snapshot
+        // conversion must share the exporter's scale.
+        use vllm_core::metrics::EnhancedMetricsCollector;
+        let collector = EnhancedMetricsCollector::default();
+        collector.record_packing_efficiency(0.85);
+        let packing = fixed_ratio_to_f64(collector.get_gauge("packing_efficiency"));
+        assert!(
+            (packing - 0.85).abs() < 1e-5,
+            "packing_efficiency must restore ≈0.85 from the ×100_000 scalar, got {packing}"
+        );
+        // Pure scale check (record_speculative_acceptance is pub(crate) to
+        // vllm-core): the same fixed-point helper serves both ratio gauges.
+        assert!(
+            (fixed_ratio_to_f64(85_000) - 0.85).abs() < 1e-5,
+            "fixed_ratio_to_f64(85_000) must be ≈0.85, not 85.0 (the ÷1000 pre-fix value)"
+        );
+        assert!(
+            (fixed_ratio_to_f64(100_000) - 1.0).abs() < 1e-9,
+            "a full-scale fixed ratio must restore exactly 1.0"
+        );
     }
 
     #[test]
