@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 71,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-15T14:13:25+00:00",
+  "updated_at": "2026-08-18T17:41:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -5342,6 +5342,55 @@
       "source": "test",
       "title": "TDD: regression test RED (map non-empty/leak), post-fix engine.finish_reason_txs.is_empty() GREEN; 473 core tests (all-features); clippy 0; just ci green",
       "confidence": 1.0
+    },
+    "ISS-077": {
+      "id": "ISS-077",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-18T17:17:07+00:00",
+      "updated_at": "2026-08-18T17:41:00+00:00",
+      "touched_round": 71,
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "Empty Batch.sampling_params contract violated: sample_batch_with_params zip-truncates to zero output on synthetic batches"
+    },
+    "TASK-091": {
+      "id": "TASK-091",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-18T17:19:24+00:00",
+      "updated_at": "2026-08-18T17:41:00+00:00",
+      "touched_round": 71,
+      "category": "correctness",
+      "severity": 2,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "sample_batch_with_params must honor empty sampling_params == greedy: fall back to SamplingParams::default() per logits row (missing params/seen entries degrade, rounding out the finalize_stop_sequences .get(i) + verify.rs .get(i).unwrap_or_default() precedent) instead of zip-truncating to zero output (ISS-077); TDD regression test"
+    },
+    "EV-099": {
+      "id": "EV-099",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T17:23:18+00:00",
+      "updated_at": "2026-08-18T17:23:18+00:00",
+      "touched_round": 71,
+      "source": "crates/core/src/sampling/tests.rs test_sample_batch_with_params_empty_params_falls_back_to_greedy",
+      "confidence": 1.0,
+      "summary": "RED confirmed: empty params_list + 2 real logits rows returned [] (zip truncation) instead of greedy tokens [1, 0]; post-fix 442 vllm-core lib tests green"
+    },
+    "CHG-087": {
+      "id": "CHG-087",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-18T17:40:05+00:00",
+      "updated_at": "2026-08-18T17:40:05+00:00",
+      "touched_round": 71,
+      "commit": 36236327,
+      "summary": "sample_batch_with_params honors empty sampling_params==greedy per row (missing params/seen degrade to default/empty); 1 unit test"
     }
   },
   "edges": [
@@ -7600,6 +7649,36 @@
       "to": "ISS-076",
       "type": "resolves",
       "created_at": "2026-08-15T14:13:09+00:00"
+    },
+    {
+      "from": "TASK-091",
+      "to": "ISS-077",
+      "type": "addresses",
+      "created_at": "2026-08-18T17:30:10+00:00"
+    },
+    {
+      "from": "ISS-077",
+      "to": "COMP-009",
+      "type": "located_in",
+      "created_at": "2026-08-18T17:32:00+00:00"
+    },
+    {
+      "from": "ISS-077",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-18T17:32:00+00:00"
+    },
+    {
+      "from": "CHG-087",
+      "to": "ISS-077",
+      "type": "resolves",
+      "created_at": "2026-08-18T17:41:00+00:00"
+    },
+    {
+      "from": "CHG-087",
+      "to": "TASK-091",
+      "type": "implements",
+      "created_at": "2026-08-18T17:41:00+00:00"
     }
   ]
 }
