@@ -110,7 +110,7 @@ pub struct MetricsSnapshotResponse {
 /// snapshot. The divisor must match the storage scale: `/debug/metrics`
 /// previously divided by 1000, inflating every ratio gauge 100×
 /// (0.85 recorded → 85.0 shown) while the Prometheus exporter correctly
-/// divides by 100_000 (RIL ISS-079).
+/// divides by `100_000` (RIL ISS-079).
 fn fixed_ratio_to_f64(fixed: u64) -> f64 {
     fixed as f64 / 100_000.0
 }

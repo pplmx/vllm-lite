@@ -69,6 +69,7 @@ use std::collections::HashMap;
 /// non-empty SEC-01 posture — no startup warning — while the middleware
 /// stayed `None` and the inference API ran **completely unauthenticated**.
 /// Enforcement must use exactly what the auth posture computes.)
+#[must_use]
 pub fn build_auth_middleware(auth: &AuthConfig) -> Option<Arc<AuthMiddleware>> {
     let keys = auth.resolve_api_keys();
     if keys.is_empty() {
