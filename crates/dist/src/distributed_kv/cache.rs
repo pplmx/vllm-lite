@@ -7,9 +7,16 @@ use super::block_data_source::{BlockDataSource, FetchError};
 use super::block_sink::BlockSink;
 use super::{CacheConfig, CacheMessage, NodeId};
 use crate::error::GrpcError;
-use crate::grpc_client::PeerClient;
+use crate::grpc_client::{PEER_RPC_TIMEOUT, PeerClient};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
+
+/// Aggregate deadline for one peer fan-out (`fetch_from_peers`). A peer that
+/// completed the handshake but never answers must not stall the fetch past
+/// this (RIL ISS-088); remaining in-flight peers are aborted and the caller
+/// falls through to the local source.
+const PEER_FETCH_DEADLINE: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 /// Cache for `DistributedKV`. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
@@ -430,22 +437,40 @@ impl DistributedKVCache {
             });
         }
 
-        while let Some(joined) = join_set.join_next().await {
-            let (url, result) = match joined {
-                Ok(pair) => pair,
-                Err(e) => {
-                    tracing::warn!(error = %e, "peer fetch task failed to join");
-                    continue;
+        // RIL ISS-088: bound the whole fan-out. A peer that handshook but
+        // never answers must not stall the fetch past `PEER_FETCH_DEADLINE`;
+        // the remaining in-flight peers are aborted and the caller falls
+        // through to the local-source fallback / final error.
+        let outcome = tokio::time::timeout(PEER_FETCH_DEADLINE, async {
+            while let Some(joined) = join_set.join_next().await {
+                let (url, result) = match joined {
+                    Ok(pair) => pair,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "peer fetch task failed to join");
+                        continue;
+                    }
+                };
+                if let Some(bytes) =
+                    Self::handle_peer_fetch_result(&url, result, block_id, expected_hash)
+                {
+                    return Some(bytes);
                 }
-            };
-            if let Some(bytes) =
-                Self::handle_peer_fetch_result(&url, result, block_id, expected_hash)
-            {
-                return Some(bytes);
+            }
+            None
+        })
+        .await;
+
+        match outcome {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                tracing::warn!(
+                    peers = peers.len(),
+                    "peer fan-out exceeded {PEER_FETCH_DEADLINE:?}; aborting remaining peers"
+                );
+                join_set.abort_all();
+                None
             }
         }
-
-        None
     }
 
     /// Process a single peer fetch result: verify the `chain_hash` and
@@ -553,13 +578,25 @@ impl DistributedKVCache {
         };
         handle.spawn(async move {
             for client in clients.iter() {
-                if let Err(e) = client.put(key, value_hash).await {
-                    tracing::warn!(
-                        peer = %client.url(),
-                        block_id = key,
-                        error = %e,
-                        "peer put failed; local update stands"
-                    );
+                // RIL ISS-088: cap each broadcast RPC so a wedged peer's
+                // fire-and-forget task terminates instead of leaking forever.
+                match tokio::time::timeout(PEER_RPC_TIMEOUT, client.put(key, value_hash)).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(status)) => {
+                        tracing::warn!(
+                            peer = %client.url(),
+                            block_id = key,
+                            error = %status,
+                            "peer put failed; local update stands"
+                        );
+                    }
+                    Err(_elapsed) => {
+                        tracing::warn!(
+                            peer = %client.url(),
+                            block_id = key,
+                            "peer put timed out; local update stands"
+                        );
+                    }
                 }
             }
         });
@@ -583,13 +620,24 @@ impl DistributedKVCache {
         };
         handle.spawn(async move {
             for client in clients.iter() {
-                if let Err(e) = client.invalidate(key).await {
-                    tracing::warn!(
-                        peer = %client.url(),
-                        block_id = key,
-                        error = %e,
-                        "peer invalidate failed; local drop stands"
-                    );
+                // RIL ISS-088: cap each broadcast RPC (see `broadcast_put`).
+                match tokio::time::timeout(PEER_RPC_TIMEOUT, client.invalidate(key)).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(status)) => {
+                        tracing::warn!(
+                            peer = %client.url(),
+                            block_id = key,
+                            error = %status,
+                            "peer invalidate failed; local drop stands"
+                        );
+                    }
+                    Err(_elapsed) => {
+                        tracing::warn!(
+                            peer = %client.url(),
+                            block_id = key,
+                            "peer invalidate timed out; local drop stands"
+                        );
+                    }
                 }
             }
         });

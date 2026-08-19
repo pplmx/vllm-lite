@@ -11,6 +11,7 @@
 //! [`NodeServiceClient`]: crate::grpc::node_service_client::NodeServiceClient
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use tokio::sync::Mutex;
 use tonic::transport::{Channel, Endpoint};
@@ -18,6 +19,13 @@ use tonic::transport::{Channel, Endpoint};
 use crate::distributed_kv::MAX_BLOCK_TRANSFER_BYTES;
 use crate::error::GrpcError;
 use crate::grpc::node_service_client::NodeServiceClient;
+
+/// Boundedness for a single peer gRPC call (RIL ISS-088): applied to both the
+/// HTTP/2 connect handshake (`connect_timeout`) and each request (`timeout`),
+/// so a half-open / wedged peer fails the call in bounded time instead of
+/// stalling it indefinitely. Also reused to cap the fire-and-forget broadcast
+/// tasks in `DistributedKVCache`.
+pub(crate) const PEER_RPC_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Cloneable, cheaply-shared handle to a peer node's gRPC service.
 ///
@@ -49,7 +57,15 @@ impl PeerClient {
     /// [`Endpoint`] (e.g. missing scheme).
     pub fn new(url: impl Into<String>) -> Result<Self, GrpcError> {
         let url: String = url.into();
-        let endpoint = Endpoint::from_shared(url.clone()).map_err(GrpcError::Transport)?;
+        let endpoint = Endpoint::from_shared(url.clone())
+            .map_err(GrpcError::Transport)?
+            // RIL ISS-088: without an explicit timeout, an RPC to a peer
+            // that completed the handshake but never answers would hang
+            // forever. `connect_timeout` bounds the HTTP/2 handshake too
+            // (the silent-peer case timed out implicitly before; now it is
+            // guaranteed and bounded).
+            .timeout(PEER_RPC_TIMEOUT)
+            .connect_timeout(PEER_RPC_TIMEOUT);
         Ok(Self {
             url,
             endpoint,
