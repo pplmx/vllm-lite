@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 79,
+  "round": 80,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-19T04:53:05+00:00",
+  "updated_at": "2026-08-19T05:09:30+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 75,
+      "touched_round": 79,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -5952,6 +5952,55 @@
       "touched_round": 78,
       "commit": "d3527556",
       "summary": "PeerClient Endpoint.timeout+connect_timeout(5s); fetch_from_peers wrapped in tokio::time::timeout(5s) with join_set.abort_all() on expiry; broadcast put/invalidate RPCs capped at 5s; new grpc_timeout integration test"
+    },
+    "ISS-090": {
+      "id": "ISS-090",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-19T05:08:14+00:00",
+      "updated_at": "2026-08-19T05:08:15+00:00",
+      "touched_round": 79,
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "errors_total in /debug/metrics is a fabricated 0: the collector has no errors_total counter and get_counter falls back to _=>0, so the endpoint always shows 0 no matter how many real engine step errors occur; the genuine Engine::error_count is never surfaced to metrics. Remove the dead metric or wire the engine error site to a real counter."
+    },
+    "TASK-102": {
+      "id": "TASK-102",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-08-19T05:08:14+00:00",
+      "updated_at": "2026-08-19T05:09:30+00:00",
+      "touched_round": 80,
+      "category": "correctness",
+      "severity": 2,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Wire engine error_count into a real errors_total collector counter (ISS-090): 8 debug/metrics errors_total was get_counter fallback 0; add errors_total AtomicU64 + record_engine_error at the single run-loop error site + get_counter arm; TDD collector test"
+    },
+    "EV-111": {
+      "id": "EV-111",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T05:08:14+00:00",
+      "updated_at": "2026-08-19T05:08:14+00:00",
+      "touched_round": 79,
+      "source": "crates/core/src/metrics/collector/sampler/tests.rs test_collector_records_engine_error",
+      "confidence": 1.0,
+      "summary": "record_engine_error twice -> get_counter(errors_total)==2 (was fallback 0); engine run.rs error site wired; 451 core lib tests + full just ci green"
+    },
+    "CHG-098": {
+      "id": "CHG-098",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T05:08:14+00:00",
+      "updated_at": "2026-08-19T05:08:14+00:00",
+      "touched_round": 79,
+      "commit": "4f5c2b0d",
+      "summary": "collector gains errors_total field + record_engine_error + get_counter arm; run loop error site records it; /debug/metrics errors_total now real"
     }
   },
   "edges": [
@@ -8498,6 +8547,30 @@
       "to": "ISS-088",
       "type": "resolves",
       "created_at": "2026-08-19T04:53:05+00:00"
+    },
+    {
+      "from": "ISS-090",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-19T05:08:14+00:00"
+    },
+    {
+      "from": "TASK-102",
+      "to": "ISS-090",
+      "type": "addresses",
+      "created_at": "2026-08-19T05:08:14+00:00"
+    },
+    {
+      "from": "CHG-098",
+      "to": "TASK-102",
+      "type": "implements",
+      "created_at": "2026-08-19T05:08:14+00:00"
+    },
+    {
+      "from": "CHG-098",
+      "to": "ISS-090",
+      "type": "resolves",
+      "created_at": "2026-08-19T05:08:14+00:00"
     }
   ]
 }
