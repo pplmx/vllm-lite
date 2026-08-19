@@ -302,12 +302,13 @@ impl MemoryManager {
         tokens: &[TokenId],
     ) -> u64 {
         let hash = self.hasher.hash_block(parent_hash, tokens);
-        // Also update the per-block cursor so subsequent
-        // `allocate(block_id + 1)` keeps the chain property (best-
-        // effort — only holds when allocate-id order matches the
-        // physical sequence order; for true per-sequence chains use
-        // the scheduler-side cursor and call this method only).
-        self.chain_cursor = hash;
+        // RIL ISS-087: do NOT write `self.chain_cursor` here. The manager-wide
+        // cursor is the *allocate* chain (it advances only on `Self::allocate`,
+        // per the field's documented invariant); this method's `parent_hash`
+        // is a per-sequence cursor supplied by the scheduler. Writing it used
+        // to mix the two independent chains — a subsequent `allocate` chained
+        // its placeholder hashes off the last recorded content hash, producing
+        // wrong distributed placeholder hashes for later blocks.
         if let Some(cache) = self.distributed_kv.as_ref() {
             // Key = content hash, value = block_id. Reverses the
             // `allocate` direction so `lookup_distributed_prefix`

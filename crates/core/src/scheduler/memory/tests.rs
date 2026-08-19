@@ -191,6 +191,43 @@ fn test_memory_manager_oom() {
 
 #[cfg(feature = "multi-node")]
 #[test]
+fn test_allocate_chain_not_poisoned_by_record_block_tokens() {
+    // RIL ISS-087: `record_block_tokens` used to write the manager-wide
+    // `chain_cursor`, so a subsequent `allocate` chained its placeholder
+    // hashes off the last recorded *content* hash instead of the previous
+    // allocate's hash — mixing two independent chains and producing
+    // wrong placeholder hashes for later blocks. The allocate chain must
+    // advance only from previous allocate hashes.
+    let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 4)));
+    let mut manager =
+        MemoryManager::new(SchedulerConfig::default(), 10).with_distributed_kv(Arc::clone(&cache));
+
+    // First allocate establishes the allocate-chain head (cursor 0).
+    let b0 = manager.allocate(1).expect("allocate 1");
+    let h0_expected = manager.hasher().hash_allocated_block(b0[0], 0, &[]);
+    let h0 = cache.get(u64::try_from(b0[0]).unwrap_or(u64::MAX));
+    assert_eq!(h0, Some(h0_expected), "first allocate placeholder hash");
+
+    // Record a content block from a different sequence with its own parent (42).
+    manager.record_block_tokens(7, 42, &[1, 2, 3]);
+
+    // The next allocate must chain off h0 (previous allocate hash), NOT off
+    // the recorded content hash (which used parent 42 — poisoning the chain).
+    let b1 = manager.allocate(1).expect("allocate 2");
+    let expected = manager
+        .hasher()
+        .hash_allocated_block(b1[0], h0_expected, &[]);
+    let h1 = cache.get(u64::try_from(b1[0]).unwrap_or(u64::MAX));
+    assert_eq!(
+        h1,
+        Some(expected),
+        "allocate placeholder hash must chain off the previous allocate hash, \
+         not the recorded content hash"
+    );
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
 fn test_memory_manager_allocate_bumps_cache_updates() {
     // When a cache is wired, `allocate()` registers each new block
     // via `cache.put`. Verify the cache's `updates` counter reflects
