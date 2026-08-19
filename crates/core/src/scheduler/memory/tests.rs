@@ -251,30 +251,35 @@ fn test_memory_manager_without_cache_is_a_no_op() {
 
 #[cfg(feature = "multi-node")]
 #[test]
-fn test_memory_manager_default_hasher_is_identity() {
-    // Default construction uses `IdentityHasher`, so the chain hash
-    // collapses to the cursor value (`0` for the first block of a
-    // fresh manager). All blocks therefore have hash `0` — matches
-    // the pre-OPS-05b2 placeholder behavior so callers that haven't
-    // opted into content hashing see no regression.
+fn test_memory_manager_default_hasher_distinguishes_content() {
+    // RIL ISS-086: the default hasher must be a real content mixer, not
+    // `IdentityHasher` (which collapses every block to its parent hash, so
+    // two different token streams under the same parent collide on hash 0 —
+    // the distributed prefix-cache then wrong-hits the first recorded block).
+    // Production should not need to remember `with_block_hasher(XorShift)`;
+    // the default is `XorShiftHasher`.
     let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 4)));
     let mut manager =
         MemoryManager::new(SchedulerConfig::default(), 10).with_distributed_kv(Arc::clone(&cache));
 
-    let blocks = manager.allocate(3).expect("allocation should succeed");
-    assert_eq!(blocks.len(), 3);
-
-    // Every block should be findable in the cache with value `0`
-    // (the IdentityHasher collapses the chain to the parent hash,
-    // which is `0` for all blocks of a fresh manager).
-    for &block_id in &blocks {
-        let cached = cache.get(u64::try_from(block_id).unwrap_or(u64::MAX));
-        assert_eq!(
-            cached,
-            Some(0),
-            "IdentityHasher + fresh cursor → cache value must be 0 for block {block_id}",
-        );
-    }
+    // Same parent (0), different content — must NOT collide under the default.
+    let h_a = manager.record_block_tokens(0, 0, &[1, 2, 3]);
+    let h_b = manager.record_block_tokens(0, 0, &[9, 8, 7]);
+    assert_ne!(
+        h_a, h_b,
+        "different token streams under the same parent must hash differently \
+         (IdentityHasher default collapsed both to 0)"
+    );
+    // XorShift has no `0-as-fixed-point` collapse for non-empty token streams.
+    assert_ne!(
+        h_a, 0,
+        "default content hash must not be the xorshift fixed point"
+    );
+    assert_ne!(
+        h_b, 0,
+        "default content hash must not be the xorshift fixed point"
+    );
+    assert_eq!(manager.hasher().name(), "xorshift");
 }
 
 #[cfg(feature = "multi-node")]

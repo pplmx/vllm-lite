@@ -46,7 +46,7 @@ use std::sync::Arc;
 use vllm_dist::DistributedKVCache;
 
 #[cfg(feature = "multi-node")]
-use vllm_traits::{BlockHasher, IdentityHasher, TokenId};
+use vllm_traits::{BlockHasher, TokenId, XorShiftHasher};
 
 #[cfg(feature = "multi-node")]
 use vllm_traits::BLOCK_SIZE;
@@ -138,8 +138,17 @@ impl MemoryManager {
             distributed_kv: None,
             #[cfg(feature = "multi-node")]
             block_data_source: None,
+            // RIL ISS-086: the default hasher must be a real content
+            // mixer. `IdentityHasher` (the pre-fix default) collapsed
+            // every block to its parent hash, so two different token
+            // streams under the same parent collided on the same
+            // content hash — the distributed prefix-cache wrong-hit the
+            // first recorded block. `XorShiftHasher` is the documented
+            // production hasher (`with_block_hasher`); make it the
+            // default so multi-node deployments are correct without
+            // remembering to install it.
             #[cfg(feature = "multi-node")]
-            hasher: Arc::new(IdentityHasher),
+            hasher: Arc::new(XorShiftHasher),
             #[cfg(feature = "multi-node")]
             chain_cursor: 0,
         }
