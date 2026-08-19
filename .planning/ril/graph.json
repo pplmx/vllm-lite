@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 74,
+  "round": 75,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-19T02:29:49+00:00",
+  "updated_at": "2026-08-19T03:10:14+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -5546,7 +5546,7 @@
       "version": 1,
       "created_at": "2026-08-18T21:31:38+00:00",
       "updated_at": "2026-08-18T21:31:38+00:00",
-      "touched_round": 71,
+      "touched_round": 74,
       "severity": 3,
       "confidence": 1.0,
       "title": "to_app_config clobbers the entire YAML config file with clap defaults: every non-Option flag has a hardcoded default_value (host 0.0.0.0, port 8000, log_level info, kv_blocks 1024, tensor_parallel 1, max_batch 256, max_waiting 10, max_draft 8, kv_quantization false, adaptive false) so clap always fills them and to_app_config (args.rs:238-281) unconditionally overwrites the values just parsed from --config / VLLM_CONFIG_PATH -- the documented YAML server/engine layer is inert for ten knobs and AppConfig::validate never sees them; --tensor-parallel-size / --max-batch-size / --max-waiting-batches are also parsed+validated+stored but never consumed by build_engine (SchedulerConfig::default() everywhere); VLLM_ADAPTIVE_SPECULATIVE default (false) is also inverted vs the config default (true)"
@@ -5758,6 +5758,54 @@
       "touched_round": 73,
       "rationale": "speculative_efficiency now records accepted/drafted (draft quality, higher=better), matching the field doc comment (sampler/mod.rs, the code-adjacent intent) and vLLM draft_token_acceptance_rate direction; the pre-fix draft/(draft+accepted) made perfect drafts score 0.5 and worthless drafts 1.0 -- inverted for an efficiency reading. speculative_acceptance_rate is wired from the same counts as the batch-aggregated acceptance gauge. MTRC-02 roadmap wording (draft tokens / total tokens) was the source of the inverted formula and is corrected to accepted / drafted.",
       "alternatives_rejected": "[vLLM efficiency = total_generated/drafted (rejected: unbounded >1 conflicts with the 0-1 gauge contract and needs per-seq bonus-token accounting absent at the call site), two-identical accepted/drafted gauges (rejected as redundant), keep draft/(draft+accepted) as a token-composition measure (rejected: misnamed and monotonic-inverted for an efficiency metric)]"
+    },
+    "TASK-098": {
+      "id": "TASK-098",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-19T03:06:36+00:00",
+      "updated_at": "2026-08-19T03:10:14+00:00",
+      "touched_round": 74,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Wire app-config engine knobs into engine construction (ISS-081 partial): build_engine* used SchedulerConfig::default() everywhere so --max-batch-size capped nothing (runtime cap comes from max_num_seqs) and the legacy fallback ignored --kv-blocks/--max-draft-tokens; TDD 2 bin tests"
+    },
+    "EV-106": {
+      "id": "EV-106",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T03:06:36+00:00",
+      "updated_at": "2026-08-19T03:06:36+00:00",
+      "touched_round": 74,
+      "source": "crates/server/src/bootstrap/engine.rs",
+      "confidence": 1.0,
+      "summary": "2 bin tests (scheduler_config_wires_max_batch_size, scheduler_config_preserves_defaults_and_honors_lowering) + full just ci green (nextest 6 bin tests incl. new)"
+    },
+    "CHG-094": {
+      "id": "CHG-094",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T03:06:36+00:00",
+      "updated_at": "2026-08-19T03:06:36+00:00",
+      "touched_round": 74,
+      "commit": "72cfc9d5",
+      "summary": "scheduler_config_from_app_config maps engine.max_batch_size -> SchedulerConfig.max_num_seqs; wired into build_engine_multi_node + all build_engine_legacy branches; fallback now with_config_boxed(app values) so --kv-blocks/--max-draft-tokens apply (max_draft default 4->8 aligns with docs)"
+    },
+    "DEC-052": {
+      "id": "DEC-052",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T03:06:36+00:00",
+      "updated_at": "2026-08-19T03:06:36+00:00",
+      "touched_round": 74,
+      "rationale": "ISS-081 split into a small consumable-knob fix now and feature-sized YAML-precedence work deferred. --max-batch-size maps to SchedulerConfig.max_num_seqs because state/mod.rs wires max_num_seqs into BatchCompositionConfig.max_batch_size (the actual runtime per-batch cap); defaults coincide (256==256) so default behavior is unchanged. The legacy new_boxed fallback ignored app values entirely (hardcoded 4/1024); routing it through with_config_boxed makes --kv-blocks/--max-draft-tokens effective there; max_draft_tokens default 4->8 aligns runtime with the documented VLLM_MAX_DRAFT_TOKENS default.",
+      "alternatives_rejected": "[map max_batch_size to SchedulerConfig.max_batch_size (rejected: that field has no runtime consumer; the batch cap comes from max_num_seqs via BatchCompositionConfig), full Option<>/clap-presence refactor now (rejected: feature-sized, touches every consumer), leave fallback on new_boxed (rejected: keeps --kv-blocks/--max-draft-tokens inert in the default path)]"
     }
   },
   "edges": [
@@ -8226,6 +8274,18 @@
       "to": "COMP-011",
       "type": "governs",
       "created_at": "2026-08-19T02:29:34+00:00"
+    },
+    {
+      "from": "TASK-098",
+      "to": "ISS-081",
+      "type": "addresses",
+      "created_at": "2026-08-19T03:10:14+00:00"
+    },
+    {
+      "from": "CHG-094",
+      "to": "TASK-098",
+      "type": "implements",
+      "created_at": "2026-08-19T03:10:14+00:00"
     }
   ]
 }
