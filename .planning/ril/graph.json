@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 76,
+  "round": 77,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-19T03:45:22+00:00",
+  "updated_at": "2026-08-19T04:16:06+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -5602,11 +5602,11 @@
     "ISS-086": {
       "id": "ISS-086",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-18T21:54:06+00:00",
-      "updated_at": "2026-08-18T21:54:06+00:00",
-      "touched_round": 71,
+      "updated_at": "2026-08-19T04:15:40+00:00",
+      "touched_round": 76,
       "severity": 3,
       "confidence": 0.8,
       "title": "Default IdentityHasher makes every multi-node prefix lookup a full false hit and content-hash keys are never invalidated: MemoryManager defaults to IdentityHasher (memory/mod.rs:142), so from parent 0 every block's content hash is 0 and lookup hits on the first key once any block is recorded; XorShiftHasher must be installed explicitly and no production caller does. Latent multi-node (DEC-048 context)"
@@ -5841,6 +5841,43 @@
       "touched_round": 75,
       "rationale": "Both dead gauges are documented-deferred rather than removed or hot-wired with invented formulas. Keeping the metric names on /metrics+OTLP preserves the Prometheus/OTLP contract (dashboards keep working); the correct wiring belongs to their owning features: packing_efficiency to ISS-064 (sequence packing ships pack_sequences -> padding_waste -> efficiency) and throughput_speedup_ratio to MTRC-03 (A/B baseline benchmark). Recorder doc comments now state the deferral so future audits do not re-report them as mystery deaths.",
       "alternatives_rejected": "[hot-wire packing_efficiency as batch-token-utilization from the step path (rejected: invented formula, would conflict with the packing feature future padding-waste semantics), remove the gauges from export (rejected: breaks the Prometheus/OTLP metric contract for existing consumers)]"
+    },
+    "TASK-099": {
+      "id": "TASK-099",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-19T04:15:40+00:00",
+      "updated_at": "2026-08-19T04:15:40+00:00",
+      "touched_round": 76,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Fix default multi-node KV hasher to a content mixer (ISS-086): IdentityHasher default collapsed different token streams under the same parent to the same hash -> wrong distributed prefix hits; production never installed XorShiftHasher; TDD content-distinction test"
+    },
+    "CHG-095": {
+      "id": "CHG-095",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T04:15:40+00:00",
+      "updated_at": "2026-08-19T04:15:40+00:00",
+      "touched_round": 76,
+      "commit": "d3221d9c",
+      "summary": "MemoryManager multi-node default hasher: IdentityHasher -> XorShiftHasher; import swap; replaced the identity-default lock-in test with content-distinction test"
+    },
+    "EV-108": {
+      "id": "EV-108",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T04:16:06+00:00",
+      "updated_at": "2026-08-19T04:16:06+00:00",
+      "touched_round": 77,
+      "source": "crates/core/src/scheduler/memory/tests.rs test_memory_manager_default_hasher_distinguishes_content",
+      "confidence": 1.0,
+      "summary": "RED: same parent + [1,2,3] vs [9,8,7] both hashed 0 under identity default; GREEN after default flip: distinct + non-zero + hasher name xorshift; 469 core multi-node lib tests + 9 dist integration + full just ci green"
     }
   },
   "edges": [
@@ -8333,6 +8370,24 @@
       "to": "COMP-002",
       "type": "governs",
       "created_at": "2026-08-19T03:45:22+00:00"
+    },
+    {
+      "from": "TASK-099",
+      "to": "ISS-086",
+      "type": "addresses",
+      "created_at": "2026-08-19T04:15:40+00:00"
+    },
+    {
+      "from": "CHG-095",
+      "to": "TASK-099",
+      "type": "implements",
+      "created_at": "2026-08-19T04:15:40+00:00"
+    },
+    {
+      "from": "CHG-095",
+      "to": "ISS-086",
+      "type": "resolves",
+      "created_at": "2026-08-19T04:15:40+00:00"
     }
   ]
 }
