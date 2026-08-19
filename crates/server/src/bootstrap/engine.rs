@@ -68,7 +68,7 @@ fn build_engine_multi_node(
         builder = builder.with_draft_model(d);
     }
     builder = builder
-        .with_config(SchedulerConfig::default())
+        .with_config(scheduler_config_from_app_config(app_config))
         .with_num_kv_blocks(app_config.engine.num_kv_blocks)
         .with_max_draft_tokens(app_config.engine.max_draft_tokens);
     #[cfg(feature = "multi-node")]
@@ -184,10 +184,42 @@ fn build_engine_legacy(
             app_config.engine.num_kv_blocks,
         )
     } else {
-        Engine::new_boxed(model, draft_model)
+        // RIL ISS-081: the legacy fallback previously called
+        // `Engine::new_boxed` which hardcodes max_draft_tokens=4 and
+        // kv_blocks=1024, ignoring the configured values. Route it through
+        // `with_config_boxed` so `--kv-blocks` / `--max-draft-tokens` /
+        // `--max-batch-size` take effect here too. Default alignments:
+        // kv_blocks default 1024 == new_boxed, so no change; max_draft
+        // default 8 == the documented VLLM_MAX_DRAFT_TOKENS default (new_boxed
+        // said 4 — an undocumented under-shoot now corrected to the docs).
+        Engine::with_config_boxed(
+            model,
+            draft_model,
+            scheduler_config_from_app_config(app_config),
+            app_config.engine.max_draft_tokens,
+            app_config.engine.num_kv_blocks,
+        )
     };
 
     Ok(engine)
+}
+
+/// Build the `SchedulerConfig` used by every engine-construction path from
+/// the server's `AppConfig` instead of `SchedulerConfig::default()`.
+///
+/// RIL ISS-081: `--max-batch-size` / `engine.max_batch_size` was parsed,
+/// validated (1-8192) and stored but never consumed — every `build_engine*`
+/// path passed `SchedulerConfig::default()`, so the knob changed nothing at
+/// runtime. The engine's per-batch sequence cap is wired from
+/// `SchedulerConfig::max_num_seqs` into the `BatchCompositionConfig`
+/// (core/scheduler/engine/state/mod.rs), so the user-facing "max batch size"
+/// knob maps there. Defaults coincide (`max_num_seqs` default 256 ==
+/// `max_batch_size` default 256), so the mapping is a no-op unless the
+/// operator raised or lowered the value.
+fn scheduler_config_from_app_config(app_config: &AppConfig) -> SchedulerConfig {
+    SchedulerConfig::builder()
+        .with_max_num_seqs(app_config.engine.max_batch_size)
+        .build()
 }
 
 /// Wire optional speculative-decoding knobs onto a freshly constructed engine.
@@ -215,5 +247,40 @@ pub fn configure_speculative(app_config: &AppConfig, engine: &mut Engine) {
             );
             engine.enable_speculative();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// RIL ISS-081: `engine.max_batch_size` must reach the engine's
+    /// scheduler (as `max_num_seqs`, the cap the batch composer is wired
+    /// from). Pre-fix every construction path passed
+    /// `SchedulerConfig::default()`, so the knob was inert.
+    #[test]
+    fn scheduler_config_wires_max_batch_size() {
+        let mut app = AppConfig::default();
+        app.engine.max_batch_size = 64;
+        let cfg = scheduler_config_from_app_config(&app);
+        assert_eq!(
+            cfg.max_num_seqs, 64,
+            "engine.max_batch_size must reach SchedulerConfig.max_num_seqs (got {})",
+            cfg.max_num_seqs
+        );
+    }
+
+    /// RIL ISS-081: lowering the knob must be honored; untouched scheduler
+    /// knobs keep their documented defaults (not re-derived or zeroed).
+    #[test]
+    fn scheduler_config_preserves_defaults_and_honors_lowering() {
+        let mut app = AppConfig::default();
+        app.engine.max_batch_size = 4;
+        let cfg = scheduler_config_from_app_config(&app);
+        assert_eq!(cfg.max_num_seqs, 4);
+        assert_eq!(cfg.max_num_batched_tokens, 4096);
+        assert_eq!(cfg.max_consecutive_decode, 10);
+        assert_eq!(cfg.prefill_chunk_size, 512);
+        assert_eq!(cfg.max_batch_size, 256);
     }
 }
