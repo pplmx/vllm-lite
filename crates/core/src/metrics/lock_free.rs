@@ -328,18 +328,33 @@ impl Default for LockFreeMetrics {
 /// Trait implemented by every metrics backend (lock-free, enhanced, prometheus). Provides `snapshot()` and `reset()` for periodic export.
 pub type MetricsCollector = LockFreeMetrics;
 
-#[cfg(test)]
 impl LockFreeMetrics {
     /// Mark the start of a request: increment the in-flight counter.
+    /// Wired into [`crate::engine::Engine::add_request`] (admitted
+    /// requests only) so `requests_in_flight` is a live gauge instead of
+    /// the pinned 0 it was stuck at when the only writers lived under
+    /// `#[cfg(test)]` (RIL ISS-082).
     pub(crate) fn record_request_start(&self) {
         self.requests_in_flight.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// Mark the end of a request: decrement the in-flight counter.
+    /// Mark the end of a request: decrement the in-flight counter,
+    /// **saturating at 0**. Pre-fix this was a raw `fetch_sub(1)`, so an
+    /// unbalanced end (a sequence finalized twice, or cancelled without a
+    /// recorded start) wrapped to `u64::MAX` (~1.8e19) and poisoned
+    /// dashboards (RIL ISS-082). Paired with
+    /// [`Self::record_request_start`] via `finalize_finished`.
     pub(crate) fn record_request_end(&self) {
-        self.requests_in_flight.fetch_sub(1, Ordering::Relaxed);
+        let _ = self
+            .requests_in_flight
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+                Some(v.saturating_sub(1))
+            });
     }
+}
 
+#[cfg(test)]
+impl LockFreeMetrics {
     /// Add `count` to the lifetime prefill-tokens counter.
     pub(crate) fn record_prefill_tokens(&self, count: u64) {
         self.prefill_tokens.fetch_add(count, Ordering::Relaxed);

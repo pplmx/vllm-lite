@@ -97,6 +97,13 @@ impl Engine {
     /// oneshot (e.g. it gave up waiting after a client disconnect),
     /// the `Result` is ignored.
     pub(crate) fn finalize_finished(&mut self, seq_id: SeqId, reason: FinishReason) {
+        // RIL ISS-082: balance the `record_request_start` from
+        // `add_request` so the `requests_in_flight` gauge is live.
+        // `finalize_finished` is the single finalization point for every
+        // Stop / Length / Cancelled completion, so one decrement per
+        // admitted request. The counter saturates at 0, so an unbalanced
+        // call cannot wrap to u64::MAX.
+        self.scheduler.metrics.record_request_end();
         if let Some(tx) = self.finish_reason_txs.remove(&seq_id) {
             let _ = tx.send(reason);
         }
@@ -182,6 +189,13 @@ impl Engine {
             self.scheduler.add_request_without_prefix_cache(req)
         };
         self.response_txs.insert(seq_id, response_tx);
+        // RIL ISS-082: count ADMITTED requests only — a rejected admission
+        // (`seq_id == 0`, e.g. an empty prompt that slipped through) never
+        // reaches `finalize_finished`, so it must not get a start either.
+        // `finalize_finished` balances this via `record_request_end`.
+        if seq_id != 0 {
+            self.scheduler.metrics.record_request_start();
+        }
         seq_id
     }
 }

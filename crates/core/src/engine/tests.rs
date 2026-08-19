@@ -205,6 +205,115 @@ fn test_tokens_total_counts_generated_not_input() {
 }
 
 #[test]
+fn test_requests_in_flight_live_and_balanced() {
+    // RIL ISS-082: `requests_in_flight` (Prometheus gauge / OTLP
+    // `inflight_requests`) must be a live signal. Pre-fix the only
+    // writers lived under `#[cfg(test)]`, so the gauge was pinned at 0
+    // under any load. Now `add_request` (admitted) increments and
+    // `finalize_finished` decrements.
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let (tx, _rx) = mpsc::channel(64);
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .runtime_snapshot()
+            .requests_in_flight,
+        0
+    );
+    engine.add_request(Request::new(1, vec![10, 20], 3), tx);
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .runtime_snapshot()
+            .requests_in_flight,
+        1,
+        "admitted request must increment requests_in_flight"
+    );
+    for _ in 0..10 {
+        let _ = engine.step();
+        if !engine.has_pending() {
+            break;
+        }
+    }
+    assert!(!engine.has_pending());
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .runtime_snapshot()
+            .requests_in_flight,
+        0,
+        "completion must decrement requests_in_flight back to 0"
+    );
+}
+
+#[test]
+fn test_requests_in_flight_skips_rejected_admission() {
+    // RIL ISS-082: a rejected admission (empty prompt → seq_id 0) must NOT
+    // increment the in-flight counter — it never reaches finalize_finished,
+    // so a start without an end would leave the gauge stuck at 1.
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let (tx, _rx) = mpsc::channel(64);
+    let seq_id = engine.add_request(Request::new(1, vec![], 3), tx);
+    assert_eq!(seq_id, 0, "empty prompt must be rejected");
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .runtime_snapshot()
+            .requests_in_flight,
+        0
+    );
+}
+
+#[test]
+fn test_requests_in_flight_balances_on_cancel() {
+    // RIL ISS-082: cancel_request finalizes with FinishReason::Cancelled,
+    // which must decrement an admitted request's in-flight count.
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10, 20], 3), tx);
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .runtime_snapshot()
+            .requests_in_flight,
+        1
+    );
+    assert!(engine.cancel_request(1));
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .runtime_snapshot()
+            .requests_in_flight,
+        0,
+        "cancel must balance the start"
+    );
+}
+
+#[test]
+fn test_requests_in_flight_end_saturates_at_zero() {
+    // RIL ISS-082: an unbalanced `record_request_end` (double-finalize,
+    // or cancel without a start) must saturate at 0 — the pre-fix raw
+    // `fetch_sub(1)` wrapped to u64::MAX (~1.8e19), poisoning dashboards.
+    let metrics = crate::metrics::EnhancedMetricsCollector::default();
+    metrics.record_request_end();
+    metrics.record_request_end();
+    assert_eq!(
+        metrics.runtime_snapshot().requests_in_flight,
+        0,
+        "saturating decrement must not wrap below 0"
+    );
+}
+
+#[test]
 fn test_sleep_policy_immediate_work() {
     let mut policy = SleepPolicy::default();
     let interval = policy.next_interval(true);

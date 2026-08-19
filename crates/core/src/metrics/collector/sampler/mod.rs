@@ -139,6 +139,24 @@ impl EnhancedMetricsCollector {
     pub(crate) fn runtime_snapshot(&self) -> MetricsSnapshot {
         self.runtime.snapshot()
     }
+
+    /// Mark the start of an admitted request (RIL ISS-082): delegates to
+    /// the lock-free `LockFreeMetrics.requests_in_flight` counter so the
+    /// `requests_in_flight` Prometheus gauge / OTLP `inflight_requests`
+    /// are live signals instead of the always-0 they exported when the
+    /// only writers lived under `#[cfg(test)]`. Wired into
+    /// [`crate::engine::Engine::add_request`].
+    pub(crate) fn record_request_start(&self) {
+        self.runtime.record_request_start();
+    }
+
+    /// Mark the end of a request (RIL ISS-082): delegates to the lock-free
+    /// saturating decrement. Wired into
+    /// [`crate::engine::Engine::finalize_finished`] so every Stop/Length/
+    /// Cancelled finalization balances a prior `record_request_start`.
+    pub(crate) fn record_request_end(&self) {
+        self.runtime.record_request_end();
+    }
 }
 
 impl Default for EnhancedMetricsCollector {
