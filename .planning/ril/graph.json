@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 80,
+  "round": 82,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-19T05:09:30+00:00",
+  "updated_at": "2026-08-19T05:26:59+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -77,7 +77,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 70,
+      "touched_round": 81,
       "title": "core/scheduler",
       "role": "queue, preemption, eviction, batch composition"
     },
@@ -6001,6 +6001,17 @@
       "touched_round": 79,
       "commit": "4f5c2b0d",
       "summary": "collector gains errors_total field + record_engine_error + get_counter arm; run loop error site records it; /debug/metrics errors_total now real"
+    },
+    "DEC-054": {
+      "id": "DEC-054",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T05:26:59+00:00",
+      "updated_at": "2026-08-19T05:26:59+00:00",
+      "touched_round": 81,
+      "rationale": "ISS-064 (sequence-packing config inert) stays a documented-deferral: real sequence packing is a feature (SequencePacker::pack_sequences -> PackedBatch with similarity_threshold / target_batch_size, requiring token/position/prefix accounting integration in the composer), not a small bug-fix. The inert gate composes prefill without packing and documents the deferral at the dispatch site.",
+      "alternatives_rejected": "[remove the inert gate + re-document (rejected: destroys a designed-and-documented feature for tidiness, same reasoning as DEC-044 for the preemption manager), wire pack_sequences now (rejected: feature-sized composer integration, out of scope for a hardening round; also must then own the packing_efficiency gauge per DEC-053)]"
     }
   },
   "edges": [
@@ -8571,6 +8582,12 @@
       "to": "ISS-090",
       "type": "resolves",
       "created_at": "2026-08-19T05:08:14+00:00"
+    },
+    {
+      "from": "DEC-054",
+      "to": "COMP-007",
+      "type": "governs",
+      "created_at": "2026-08-19T05:26:59+00:00"
     }
   ]
 }
