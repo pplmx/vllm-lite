@@ -43,6 +43,11 @@ pub struct EnhancedMetricsCollector {
     /// consumer fills the 64-slot buffer. This counter makes the resulting
     /// stream gap visible on `/metrics` instead of silent.
     dropped_tokens_total: AtomicU64,
+    /// Total engine step failures (RIL ISS-090): the run loop's sole error
+    /// increment site (`Engine::error_count`) surfaces here as `errors_total`,
+    /// which /debug/metrics was showing as a fabricated `0` via the
+    /// collector's fallback arm.
+    errors_total: AtomicU64,
     /// Total adaptive-speculation adjustments applied.
     speculative_adjustments: AtomicU64,
     /// Packing efficiency percentage × 100 (fixed-point).
@@ -84,6 +89,7 @@ impl EnhancedMetricsCollector {
             cuda_graph_hits: AtomicU64::new(0),
             cuda_graph_misses: AtomicU64::new(0),
             dropped_tokens_total: AtomicU64::new(0),
+            errors_total: AtomicU64::new(0),
             speculative_adjustments: AtomicU64::new(0),
             packing_efficiency: AtomicU64::new(0),
             speculative_acceptance_rate: AtomicU64::new(0),
@@ -110,6 +116,7 @@ impl EnhancedMetricsCollector {
             "speculative_adjustments_total" => self.speculative_adjustments.load(Ordering::Relaxed),
             "requests_total" => self.runtime.requests_total(),
             "dropped_tokens_total" => self.dropped_tokens_total.load(Ordering::Relaxed),
+            "errors_total" => self.errors_total.load(Ordering::Relaxed),
             _ => 0,
         }
     }

@@ -100,6 +100,10 @@ impl Engine {
                 });
                 if let Err(e) = result {
                     self.error_count += 1;
+                    // RIL ISS-090: surface the real error count to the
+                    // metrics collector — /debug/metrics `errors_total` was a
+                    // fabricated `0` (collector fallback arm) before this.
+                    self.scheduler.metrics.record_engine_error();
                     self.last_error = Some(e.to_string());
                     error!(step = step_count, error = %e, "Engine step error");
                     // ISS-045: a panic bypasses `step()`'s own recovery, so

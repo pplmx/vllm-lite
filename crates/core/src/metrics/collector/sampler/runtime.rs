@@ -80,6 +80,16 @@ impl EnhancedMetricsCollector {
         self.dropped_tokens_total.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Increment the engine step-error counter (RIL ISS-090).
+    ///
+    /// Called from the run loop's single error site (where
+    /// `Engine::error_count` is incremented), so `/debug/metrics`
+    /// `errors_total` reflects real engine failures instead of the
+    /// collector's fabricated `0` fallback.
+    pub(crate) fn record_engine_error(&self) {
+        self.errors_total.fetch_add(1, Ordering::Relaxed);
+    }
+
     /// Increment completed-request counter.
     pub fn record_request(&self) {
         self.runtime.record_request();

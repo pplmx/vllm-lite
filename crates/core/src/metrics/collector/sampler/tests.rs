@@ -37,6 +37,19 @@ fn test_collector_records_dropped_token() {
     assert_eq!(collector.get_counter("dropped_tokens_total"), 2);
 }
 
+/// RIL ISS-090: `errors_total` in /debug/metrics was backed by the
+/// collector's `_ => 0` fallback — pinned at 0 no matter how many real engine
+/// step errors occurred. The engine's `error_count` is now surfaced through
+/// `record_engine_error` at the single increment site (run.rs).
+#[test]
+fn test_collector_records_engine_error() {
+    let collector = EnhancedMetricsCollector::new();
+    assert_eq!(collector.get_counter("errors_total"), 0);
+    collector.record_engine_error();
+    collector.record_engine_error();
+    assert_eq!(collector.get_counter("errors_total"), 2);
+}
+
 #[test]
 fn test_collector_records_packing_efficiency() {
     let collector = EnhancedMetricsCollector::new();
