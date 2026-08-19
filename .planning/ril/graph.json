@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 78,
+  "round": 79,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-19T04:24:48+00:00",
+  "updated_at": "2026-08-19T04:53:05+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -5626,11 +5626,11 @@
     "ISS-088": {
       "id": "ISS-088",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-18T21:58:09+00:00",
-      "updated_at": "2026-08-18T21:58:09+00:00",
-      "touched_round": 71,
+      "updated_at": "2026-08-19T04:53:05+00:00",
+      "touched_round": 78,
       "severity": 3,
       "confidence": 0.7,
       "title": "Distributed KV gRPC has no timeouts: Endpoint created without .timeout(), fetch_from_peers waits every peer in a JoinSet with no deadline (a half-open TCP / silent HTTP-2 peer stalls the fetch indefinitely), and put/invalidate broadcasts spawn fire-and-forget tasks with no deadline/retry/backpressure -> a wedged peer leaks unbounded pending requests. Latent multi-node (DEC-048 context)"
@@ -5915,6 +5915,43 @@
       "touched_round": 77,
       "commit": "77c68983",
       "summary": "record_block_tokens no longer writes self.chain_cursor; the allocate placeholder chain advances only from previous allocate hashes; new chain-isolation test"
+    },
+    "TASK-101": {
+      "id": "TASK-101",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-19T04:53:05+00:00",
+      "updated_at": "2026-08-19T04:53:05+00:00",
+      "touched_round": 78,
+      "category": "stability",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 2,
+      "title": "Bound distributed-KV gRPC calls (ISS-088): Endpoint had no request/connect timeout, fetch_from_peers JoinSet had no aggregate deadline, broadcasts were unbounded fire-and-forget; a wedged peer stalled fetch_block forever; TDD hanging-handler integration test"
+    },
+    "EV-110": {
+      "id": "EV-110",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T04:53:05+00:00",
+      "updated_at": "2026-08-19T04:53:05+00:00",
+      "touched_round": 78,
+      "source": "crates/dist/tests/grpc_timeout.rs fetch_block_is_bounded_against_a_hanging_peer",
+      "confidence": 1.0,
+      "summary": "RED: hanging TransferKVBlock handler stalled client fetch past a 20s outer bound; GREEN after adding PEER_RPC_TIMEOUT + PEER_FETCH_DEADLINE: resolves in ~5s; 7 peer-sync/kv-transfer tests + full just ci green"
+    },
+    "CHG-097": {
+      "id": "CHG-097",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T04:53:05+00:00",
+      "updated_at": "2026-08-19T04:53:05+00:00",
+      "touched_round": 78,
+      "commit": "d3527556",
+      "summary": "PeerClient Endpoint.timeout+connect_timeout(5s); fetch_from_peers wrapped in tokio::time::timeout(5s) with join_set.abort_all() on expiry; broadcast put/invalidate RPCs capped at 5s; new grpc_timeout integration test"
     }
   },
   "edges": [
@@ -8443,6 +8480,24 @@
       "to": "ISS-087",
       "type": "resolves",
       "created_at": "2026-08-19T04:24:47+00:00"
+    },
+    {
+      "from": "TASK-101",
+      "to": "ISS-088",
+      "type": "addresses",
+      "created_at": "2026-08-19T04:53:05+00:00"
+    },
+    {
+      "from": "CHG-097",
+      "to": "TASK-101",
+      "type": "implements",
+      "created_at": "2026-08-19T04:53:05+00:00"
+    },
+    {
+      "from": "CHG-097",
+      "to": "ISS-088",
+      "type": "resolves",
+      "created_at": "2026-08-19T04:53:05+00:00"
     }
   ]
 }
