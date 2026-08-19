@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 77,
+  "round": 78,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-19T04:16:06+00:00",
+  "updated_at": "2026-08-19T04:24:48+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -5614,11 +5614,11 @@
     "ISS-087": {
       "id": "ISS-087",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-18T21:57:25+00:00",
-      "updated_at": "2026-08-18T21:57:25+00:00",
-      "touched_round": 71,
+      "updated_at": "2026-08-19T04:24:47+00:00",
+      "touched_round": 77,
       "severity": 3,
       "confidence": 0.7,
       "title": "chain_cursors is never seeded/cleared on prefix-cache adoption, preemption reset, or rollback, so parent_hash chains diverge from canonical; record_block_tokens also writes self.chain_cursor, poisoning the manager-wide cursor used by subsequent allocate placeholder puts -> wrong distributed-prefix matches/misses. Latent multi-node (DEC-048 context)"
@@ -5878,6 +5878,43 @@
       "source": "crates/core/src/scheduler/memory/tests.rs test_memory_manager_default_hasher_distinguishes_content",
       "confidence": 1.0,
       "summary": "RED: same parent + [1,2,3] vs [9,8,7] both hashed 0 under identity default; GREEN after default flip: distinct + non-zero + hasher name xorshift; 469 core multi-node lib tests + 9 dist integration + full just ci green"
+    },
+    "TASK-100": {
+      "id": "TASK-100",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-19T04:24:47+00:00",
+      "updated_at": "2026-08-19T04:24:47+00:00",
+      "touched_round": 77,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Fix record_block_tokens poisoning the manager-wide allocate chain_cursor (ISS-087): per-sequence content hash was written into the manager cursor, so a subsequent allocate chained placeholder hashes off a content hash (wrong distributed placeholder hashes); TDD chain-isolation test"
+    },
+    "EV-109": {
+      "id": "EV-109",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T04:24:47+00:00",
+      "updated_at": "2026-08-19T04:24:47+00:00",
+      "touched_round": 77,
+      "source": "crates/core/src/scheduler/memory/tests.rs test_allocate_chain_not_poisoned_by_record_block_tokens",
+      "confidence": 1.0,
+      "summary": "RED: second allocate cached hash != hash_allocated_block(prev-allocate-cursor) after a record_block_tokens (cursor poisoned); GREEN after removing the write; 53 memory + 9 dist integration + 470 core multi-node lib + full just ci green"
+    },
+    "CHG-096": {
+      "id": "CHG-096",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T04:24:47+00:00",
+      "updated_at": "2026-08-19T04:24:47+00:00",
+      "touched_round": 77,
+      "commit": "77c68983",
+      "summary": "record_block_tokens no longer writes self.chain_cursor; the allocate placeholder chain advances only from previous allocate hashes; new chain-isolation test"
     }
   },
   "edges": [
@@ -8388,6 +8425,24 @@
       "to": "ISS-086",
       "type": "resolves",
       "created_at": "2026-08-19T04:15:40+00:00"
+    },
+    {
+      "from": "TASK-100",
+      "to": "ISS-087",
+      "type": "addresses",
+      "created_at": "2026-08-19T04:24:47+00:00"
+    },
+    {
+      "from": "CHG-096",
+      "to": "TASK-100",
+      "type": "implements",
+      "created_at": "2026-08-19T04:24:47+00:00"
+    },
+    {
+      "from": "CHG-096",
+      "to": "ISS-087",
+      "type": "resolves",
+      "created_at": "2026-08-19T04:24:47+00:00"
     }
   ]
 }
