@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 72,
+  "round": 74,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-18T23:55:28+00:00",
+  "updated_at": "2026-08-19T02:29:49+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1821,7 +1821,7 @@
       "version": 1,
       "created_at": "2026-08-10T10:39:57+00:00",
       "updated_at": "2026-08-10T10:39:57+00:00",
-      "touched_round": 71,
+      "touched_round": 73,
       "title": "vllm-core engine/speculative dispatch + scheduler update",
       "role": "speculative decoding step orchestration and scheduler state fold"
     },
@@ -5554,11 +5554,11 @@
     "ISS-082": {
       "id": "ISS-082",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-18T21:31:39+00:00",
-      "updated_at": "2026-08-18T21:31:39+00:00",
-      "touched_round": 71,
+      "updated_at": "2026-08-19T01:46:22+00:00",
+      "touched_round": 73,
       "severity": 3,
       "confidence": 1.0,
       "title": "requests_in_flight is never updated in production and its decrement is a non-saturating fetch_sub: the only writers record_request_start/record_request_end live in a #[cfg(test)] impl (lock_free.rs:331-341), so the Prometheus gauge and OTLP inflight_requests are pinned at 0 under load; when wired, record_request_end's raw fetch_sub(1) would wrap to u64::MAX on any unbalanced end (double-finalize or cancel-without-start), poisoning dashboards"
@@ -5578,11 +5578,11 @@
     "ISS-084": {
       "id": "ISS-084",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-18T21:31:42+00:00",
-      "updated_at": "2026-08-18T21:31:42+00:00",
-      "touched_round": 71,
+      "updated_at": "2026-08-19T02:29:49+00:00",
+      "touched_round": 73,
       "severity": 2,
       "confidence": 1.0,
       "title": "speculative_efficiency is computed on the wrong formula and the acceptance-rate gauge is never recorded: spec_dispatch/dispatch.rs:137 records efficiency = total_draft/(total_draft+total_accepted) -- the fraction of steps that were drafts -- into the metric documented as 'efficiency (accepted / drafted)', while record_speculative_acceptance(accepted,total) (the real acceptance-rate recorder surfaced as speculative_acceptance_rate) has zero production callers, so that gauge stays 0 while the per-request DashMap is updated instead"
@@ -5671,6 +5671,93 @@
       "source": "crates/core/src/engine/tests.rs test_tokens_total_counts_generated_not_input",
       "confidence": 1.0,
       "summary": "40-token prompt + max_tokens=5: post-fix tokens_total=5 (was ~44 input-length sum pre-fix); 444 core lib tests green"
+    },
+    "TASK-096": {
+      "id": "TASK-096",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-08-19T00:42:07+00:00",
+      "updated_at": "2026-08-19T01:46:20+00:00",
+      "touched_round": 73,
+      "category": "stability",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Make requests_in_flight live + saturating: wire start/end into the engine lifecycle, move writers out of cfg(test), saturating decrement (ISS-082); 4 TDD tests",
+      "lock_owner": "loop-1",
+      "lock_until": "2026-08-19T01:17:35+00:00"
+    },
+    "CHG-092": {
+      "id": "CHG-092",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T00:59:11+00:00",
+      "updated_at": "2026-08-19T00:59:11+00:00",
+      "touched_round": 73,
+      "commit": "8f4599c3",
+      "summary": "requests_in_flight wired live (add_request start, finalize_finished saturating end); writers out of cfg(test)"
+    },
+    "EV-104": {
+      "id": "EV-104",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T01:15:13+00:00",
+      "updated_at": "2026-08-19T01:15:13+00:00",
+      "touched_round": 73,
+      "source": "crates/core/src/engine/tests.rs test_requests_in_flight_*",
+      "confidence": 1.0,
+      "summary": "4 tests: 0->1->0 round trip, rejected admission stays 0, cancel balances, double-end saturates at 0; just ci green"
+    },
+    "TASK-097": {
+      "id": "TASK-097",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-19T02:28:49+00:00",
+      "updated_at": "2026-08-19T02:29:49+00:00",
+      "touched_round": 73,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1,
+      "title": "Record speculative_efficiency as accepted/drafted and give speculative_acceptance_rate a live production recorder (ISS-084): dispatch.rs computed draft/(draft+accepted) -- inverted (perfect drafts scored 0.5) -- and record_speculative_acceptance had zero callers so the gauge stayed 0; TDD 2 dispatch tests"
+    },
+    "EV-105": {
+      "id": "EV-105",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T02:28:49+00:00",
+      "updated_at": "2026-08-19T02:28:49+00:00",
+      "touched_round": 73,
+      "source": "crates/core/src/engine/spec_dispatch/tests.rs",
+      "confidence": 1.0,
+      "summary": "test_speculative_metrics_all_drafts_accepted asserts efficiency+acceptance gauges == 100_000 (1.0, was 50_000 pre-fix) and test_speculative_metrics_no_drafts_accepted asserts both == 0 (was 100_000 pre-fix -- inverted formula); just ci green"
+    },
+    "CHG-093": {
+      "id": "CHG-093",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T02:29:16+00:00",
+      "updated_at": "2026-08-19T02:29:16+00:00",
+      "touched_round": 73,
+      "commit": "ae4c1a44",
+      "summary": "dispatch.rs efficiency := accepted/drafted + record_speculative_acceptance(total_accepted, total_draft) makes acceptance-rate gauge live; dropped dead_code allow; corrected fixed-point field doc comments (x100_000) + Prometheus HELP + MTRC-02 roadmap lines; 2 TDD tests"
+    },
+    "DEC-051": {
+      "id": "DEC-051",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T02:29:16+00:00",
+      "updated_at": "2026-08-19T02:29:16+00:00",
+      "touched_round": 73,
+      "rationale": "speculative_efficiency now records accepted/drafted (draft quality, higher=better), matching the field doc comment (sampler/mod.rs, the code-adjacent intent) and vLLM draft_token_acceptance_rate direction; the pre-fix draft/(draft+accepted) made perfect drafts score 0.5 and worthless drafts 1.0 -- inverted for an efficiency reading. speculative_acceptance_rate is wired from the same counts as the batch-aggregated acceptance gauge. MTRC-02 roadmap wording (draft tokens / total tokens) was the source of the inverted formula and is corrected to accepted / drafted.",
+      "alternatives_rejected": "[vLLM efficiency = total_generated/drafted (rejected: unbounded >1 conflicts with the 0-1 gauge contract and needs per-seq bonus-token accounting absent at the call site), two-identical accepted/drafted gauges (rejected as redundant), keep draft/(draft+accepted) as a token-composition measure (rejected: misnamed and monotonic-inverted for an efficiency metric)]"
     }
   },
   "edges": [
@@ -8097,6 +8184,48 @@
       "to": "TASK-095",
       "type": "implements",
       "created_at": "2026-08-18T23:36:51+00:00"
+    },
+    {
+      "from": "TASK-096",
+      "to": "ISS-082",
+      "type": "addresses",
+      "created_at": "2026-08-19T01:31:15+00:00"
+    },
+    {
+      "from": "CHG-092",
+      "to": "ISS-082",
+      "type": "resolves",
+      "created_at": "2026-08-19T01:31:17+00:00"
+    },
+    {
+      "from": "CHG-092",
+      "to": "TASK-096",
+      "type": "implements",
+      "created_at": "2026-08-19T01:31:19+00:00"
+    },
+    {
+      "from": "TASK-097",
+      "to": "ISS-084",
+      "type": "addresses",
+      "created_at": "2026-08-19T02:29:33+00:00"
+    },
+    {
+      "from": "CHG-093",
+      "to": "ISS-084",
+      "type": "resolves",
+      "created_at": "2026-08-19T02:29:34+00:00"
+    },
+    {
+      "from": "CHG-093",
+      "to": "TASK-097",
+      "type": "implements",
+      "created_at": "2026-08-19T02:29:34+00:00"
+    },
+    {
+      "from": "DEC-051",
+      "to": "COMP-011",
+      "type": "governs",
+      "created_at": "2026-08-19T02:29:34+00:00"
     }
   ]
 }
