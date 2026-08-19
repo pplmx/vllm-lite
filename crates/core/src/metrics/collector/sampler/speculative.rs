@@ -36,6 +36,12 @@ impl EnhancedMetricsCollector {
         self.speculative_efficiency.store(fixed, Ordering::Relaxed);
     }
 
+    /// Records the spec-vs-non-spec throughput speedup ratio (1.0 = same).
+    ///
+    /// RIL ISS-089: no production caller exists. MTRC-03 documents this as
+    /// "throughput speedup vs non-speculative baseline", which requires an
+    /// A/B baseline run — deferred as feature-sized. The gauge is pinned at
+    /// 0 on /metrics and OTLP; keep it exposed for the metric contract.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, dead_code)]
     pub(crate) fn record_throughput_speedup(&self, ratio: f64) {
         let fixed = (ratio * 100_000.0) as u64;

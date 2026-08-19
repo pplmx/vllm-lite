@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 75,
+  "round": 76,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-19T03:10:14+00:00",
+  "updated_at": "2026-08-19T03:45:22+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 71,
+      "touched_round": 75,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -5806,6 +5806,41 @@
       "touched_round": 74,
       "rationale": "ISS-081 split into a small consumable-knob fix now and feature-sized YAML-precedence work deferred. --max-batch-size maps to SchedulerConfig.max_num_seqs because state/mod.rs wires max_num_seqs into BatchCompositionConfig.max_batch_size (the actual runtime per-batch cap); defaults coincide (256==256) so default behavior is unchanged. The legacy new_boxed fallback ignored app values entirely (hardcoded 4/1024); routing it through with_config_boxed makes --kv-blocks/--max-draft-tokens effective there; max_draft_tokens default 4->8 aligns runtime with the documented VLLM_MAX_DRAFT_TOKENS default.",
       "alternatives_rejected": "[map max_batch_size to SchedulerConfig.max_batch_size (rejected: that field has no runtime consumer; the batch cap comes from max_num_seqs via BatchCompositionConfig), full Option<>/clap-presence refactor now (rejected: feature-sized, touches every consumer), leave fallback on new_boxed (rejected: keeps --kv-blocks/--max-draft-tokens inert in the default path)]"
+    },
+    "ISS-089": {
+      "id": "ISS-089",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T03:42:44+00:00",
+      "updated_at": "2026-08-19T03:42:44+00:00",
+      "touched_round": 75,
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "Batch efficiency and throughput speedup gauges have no production recorders: packing_efficiency and throughput_speedup_ratio are exposed on Prometheus /metrics + OTLP but have zero non-test call sites (pinned at 0.0 forever). Root: packing_efficiency feeds from SequencePacker::pack_sequences (never called, sequence packing ISS-064 inert) and throughput_speedup_ratio needs an A/B non-spec baseline (MTRC-03, feature-sized). Same observed class as ISS-082/084 (documented metric silently dead)."
+    },
+    "EV-107": {
+      "id": "EV-107",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T03:44:14+00:00",
+      "updated_at": "2026-08-19T03:44:14+00:00",
+      "touched_round": 75,
+      "source": "grep record_packing_efficiency / record_throughput_speedup across crates",
+      "confidence": 1.0,
+      "summary": "record_packing_efficiency has only test callers (exporter/mod.rs:143, debug.rs:375); record_throughput_speedup has zero callers (dead_code allow); pack_sequences with padding_waste is production-unreferenced under ISS-064"
+    },
+    "DEC-053": {
+      "id": "DEC-053",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-19T03:44:14+00:00",
+      "updated_at": "2026-08-19T03:44:14+00:00",
+      "touched_round": 75,
+      "rationale": "Both dead gauges are documented-deferred rather than removed or hot-wired with invented formulas. Keeping the metric names on /metrics+OTLP preserves the Prometheus/OTLP contract (dashboards keep working); the correct wiring belongs to their owning features: packing_efficiency to ISS-064 (sequence packing ships pack_sequences -> padding_waste -> efficiency) and throughput_speedup_ratio to MTRC-03 (A/B baseline benchmark). Recorder doc comments now state the deferral so future audits do not re-report them as mystery deaths.",
+      "alternatives_rejected": "[hot-wire packing_efficiency as batch-token-utilization from the step path (rejected: invented formula, would conflict with the packing feature future padding-waste semantics), remove the gauges from export (rejected: breaks the Prometheus/OTLP metric contract for existing consumers)]"
     }
   },
   "edges": [
@@ -8286,6 +8321,18 @@
       "to": "TASK-098",
       "type": "implements",
       "created_at": "2026-08-19T03:10:14+00:00"
+    },
+    {
+      "from": "ISS-089",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-19T03:45:22+00:00"
+    },
+    {
+      "from": "DEC-053",
+      "to": "COMP-002",
+      "type": "governs",
+      "created_at": "2026-08-19T03:45:22+00:00"
     }
   ]
 }
