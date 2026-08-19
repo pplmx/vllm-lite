@@ -388,6 +388,77 @@ fn test_warmup_draft_kv_invokes_draft_per_sequence() {
     );
 }
 
+/// RIL ISS-084: speculative metrics must report actual draft acceptance.
+/// `speculative_efficiency` must be accepted/drafted (all drafts accepted ->
+/// 1.0) and `speculative_acceptance_rate` must have a live production recorder
+/// (pre-fix it was never written and stayed 0). The pre-fix efficiency
+/// formula draft/(draft+accepted) scored a perfect draft model 0.5 — an
+/// inverted metric where a worse draft model reports *higher* efficiency.
+#[test]
+fn test_speculative_metrics_all_drafts_accepted() {
+    let target = FakeModel::new(42);
+    let draft = FakeModel::new(42); // draft argmax == target argmax => all accepted
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 3;
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio_mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10, 20], 10), tx);
+
+    // Step 1: prefill; Step 2: decode + speculative verification (all drafts accepted).
+    let _ = engine.step().unwrap();
+    let _ = engine.step().unwrap();
+
+    // Gauges are fixed-point ratios × 100_000; accepted/drafted = 1.0.
+    let efficiency = engine.scheduler.metrics.get_gauge("speculative_efficiency");
+    let acceptance = engine
+        .scheduler
+        .metrics
+        .get_gauge("speculative_acceptance_rate");
+    assert_eq!(
+        efficiency, 100_000,
+        "efficiency must be accepted/drafted = 1.0 when every draft is accepted; \
+         got {efficiency} (pre-fix it recorded draft/(draft+accepted) = 0.5)"
+    );
+    assert_eq!(
+        acceptance, 100_000,
+        "acceptance-rate gauge must be live (accepted/drafted = 1.0); \
+         got {acceptance} (pre-fix it had no production callers and stayed 0)"
+    );
+}
+
+/// RIL ISS-084: with every draft rejected, both speculative gauges must be 0 —
+/// an inverted efficiency formula (draft/(draft+0) = 1.0) would falsely report
+/// "perfect efficiency" for a draft model that is never accepted.
+#[test]
+fn test_speculative_metrics_no_drafts_accepted() {
+    let target = FakeModel::new(7);
+    let draft = FakeModel::new(42); // draft argmax (42) != target argmax (7) => all rejected
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 3;
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio_mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10, 20], 10), tx);
+
+    let _ = engine.step().unwrap();
+    let _ = engine.step().unwrap();
+
+    assert_eq!(
+        engine.scheduler.metrics.get_gauge("speculative_efficiency"),
+        0,
+        "efficiency must be 0 when no draft is accepted"
+    );
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .get_gauge("speculative_acceptance_rate"),
+        0,
+        "acceptance-rate gauge must be recorded as 0 (live, not the pre-fix default)"
+    );
+}
+
 /// Test Plan 17.1-A: Unified `step()` dispatches correctly
 #[test]
 fn test_step_unified_dispatch() {

@@ -128,16 +128,24 @@ impl crate::engine::Engine {
             }
         }
 
-        // Record speculative efficiency metric (Plan 17.4-F / MTRC-02)
-        let total_tokens_step = total_draft + total_accepted;
-        if total_tokens_step > 0 {
+        // Record speculative efficiency metric (Plan 17.4-F / MTRC-02).
+        // RIL ISS-084: efficiency is accepted/drafted (draft quality — a
+        // perfect draft model scores 1.0, a never-accepted one 0.0). The
+        // pre-fix draft/(draft+accepted) scored perfect drafts 0.5 — an
+        // inverted metric where worse drafts report *higher* efficiency.
+        // The batch-aggregated acceptance-rate gauge is recorded from the
+        // same counts (pre-fix it had no production callers and stayed 0).
+        if total_draft > 0 {
             // invariant: draft/accepted counts are bounded per-step; precision loss
-            // is acceptable for the efficiency ratio metric.
+            // is acceptable for the ratio gauges.
             #[allow(clippy::cast_precision_loss)]
-            let efficiency = total_draft as f64 / total_tokens_step as f64;
+            let efficiency = total_accepted as f64 / total_draft as f64;
             self.scheduler
                 .metrics
                 .record_speculative_efficiency(efficiency);
+            self.scheduler
+                .metrics
+                .record_speculative_acceptance(total_accepted, total_draft);
         }
 
         // Record per-request acceptance rate (Plan 17.4-F / MTRC-01)

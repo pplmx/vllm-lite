@@ -133,12 +133,14 @@ impl PrometheusExporter {
         let eff = self.collector.get_gauge("packing_efficiency") as f64 / 100_000.0;
         let _ = write!(output, "packing_efficiency {eff:.3}\n");
 
-        output.push_str("# HELP speculative_acceptance_rate Token acceptance rate (0-1)\n");
+        output.push_str("# HELP speculative_acceptance_rate Draft token acceptance rate, accepted/drafted (0-1)\n");
         output.push_str("# TYPE speculative_acceptance_rate gauge\n");
         let rate = self.collector.get_gauge("speculative_acceptance_rate") as f64 / 100_000.0;
         let _ = write!(output, "speculative_acceptance_rate {rate:.3}\n");
 
-        output.push_str("# HELP speculative_efficiency Draft token efficiency ratio (0-1)\n");
+        output.push_str(
+            "# HELP speculative_efficiency Draft token efficiency, accepted/drafted (0-1)\n",
+        );
         output.push_str("# TYPE speculative_efficiency gauge\n");
         let eff = self.collector.get_gauge("speculative_efficiency") as f64 / 100_000.0;
         let _ = write!(output, "speculative_efficiency {eff:.3}\n");

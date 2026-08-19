@@ -12,9 +12,12 @@ impl EnhancedMetricsCollector {
     #[allow(
         clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        dead_code
+        clippy::cast_sign_loss
     )]
+    /// Records the batch-aggregated draft acceptance rate
+    /// `accepted / total` (× `100_000` fixed-point). RIL ISS-084: this is the
+    /// only production caller of the `speculative_acceptance_rate` gauge —
+    /// before the fix no caller existed and the gauge stayed 0.
     pub(crate) fn record_speculative_acceptance(&self, accepted: usize, total: usize) {
         if total > 0 {
             let rate = (accepted as f64 / total as f64 * 100_000.0) as u64;

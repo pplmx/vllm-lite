@@ -47,9 +47,9 @@ pub struct EnhancedMetricsCollector {
     speculative_adjustments: AtomicU64,
     /// Packing efficiency percentage × 100 (fixed-point).
     packing_efficiency: AtomicU64,
-    /// Speculative acceptance rate percentage × 100 (fixed-point).
+    /// Speculative acceptance rate (accepted / drafted) × `100_000` (fixed-point).
     speculative_acceptance_rate: AtomicU64,
-    /// Speculative efficiency (accepted / drafted) × 1000 (fixed-point).
+    /// Speculative efficiency (accepted / drafted) × `100_000` (fixed-point).
     speculative_efficiency: AtomicU64,
     /// Throughput speedup vs. greedy decoding × 100 (fixed-point).
     throughput_speedup_ratio: AtomicU64,
