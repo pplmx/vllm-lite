@@ -9,7 +9,7 @@
 use crate::engine::Engine;
 use crate::types::Request;
 use tokio::sync::mpsc;
-use vllm_traits::{Batch, FinishReason, SampledToken, SeqId, TokenId};
+use vllm_traits::{Batch, FinishReason, SampledToken, SeqId};
 
 impl Engine {
     /// Returns `true` if the engine is considered healthy and ready to process
@@ -70,8 +70,17 @@ impl Engine {
             let Some(seq) = self.scheduler.get_sequence(*seq_id) else {
                 continue;
             };
-            let generated: Vec<TokenId> = seq.tokens[seq.prompt_len..].to_vec();
-            if crate::sampling::matches_stop_sequences(&generated, stops) {
+            // Suffix-match only — `matches_stop_sequences` compares the
+            // TAIL of the slice, so borrow the generated region directly
+            // instead of `to_vec()`-copying it. This runs on every step
+            // of all three step paths for every sequence carrying stop
+            // sequences; a full copy would be O(generated) per step
+            // (quadratic over a request's lifetime) purely to feed a
+            // suffix check. Slicing from `prompt_len` keeps the
+            // prompt-exclusion semantic (a stop suffix in the prompt
+            // must not match) — see the pinned regression test.
+            let generated = &seq.tokens[seq.prompt_len..];
+            if crate::sampling::matches_stop_sequences(generated, stops) {
                 newly_stopped.push(*seq_id);
             }
         }

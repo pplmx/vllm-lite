@@ -642,3 +642,47 @@ fn test_finalize_stop_sequences_matches_and_releases() {
     );
     assert_eq!(engine.scheduler.running_count(), 0);
 }
+
+#[test]
+fn test_finalize_stop_sequences_ignores_prompt_only_match() {
+    // The stop check must only consider the GENERATED region
+    // (`seq.tokens[seq.prompt_len..]`): a stop sequence that is a suffix
+    // of the PROMPT must not finish the sequence while it is still
+    // generating. Guards the slice-borrow contract of the no-copy
+    // suffix check (the perf fix in `finalize_stop_sequences` — the
+    // check borrows the generated region instead of `to_vec()`-copying
+    // it, but a regression that compared against raw `seq.tokens`
+    // would wrongly match prompt content).
+    let stub = StubModel::returning(1);
+    let mut engine = Engine::new(stub, None);
+
+    // The prompt ends with [1, 2] — the SAME suffix as the stop
+    // sequence — but every generated token is 1, so the generated
+    // region never ends in [1, 2].
+    let params = vllm_traits::SamplingParams::builder()
+        .with_stop_token_sequences(vec![vec![1, 2]])
+        .build();
+    let req = Request {
+        id: 1,
+        prompt: vec![7, 1, 2],
+        max_tokens: 100,
+        sampling_params: params,
+        priority: crate::types::Priority::default(),
+        draft_model_id: None,
+    };
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(req, tx);
+
+    // Several decode steps: generated tokens are all 1, so the stop
+    // sequence [1, 2] must never match even though the PROMPT [7,1,2]
+    // ends in it.
+    for _ in 0..5 {
+        let out = engine.step().unwrap();
+        assert!(!out.is_empty());
+    }
+    assert!(
+        engine.has_pending(),
+        "a stop sequence matching only the prompt suffix must not finish the sequence"
+    );
+    assert_eq!(engine.scheduler.running_count(), 1);
+}
