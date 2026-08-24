@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 82,
+  "round": 83,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-19T05:26:59+00:00",
+  "updated_at": "2026-08-24T13:43:04+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -4874,52 +4874,46 @@
       "id": "TASK-081",
       "type": "task",
       "status": "resolved",
-      "version": 3,
+      "version": 4,
       "created_at": "2026-08-15T05:14:07+00:00",
-      "updated_at": "2026-08-15T06:20:18+00:00",
+      "updated_at": "2026-08-24T13:13:56+00:00",
       "touched_round": 69,
       "category": "correctness",
       "severity": 3,
       "confidence": 1.0,
       "effort": 3,
       "priority_score": 17.3,
-      "title": "Harden embeddings endpoint to sibling boundary parity (ISS-068): per-element empty/whitespace rejection (mirror sync completions empty-prompt 400), check_context_length gate per input (ISS-044 class), input-count cap, and don't map model.embed failure to retryable 503",
-      "lock_owner": "loop-1",
-      "lock_until": "2026-08-15T07:07:48+00:00"
+      "title": "Harden embeddings endpoint to sibling boundary parity (ISS-068): per-element empty/whitespace rejection (mirror sync completions empty-prompt 400), check_context_length gate per input (ISS-044 class), input-count cap, and don't map model.embed failure to retryable 503"
     },
     "TASK-082": {
       "id": "TASK-082",
       "type": "task",
       "status": "resolved",
-      "version": 3,
+      "version": 4,
       "created_at": "2026-08-15T05:14:07+00:00",
-      "updated_at": "2026-08-15T05:27:42+00:00",
+      "updated_at": "2026-08-24T13:13:56+00:00",
       "touched_round": 69,
       "category": "correctness",
       "severity": 3,
       "confidence": 1.0,
       "effort": 2,
       "priority_score": 21.2,
-      "title": "Chat streaming validation parity (ISS-069): validate model/messages non-empty before the stream/n-parallel dispatch (mirror sync completions pre-dispatch validation), constrain role to system/user/assistant/tool (silent data loss today), reject empty message content",
-      "lock_owner": "loop-1",
-      "lock_until": "2026-08-15T06:14:26+00:00"
+      "title": "Chat streaming validation parity (ISS-069): validate model/messages non-empty before the stream/n-parallel dispatch (mirror sync completions pre-dispatch validation), constrain role to system/user/assistant/tool (silent data loss today), reject empty message content"
     },
     "TASK-083": {
       "id": "TASK-083",
       "type": "task",
       "status": "resolved",
-      "version": 3,
+      "version": 4,
       "created_at": "2026-08-15T05:14:07+00:00",
-      "updated_at": "2026-08-15T06:07:13+00:00",
+      "updated_at": "2026-08-24T13:13:56+00:00",
       "touched_round": 69,
       "category": "security",
       "severity": 3,
       "confidence": 1.0,
       "effort": 2,
       "priority_score": 21.2,
-      "title": "Batch resource bounding (ISS-070): cap create_batch prompts (0.5x OpenAI 50k contract, reject with 400) closing cost-clamp-amplification, and add seq_id_rx timeout in batch worker (mirror siblings' 1s + CancelOnDrop) so a stalled engine can't hang a job InProgress forever",
-      "lock_owner": "loop-1",
-      "lock_until": "2026-08-15T06:28:29+00:00"
+      "title": "Batch resource bounding (ISS-070): cap create_batch prompts (0.5x OpenAI 50k contract, reject with 400) closing cost-clamp-amplification, and add seq_id_rx timeout in batch worker (mirror siblings' 1s + CancelOnDrop) so a stalled engine can't hang a job InProgress forever"
     },
     "CHG-078": {
       "id": "CHG-078",
@@ -5039,18 +5033,16 @@
       "id": "TASK-084",
       "type": "task",
       "status": "resolved",
-      "version": 3,
+      "version": 4,
       "created_at": "2026-08-15T07:11:26+00:00",
-      "updated_at": "2026-08-15T07:21:33+00:00",
+      "updated_at": "2026-08-24T13:13:56+00:00",
       "touched_round": 70,
       "category": "maintainability",
       "severity": 2,
       "confidence": 1.0,
       "effort": 1,
       "priority_score": 6.0,
-      "title": "Correct RBAC/JWT docs to state the true (un-enforced) status: security/mod.rs no longer claims 'Mounted via security::install_middleware' and rbac.rs gains an 'IMPORTANT - not enforced in production' note (ISS-071, governed by DEC-049)",
-      "lock_owner": "loop-1",
-      "lock_until": "2026-08-15T07:43:50+00:00"
+      "title": "Correct RBAC/JWT docs to state the true (un-enforced) status: security/mod.rs no longer claims 'Mounted via security::install_middleware' and rbac.rs gains an 'IMPORTANT - not enforced in production' note (ISS-071, governed by DEC-049)"
     },
     "CHG-081": {
       "id": "CHG-081",
@@ -5127,18 +5119,16 @@
       "id": "TASK-085",
       "type": "task",
       "status": "resolved",
-      "version": 3,
+      "version": 4,
       "created_at": "2026-08-15T09:08:53+00:00",
-      "updated_at": "2026-08-15T13:10:52+00:00",
+      "updated_at": "2026-08-24T13:13:56+00:00",
       "touched_round": 70,
       "category": "correctness",
       "severity": 4,
       "confidence": 1.0,
       "effort": 3,
       "priority_score": 23.0,
-      "title": "Port the regular build_batch memory-admission guards into the CUDA-graph path select_sequences_for_phase (ISS-072): additional-blocks preemption gate (ISS-055/056), filter_fully_allocated_prefills, admit_decode_sequences, requeue_uncomposed_prefills -- closes block-0 KV corruption + over-preemption livelock on cuda-graph builds",
-      "lock_owner": "loop-1",
-      "lock_until": "2026-08-15T13:50:04+00:00"
+      "title": "Port the regular build_batch memory-admission guards into the CUDA-graph path select_sequences_for_phase (ISS-072): additional-blocks preemption gate (ISS-055/056), filter_fully_allocated_prefills, admit_decode_sequences, requeue_uncomposed_prefills -- closes block-0 KV corruption + over-preemption livelock on cuda-graph builds"
     },
     "TASK-086": {
       "id": "TASK-086",
@@ -5307,18 +5297,16 @@
       "id": "TASK-090",
       "type": "task",
       "status": "resolved",
-      "version": 3,
+      "version": 4,
       "created_at": "2026-08-15T14:01:01+00:00",
-      "updated_at": "2026-08-15T14:13:25+00:00",
+      "updated_at": "2026-08-24T13:13:56+00:00",
       "touched_round": 71,
       "category": "correctness",
       "severity": 2,
       "confidence": 1.0,
       "effort": 1,
       "priority_score": 8.0,
-      "title": "Skip inserting finish_reason_tx when add_request returns seq_id 0 (rejected admission) so no orphan oneshot leaks under key 0 (ISS-076); TDD regression test at engine level",
-      "lock_owner": "loop-1",
-      "lock_until": "2026-08-15T15:01:50+00:00"
+      "title": "Skip inserting finish_reason_tx when add_request returns seq_id 0 (rejected admission) so no orphan oneshot leaks under key 0 (ISS-076); TDD regression test at engine level"
     },
     "CHG-086": {
       "id": "CHG-086",
@@ -5676,17 +5664,15 @@
       "id": "TASK-096",
       "type": "task",
       "status": "resolved",
-      "version": 3,
+      "version": 4,
       "created_at": "2026-08-19T00:42:07+00:00",
-      "updated_at": "2026-08-19T01:46:20+00:00",
+      "updated_at": "2026-08-24T13:13:56+00:00",
       "touched_round": 73,
       "category": "stability",
       "severity": 3,
       "confidence": 1.0,
       "effort": 1,
-      "title": "Make requests_in_flight live + saturating: wire start/end into the engine lifecycle, move writers out of cfg(test), saturating decrement (ISS-082); 4 TDD tests",
-      "lock_owner": "loop-1",
-      "lock_until": "2026-08-19T01:17:35+00:00"
+      "title": "Make requests_in_flight live + saturating: wire start/end into the engine lifecycle, move writers out of cfg(test), saturating decrement (ISS-082); 4 TDD tests"
     },
     "CHG-092": {
       "id": "CHG-092",
@@ -6012,6 +5998,39 @@
       "touched_round": 81,
       "rationale": "ISS-064 (sequence-packing config inert) stays a documented-deferral: real sequence packing is a feature (SequencePacker::pack_sequences -> PackedBatch with similarity_threshold / target_batch_size, requiring token/position/prefix accounting integration in the composer), not a small bug-fix. The inert gate composes prefill without packing and documents the deferral at the dispatch site.",
       "alternatives_rejected": "[remove the inert gate + re-document (rejected: destroys a designed-and-documented feature for tidiness, same reasoning as DEC-044 for the preemption manager), wire pack_sequences now (rejected: feature-sized composer integration, out of scope for a hardening round; also must then own the packing_efficiency gauge per DEC-053)]"
+    },
+    "TASK-103": {
+      "id": "TASK-103",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-24T13:35:52+00:00",
+      "updated_at": "2026-08-24T13:43:04+00:00",
+      "touched_round": 83,
+      "category": "performance",
+      "severity": 2,
+      "title": "Stop-sequence check copies the generated region into a Vec on every step: finalize_stop_sequences builds seq.tokens[prompt_len..].to_vec() per sequence per step on all three step paths (batch/graph/spec) for every sequence carrying stop sequences, feeding an O(stop) suffix check — a full O(generated) copy per step (quadratic per request over its lifetime). matches_stop_sequences only reads the tail, so borrow the slice and drop the copy."
+    },
+    "CHG-099": {
+      "id": "CHG-099",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-24T13:38:52+00:00",
+      "updated_at": "2026-08-24T13:38:52+00:00",
+      "touched_round": 83,
+      "commit": "6b4a31a0"
+    },
+    "EV-112": {
+      "id": "EV-112",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-24T13:40:28+00:00",
+      "updated_at": "2026-08-24T13:40:28+00:00",
+      "touched_round": 83,
+      "source": "test:engine::tests::test_finalize_stop_sequences_ignores_prompt_only_match + 452 lib tests green + clippy clean",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -8588,6 +8607,12 @@
       "to": "COMP-007",
       "type": "governs",
       "created_at": "2026-08-19T05:26:59+00:00"
+    },
+    {
+      "from": "CHG-099",
+      "to": "TASK-103",
+      "type": "implements",
+      "created_at": "2026-08-24T13:43:04+00:00"
     }
   ]
 }
