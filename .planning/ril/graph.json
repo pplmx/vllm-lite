@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 85,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-31T16:14:57+00:00",
+  "updated_at": "2026-08-31T16:54:34+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6239,6 +6239,18 @@
       "touched_round": 85,
       "commit": "4e7a1035",
       "summary": "dist distributed_kv/cache.rs peer-fetch fan-out deadline: match -> unwrap_or_else (clears single_match_else + option_if_let_else)"
+    },
+    "EV-116": {
+      "id": "EV-116",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-31T16:54:34+00:00",
+      "updated_at": "2026-08-31T16:54:34+00:00",
+      "touched_round": 85,
+      "source": "a92654ad + b084b90b (CHANGELOG [Unreleased] + traits::FinishReason doc-truth); check-public-api.sh OK (vllm-core +4 covered); just doc-coverage-check 81.42% (>=65)",
+      "content": "Docs/tooling closed out for rounds 84-88: CHANGELOG bullets for EOS-stop (incl. public-api: vllm-core added bullet satisfying the cargo-public-api baseline gate), YAML-clobber fix, vllm config validate, config-parse WARN + usage-line. FinishReason::Stop/Length docs now describe implemented EOS-stop. Full gate re-verified: 2216 workspace tests, fmt, CI-tier clippy, public-api OK, doc coverage 81.42%.",
+      "confidence": 1.0
     }
   },
   "edges": [
