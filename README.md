@@ -335,7 +335,7 @@ export VLLM_API_KEY=your-secret-key
 | `VLLM_KV_BLOCKS`                     | KV Block 数量      | `1024`    | 1-65536，显存相关                                                                                     |
 | `VLLM_KV_QUANTIZATION`               | KV Cache 量化开关  | `false`   | 启用 KV Cache 量化                                                                                    |
 | `VLLM_MAX_DRAFT_TOKENS`              | 最大投机 Token     | `8`       | 0-64，投机解码                                                                                        |
-| `VLLM_ADAPTIVE_SPECULATIVE`          | 自适应投机解码     | `false`   | 动态调整 draft 长度                                                                                   |
+| `VLLM_ADAPTIVE_SPECULATIVE`          | 自适应投机解码     | `true`    | 动态调整 draft 长度；默认 `true`（同 config），设 `false` 时退回普通投机解码                          |
 | `VLLM_TENSOR_PARALLEL_SIZE`          | 张量并行度         | `1`       | 1-64，GPU 数量                                                                                        |
 | `VLLM_MAX_BATCH_SIZE`                | 最大批大小         | `256`     | 1-8192                                                                                                |
 | `VLLM_MAX_WAITING_BATCHES`           | 最大等待批次       | `10`      | 1-100                                                                                                 |
@@ -378,6 +378,10 @@ auth:
       max_requests: 500
       rate_limit_window_secs: 30
 ```
+
+> **配置优先级（RIL ISS-081）**：显式 CLI 标志 / 环境变量 > `--config`/`VLLM_CONFIG_PATH`
+> YAML 文件 > 内置默认值（`AppConfig::default()`）。YAML 中未指定的字段保持内置默认；
+> 当某个值同时出现在 YAML 与 CLI/env 中时，CLI/env 胜出。
 
 ### Scheduler 默认值（代码级，非 YAML 可配置）
 

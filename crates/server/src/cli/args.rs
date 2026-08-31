@@ -130,14 +130,26 @@ pub struct CliArgs {
     pub otlp_endpoint: Option<String>,
 }
 
+// RIL ISS-081: these args are `Option<T>` rather than defaulted so that
+// `to_app_config` can distinguish "operator passed a flag / set env" from
+// "operator left it alone". With hardcoded `default_value` strings, clap
+// always filled the struct and `to_app_config` unconditionally overwrote
+// the YAML file's values — a config with `kv_blocks: 4096` was silently
+// reset to 1024. The effective defaults now come from one place
+// (`AppConfig::default()`); `--help` documents the env var names.
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "server_args")]
 struct ServerArgs {
-    #[arg(long, default_value = "0.0.0.0", env = "VLLM_HOST", global = true)]
-    pub host: String,
+    #[arg(
+        long,
+        env = "VLLM_HOST",
+        global = true,
+        help = "Bind address (default 0.0.0.0, or from --config YAML)"
+    )]
+    pub host: Option<String>,
 
-    #[arg(long, default_value = "8000", env = "VLLM_PORT", short = 'p', value_parser = validate_port)]
-    pub port: u16,
+    #[arg(long, env = "VLLM_PORT", short = 'p', value_parser = validate_port, help = "Listen port (default 8000, or from --config YAML)")]
+    pub port: Option<u16>,
 }
 
 /// `ModelArgs`. See the type definition for fields and behavior.
@@ -152,29 +164,46 @@ pub struct ModelArgs {
     pub allow_stub: bool,
 }
 
+// RIL ISS-081: `Option<T>` (see the note on `ServerArgs`) so YAML values
+// survive unless the operator explicitly overrides via flag or env var.
+// NB: with Option fields the hardcoded defaults are gone, so
+// `enable_adaptive_speculative` is no longer forced to `false` — it now
+// honors the documented config default `true` when unspecified.
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "engine_args")]
 struct EngineArgs {
-    #[arg(long, default_value = "1", env = "VLLM_TENSOR_PARALLEL_SIZE", short = 't', value_parser = validate_tensor_parallel_size)]
-    pub tensor_parallel_size: usize,
+    #[arg(long, env = "VLLM_TENSOR_PARALLEL_SIZE", short = 't', value_parser = validate_tensor_parallel_size, help = "Tensor-parallel degree (default 1, or from --config YAML)")]
+    pub tensor_parallel_size: Option<usize>,
 
-    #[arg(long, default_value = "1024", env = "VLLM_KV_BLOCKS", value_parser = validate_kv_blocks)]
-    pub kv_blocks: usize,
+    #[arg(long, env = "VLLM_KV_BLOCKS", value_parser = validate_kv_blocks, help = "KV-cache blocks to allocate (default 1024, or from --config YAML)")]
+    pub kv_blocks: Option<usize>,
 
-    #[arg(long, default_value = "false", env = "VLLM_KV_QUANTIZATION")]
-    pub kv_quantization: bool,
+    #[arg(
+        long,
+        env = "VLLM_KV_QUANTIZATION",
+        default_missing_value = "true",
+        num_args = 0..=1,
+        help = "Enable FP8 KV-cache quantization (default false)"
+    )]
+    pub kv_quantization: Option<bool>,
 
-    #[arg(long, default_value = "256", env = "VLLM_MAX_BATCH_SIZE", value_parser = validate_max_batch_size)]
-    pub max_batch_size: usize,
+    #[arg(long, env = "VLLM_MAX_BATCH_SIZE", value_parser = validate_max_batch_size, help = "Max batch size (default 256, or from --config YAML)")]
+    pub max_batch_size: Option<usize>,
 
-    #[arg(long, default_value = "10", env = "VLLM_MAX_WAITING_BATCHES", value_parser = validate_max_waiting_batches)]
-    pub max_waiting_batches: usize,
+    #[arg(long, env = "VLLM_MAX_WAITING_BATCHES", value_parser = validate_max_waiting_batches, help = "Max waiting batches (default 10, or from --config YAML)")]
+    pub max_waiting_batches: Option<usize>,
 
-    #[arg(long, default_value = "8", env = "VLLM_MAX_DRAFT_TOKENS", value_parser = validate_max_draft_tokens)]
-    pub max_draft_tokens: usize,
+    #[arg(long, env = "VLLM_MAX_DRAFT_TOKENS", value_parser = validate_max_draft_tokens, help = "Max draft tokens per speculative step (default 8, or from --config YAML)")]
+    pub max_draft_tokens: Option<usize>,
 
-    #[arg(long, default_value = "false", env = "VLLM_ADAPTIVE_SPECULATIVE")]
-    pub enable_adaptive_speculative: bool,
+    #[arg(
+        long,
+        env = "VLLM_ADAPTIVE_SPECULATIVE",
+        default_missing_value = "true",
+        num_args = 0..=1,
+        help = "Adaptive speculative decoding (default true, or from --config YAML)"
+    )]
+    pub enable_adaptive_speculative: Option<bool>,
 
     /// Explicit model context length (tokens). Overrides the checkpoint's
     /// `max_position_embeddings` (if declared) in request context-length
@@ -221,8 +250,13 @@ pub struct SecurityArgs {
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "logging_args")]
 struct LoggingArgs {
-    #[arg(long, default_value = "info", env = "VLLM_LOG_LEVEL", value_enum)]
-    pub log_level: LogLevel,
+    #[arg(
+        long,
+        env = "VLLM_LOG_LEVEL",
+        value_enum,
+        help = "Log level (default info, or from --config YAML)"
+    )]
+    pub log_level: Option<LogLevel>,
 
     #[arg(long, env = "VLLM_LOG_DIR")]
     pub log_dir: Option<PathBuf>,
@@ -240,16 +274,39 @@ impl CliArgs {
     pub fn to_app_config(&self) -> AppConfig {
         let mut config = AppConfig::load(self.config.config.clone());
 
-        config.server.host.clone_from(&self.server.host);
-        config.server.port = self.server.port;
+        // RIL ISS-081: only override a field when the operator actually
+        // specified it through a flag or env var (`Some`). The `Option<T>`
+        // arg types make an unset value distinguishable from a defaulted one,
+        // so values from the `--config` YAML (and `AppConfig::default()`)
+        // survive unless explicitly overridden.
+        if let Some(ref host) = self.server.host {
+            config.server.host.clone_from(host);
+        }
+        if let Some(port) = self.server.port {
+            config.server.port = port;
+        }
 
-        config.engine.tensor_parallel_size = self.engine.tensor_parallel_size;
-        config.engine.num_kv_blocks = self.engine.kv_blocks;
-        config.engine.kv_quantization = self.engine.kv_quantization;
-        config.engine.max_batch_size = self.engine.max_batch_size;
-        config.engine.max_waiting_batches = self.engine.max_waiting_batches;
-        config.engine.max_draft_tokens = self.engine.max_draft_tokens;
-        config.engine.enable_adaptive_speculative = self.engine.enable_adaptive_speculative;
+        if let Some(tensor_parallel_size) = self.engine.tensor_parallel_size {
+            config.engine.tensor_parallel_size = tensor_parallel_size;
+        }
+        if let Some(num_kv_blocks) = self.engine.kv_blocks {
+            config.engine.num_kv_blocks = num_kv_blocks;
+        }
+        if let Some(kv_quantization) = self.engine.kv_quantization {
+            config.engine.kv_quantization = kv_quantization;
+        }
+        if let Some(max_batch_size) = self.engine.max_batch_size {
+            config.engine.max_batch_size = max_batch_size;
+        }
+        if let Some(max_waiting_batches) = self.engine.max_waiting_batches {
+            config.engine.max_waiting_batches = max_waiting_batches;
+        }
+        if let Some(max_draft_tokens) = self.engine.max_draft_tokens {
+            config.engine.max_draft_tokens = max_draft_tokens;
+        }
+        if let Some(enable_adaptive_speculative) = self.engine.enable_adaptive_speculative {
+            config.engine.enable_adaptive_speculative = enable_adaptive_speculative;
+        }
         if let Some(max_model_len) = self.engine.max_model_len {
             config.engine.max_model_len = Some(max_model_len);
         }
@@ -261,7 +318,9 @@ impl CliArgs {
             config.auth.api_keys_file = Some(path.to_string_lossy().to_string());
         }
 
-        config.server.log_level = self.logging.log_level.to_string();
+        if let Some(ref log_level) = self.logging.log_level {
+            config.server.log_level = log_level.to_string();
+        }
         config.server.log_dir = self
             .logging
             .log_dir

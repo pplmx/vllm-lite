@@ -26,19 +26,23 @@ use clap::Parser;
 
 #[test]
 fn test_cli_defaults() {
+    // RIL ISS-081: unset CLI args are `None` (no hardcoded clap defaults), so
+    // `to_app_config` can tell "operator left it alone" from "operator
+    // overrode it" and preserve `--config` YAML / built-in defaults.
     let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
 
-    assert_eq!(cli.server.host, "0.0.0.0");
-    assert_eq!(cli.server.port, 8000u16);
-    assert_eq!(cli.engine.tensor_parallel_size, 1usize);
-    assert_eq!(cli.engine.kv_blocks, 1024usize);
-    assert_eq!(cli.engine.max_batch_size, 256usize);
-    assert_eq!(cli.engine.max_waiting_batches, 10usize);
-    assert_eq!(cli.engine.max_draft_tokens, 8usize);
-    assert!(!cli.engine.kv_quantization);
+    assert!(cli.server.host.is_none());
+    assert!(cli.server.port.is_none());
+    assert!(cli.engine.tensor_parallel_size.is_none());
+    assert!(cli.engine.kv_blocks.is_none());
+    assert!(cli.engine.max_batch_size.is_none());
+    assert!(cli.engine.max_waiting_batches.is_none());
+    assert!(cli.engine.max_draft_tokens.is_none());
+    assert!(cli.engine.kv_quantization.is_none());
+    assert!(cli.engine.enable_adaptive_speculative.is_none());
     assert!(cli.auth.api_key.is_empty());
     assert!(cli.auth.api_key_file.is_none());
-    assert_eq!(cli.logging.log_level, LogLevel::Info);
+    assert!(cli.logging.log_level.is_none());
     assert!(cli.logging.log_dir.is_none());
     assert!(cli.config.config.is_none());
 }
@@ -66,22 +70,22 @@ fn test_cli_with_long_args() {
         "16",
     ]);
 
-    assert_eq!(cli.server.host, "127.0.0.1");
-    assert_eq!(cli.server.port, 9000u16);
-    assert_eq!(cli.engine.tensor_parallel_size, 4usize);
-    assert_eq!(cli.engine.kv_blocks, 2048usize);
-    assert!(cli.engine.kv_quantization);
-    assert_eq!(cli.engine.max_batch_size, 128usize);
-    assert_eq!(cli.engine.max_waiting_batches, 5usize);
-    assert_eq!(cli.engine.max_draft_tokens, 16usize);
+    assert_eq!(cli.server.host.as_deref(), Some("127.0.0.1"));
+    assert_eq!(cli.server.port, Some(9000u16));
+    assert_eq!(cli.engine.tensor_parallel_size, Some(4usize));
+    assert_eq!(cli.engine.kv_blocks, Some(2048usize));
+    assert_eq!(cli.engine.kv_quantization, Some(true));
+    assert_eq!(cli.engine.max_batch_size, Some(128usize));
+    assert_eq!(cli.engine.max_waiting_batches, Some(5usize));
+    assert_eq!(cli.engine.max_draft_tokens, Some(16usize));
 }
 
 #[test]
 fn test_cli_short_args() {
     let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model", "-p", "8080", "-t", "2"]);
 
-    assert_eq!(cli.server.port, 8080u16);
-    assert_eq!(cli.engine.tensor_parallel_size, 2usize);
+    assert_eq!(cli.server.port, Some(8080u16));
+    assert_eq!(cli.engine.tensor_parallel_size, Some(2usize));
 }
 
 #[test]
@@ -113,21 +117,21 @@ fn test_cli_api_key_vec() {
 fn test_cli_log_level() {
     let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model", "--log-level", "debug"]);
 
-    assert_eq!(cli.logging.log_level, LogLevel::Debug);
+    assert_eq!(cli.logging.log_level, Some(LogLevel::Debug));
 }
 
 #[test]
 fn test_cli_log_level_case_insensitive() {
     let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model", "--log-level", "debug"]);
 
-    assert_eq!(cli.logging.log_level, LogLevel::Debug);
+    assert_eq!(cli.logging.log_level, Some(LogLevel::Debug));
 }
 
 #[test]
 fn test_cli_log_level_valid_values() {
     for level in ["trace", "debug", "info", "warn", "error"] {
         let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model", "--log-level", level]);
-        assert_eq!(cli.logging.log_level.to_string(), level);
+        assert_eq!(cli.logging.log_level.unwrap().to_string(), level);
     }
 }
 
@@ -357,6 +361,149 @@ fn test_to_app_config_with_log_dir() {
     let config = cli.to_app_config();
 
     assert_eq!(config.server.log_dir, Some("/var/log/vllm".to_string()));
+}
+
+// ───────────────── RIL ISS-081: YAML-preservation regressions ─────────────────
+//
+// Every clap arg below carries a hardcoded `default_value`, so clap always fills
+// the struct and `to_app_config` unconditionally overwrote the YAML-loaded
+// values. Pre-fix an operator's `--- config.yaml` with `kv_blocks: 4096` was
+// silently reset to the clap default 1024; `enable_adaptive_speculative: true`
+// was even INVERTED to `false` (clap default) vs the documented config default.
+// These two tests lock the corrected precedence: explicit CLI/env wins, YAML
+// survives, and built-in defaults win otherwise.
+
+/// RIL ISS-081: values set in the `--config` YAML file must survive
+/// `to_app_config()` when no CLI flag overrides them.
+#[test]
+fn test_to_app_config_preserves_yaml_values() {
+    let dir = tempfile::tempdir().expect("create tempdir");
+    let config_path = dir.path().join("config.yaml");
+    std::fs::write(
+        &config_path,
+        r#"
+server:
+  host: "127.0.0.1"
+  port: 9999
+  log_level: "debug"
+engine:
+  num_kv_blocks: 4096
+  max_batch_size: 64
+  max_draft_tokens: 16
+  enable_adaptive_speculative: true
+"#,
+    )
+    .expect("write config file");
+
+    let cli = CliArgs::parse_from([
+        "vllm-server",
+        "-m",
+        "/test/model",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ]);
+    let config = cli.to_app_config();
+
+    assert_eq!(config.server.host, "127.0.0.1");
+    assert_eq!(config.server.port, 9999);
+    assert_eq!(config.server.log_level, "debug");
+    assert_eq!(config.engine.num_kv_blocks, 4096);
+    assert_eq!(config.engine.max_batch_size, 64);
+    assert_eq!(config.engine.max_draft_tokens, 16);
+    assert!(
+        config.engine.enable_adaptive_speculative,
+        "YAML true must not be inverted to false by the clap default"
+    );
+}
+
+/// RIL ISS-081: an explicit CLI flag must STILL win over the `--config` YAML
+/// value (precedence: CLI/env > YAML > defaults). This guards the override
+/// direction after the clobber fix — removing the clobber must not also remove
+/// legitimate flag-overrides-config behavior.
+#[test]
+fn test_to_app_config_flag_overrides_yaml() {
+    let dir = tempfile::tempdir().expect("create tempdir");
+    let config_path = dir.path().join("config.yaml");
+    std::fs::write(
+        &config_path,
+        "engine:\n  num_kv_blocks: 4096\n  max_draft_tokens: 16\n",
+    )
+    .expect("write config file");
+
+    let cli = CliArgs::parse_from([
+        "vllm-server",
+        "-m",
+        "/test/model",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+        "--kv-blocks",
+        "2048",
+        "--max-draft-tokens",
+        "32",
+    ]);
+    let config = cli.to_app_config();
+
+    assert_eq!(
+        config.engine.num_kv_blocks, 2048,
+        "explicit --kv-blocks must override the YAML value"
+    );
+    assert_eq!(
+        config.engine.max_draft_tokens, 32,
+        "explicit --max-draft-tokens must override the YAML value"
+    );
+}
+
+/// RIL ISS-081: a bare `--enable-adaptive-speculative` flag still means
+/// `true`, and `--enable-adaptive-speculative=false` still means `false`
+/// (the `default_missing_value`/`num_args=0..=1` bool-flag pattern must not
+/// have changed flag semantics).
+#[test]
+fn test_adaptive_speculative_bool_flag_semantics() {
+    let on = CliArgs::parse_from([
+        "vllm-server",
+        "-m",
+        "/test/model",
+        "--enable-adaptive-speculative",
+    ]);
+    assert_eq!(on.engine.enable_adaptive_speculative, Some(true));
+
+    let off = CliArgs::parse_from([
+        "vllm-server",
+        "-m",
+        "/test/model",
+        "--enable-adaptive-speculative=false",
+    ]);
+    assert_eq!(off.engine.enable_adaptive_speculative, Some(false));
+
+    let unset = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
+    assert!(unset.engine.enable_adaptive_speculative.is_none());
+}
+
+/// RIL ISS-081: with neither a config file nor CLI overrides, the resolved
+/// config must equal `AppConfig::default()`. In particular
+/// `engine.enable_adaptive_speculative` keeps its documented default (`true`),
+/// not the clap flag's inverted `false`.
+#[test]
+fn test_to_app_config_keeps_config_defaults_when_unset() {
+    let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
+    let config = cli.to_app_config();
+    let defaults = AppConfig::default();
+
+    assert_eq!(config.server.host, defaults.server.host);
+    assert_eq!(config.server.port, defaults.server.port);
+    assert_eq!(config.server.log_level, defaults.server.log_level);
+    assert_eq!(
+        config.engine.num_kv_blocks, defaults.engine.num_kv_blocks,
+        "no CLI override must not reset num_kv_blocks"
+    );
+    assert_eq!(
+        config.engine.max_batch_size, defaults.engine.max_batch_size,
+        "no CLI override must not reset max_batch_size"
+    );
+    assert!(
+        config.engine.enable_adaptive_speculative,
+        "documented default is adaptive=true; the clap flag's false must not force it"
+    );
 }
 
 // ─────────────────── P43 T5: --otlp-endpoint CLI override ───────────────────
