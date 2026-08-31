@@ -69,6 +69,13 @@ pub struct Engine {
     /// log/diagnostics; the structured error chain is on the originating
     /// request, this is just a convenience field for quick inspection.
     pub last_error: Option<String>,
+    /// The model's end-of-sentence token id (RIL ISS-075). When set, a
+    /// sequence whose last generated token equals this id is finalized with
+    /// `FinishReason::Stop` (in `finalize_stop_sequences`) instead of burning
+    /// the remaining `max_tokens` budget and reporting `Length`. Wired by the
+    /// server from the checkpoint's `config.json`; `None` keeps the pre-EOS
+    /// behavior (every sequence runs to `max_tokens`).
+    pub eos_token_id: Option<u32>,
     /// Per-sequence mpsc senders for streaming generated tokens back
     /// to requesters. Map keyed by [`SeqId`]; entries are removed
     /// when the receiver is dropped. Visible to integration tests.

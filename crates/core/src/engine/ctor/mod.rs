@@ -101,6 +101,7 @@ impl Engine {
             speculative_mode: false,
             error_count: 0,
             last_error: None,
+            eos_token_id: None,
             response_txs: HashMap::with_capacity(max_seqs),
             finish_reason_txs: HashMap::with_capacity(max_seqs),
             sleep_policy: SleepPolicy::default(),

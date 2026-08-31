@@ -686,3 +686,57 @@ fn test_finalize_stop_sequences_ignores_prompt_only_match() {
     );
     assert_eq!(engine.scheduler.running_count(), 1);
 }
+
+/// RIL ISS-075: when the engine knows the model's EOS token id and the
+/// generated token equals it, the sequence must finish with
+/// `FinishReason::Stop` long before `max_tokens` — a 'short' answer must not
+/// burn the whole budget or report `Length`.
+#[test]
+fn test_eos_stop_finalizes_with_stop_reason() {
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    engine.set_eos_token_id(Some(42));
+
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10, 20], 100), tx);
+    // Direct callers of `add_request` get no finish-reason channel (the HTTP
+    // mailbox message carries one); inject a capturing oneshot ourselves.
+    let (fr_tx, mut fr_rx) = tokio::sync::oneshot::channel();
+    engine.finish_reason_txs.insert(1, fr_tx);
+
+    let out = engine.step().unwrap();
+    assert!(!out.is_empty());
+    assert!(
+        !engine.has_pending(),
+        "EOS-stop must finish the sequence long before max_tokens (100)"
+    );
+    assert_eq!(engine.scheduler.running_count(), 0);
+    let reason = fr_rx.try_recv().expect("finish reason must be delivered");
+    assert_eq!(
+        reason,
+        FinishReason::Stop,
+        "an EOS token must be reported as Stop, not Length"
+    );
+}
+
+/// RIL ISS-075: with no EOS id configured (the engine default, e.g. a mock
+/// or a checkpoint that declares none), a token equal to what WOULD be the
+/// EOS id must not stop the sequence — legacy run-to-`max_tokens` behavior
+/// is preserved.
+#[test]
+fn test_eos_stop_disabled_when_eos_unset() {
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    // engine.eos_token_id is None by default.
+
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10, 20], 5), tx);
+
+    let out = engine.step().unwrap();
+    assert!(!out.is_empty());
+    assert!(
+        engine.has_pending(),
+        "without an EOS id the sequence must keep running to max_tokens"
+    );
+    assert_eq!(engine.scheduler.running_count(), 1);
+}

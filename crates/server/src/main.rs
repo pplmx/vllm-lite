@@ -143,6 +143,7 @@ async fn main() -> Result<()> {
     );
 
     bootstrap::engine::configure_speculative(&app_config, &mut engine);
+    bootstrap::engine::configure_eos(&loader, &mut engine);
 
     // Phase 41 OPS-32a second-half: when multi-node is enabled, spawn
     // the gRPC server that answers `TransferKVBlock` calls with real

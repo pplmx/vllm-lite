@@ -55,18 +55,6 @@ impl Engine {
     pub(crate) fn finalize_stop_sequences(&mut self, batch: &Batch) -> Vec<SeqId> {
         let mut newly_stopped: Vec<SeqId> = Vec::new();
         for (i, seq_id) in batch.seq_ids.iter().enumerate() {
-            // Defensive `.get`: synthetic batches may carry an empty
-            // `sampling_params` (the Batch docs call that "equivalent
-            // to greedy decoding") — mirror the verifier path so a
-            // seq/params length mismatch degrades instead of panicking.
-            let stops = match batch
-                .sampling_params
-                .get(i)
-                .and_then(|p| p.stop_token_sequences.as_ref())
-            {
-                Some(s) if !s.is_empty() => s,
-                _ => continue,
-            };
             let Some(seq) = self.scheduler.get_sequence(*seq_id) else {
                 continue;
             };
@@ -80,7 +68,29 @@ impl Engine {
             // prompt-exclusion semantic (a stop suffix in the prompt
             // must not match) — see the pinned regression test.
             let generated = &seq.tokens[seq.prompt_len..];
-            if crate::sampling::matches_stop_sequences(generated, stops) {
+            // RIL ISS-075: the model's end-of-sentence token is a MODEL-level
+            // stop signal that applies to every sequence regardless of its
+            // per-request `stop_token_sequences`. Without it, a 'short'
+            // answer burns the full `max_tokens` budget and reports
+            // `FinishReason::Length` instead of `Stop`.
+            let matches_eos = self
+                .eos_token_id
+                .is_some_and(|eos| generated.last() == Some(&eos));
+            // Defensive `.get`: synthetic batches may carry an empty
+            // `sampling_params` (the Batch docs call that "equivalent
+            // to greedy decoding") — mirror the verifier path so a
+            // seq/params length mismatch degrades instead of panicking.
+            // Empty stops (fallthrough arm) make `matches_stop_sequences`
+            // a no-op, so the EOS check above is unaffected.
+            let stops: &[Vec<u32>] = match batch
+                .sampling_params
+                .get(i)
+                .and_then(|p| p.stop_token_sequences.as_ref())
+            {
+                Some(s) if !s.is_empty() => s,
+                _ => &[],
+            };
+            if matches_eos || crate::sampling::matches_stop_sequences(generated, stops) {
                 newly_stopped.push(*seq_id);
             }
         }
@@ -89,6 +99,16 @@ impl Engine {
             self.finalize_finished(*seq_id, FinishReason::Stop);
         }
         newly_stopped
+    }
+
+    /// Configure the model's end-of-sentence token id (RIL ISS-075).
+    ///
+    /// Called by the server after engine construction (same hook pattern as
+    /// `configure_speculative`); the core default is `None` so engines
+    /// constructed without a checkpoint (tests, mocks) keep the legacy
+    /// run-to-`max_tokens` behavior.
+    pub const fn set_eos_token_id(&mut self, eos_token_id: Option<u32>) {
+        self.eos_token_id = eos_token_id;
     }
 
     /// Notify any registered handler of the [`FinishReason`] for `seq_id`,

@@ -222,6 +222,49 @@ fn scheduler_config_from_app_config(app_config: &AppConfig) -> SchedulerConfig {
         .build()
 }
 
+/// Wire the checkpoint's end-of-sentence token into the engine (RIL ISS-075)
+/// so a sequence stops as soon as the model emits it — `FinishReason::Stop`
+/// instead of burning the remaining `max_tokens` budget.
+///
+/// Reads `eos_token_id` from the checkpoint `config.json` (the HuggingFace
+/// convention; Qwen3 / Llama / Mistral checkpoints all carry it). Like
+/// `configure_speculative`, this is a post-construction hook. The id may be a
+/// single number or a list (some checkpoints declare several); the first
+/// parseable entry wins. When the checkpoint declares none, EOS-stop stays
+/// disabled and generation runs to `max_tokens` as before.
+/// Read `eos_token_id` from a checkpoint `config.json` value, accepting the
+/// HuggingFace conventions: a single integer (`"eos_token_id": 151645`) or a
+/// list of integers (`[151645, ...]` — some checkpoints declare several). The
+/// first parseable entry wins. `None` when absent or unparseable (stub/GGUF
+/// checkpoints, or ids outside the `u32` token range).
+#[must_use]
+fn read_eos_token_id(config: &serde_json::Value) -> Option<u32> {
+    config.get("eos_token_id").and_then(|v| match v {
+        serde_json::Value::Number(n) => n.as_u64().and_then(|n| u32::try_from(n).ok()),
+        serde_json::Value::Array(ids) => ids
+            .iter()
+            .find_map(|e| e.as_u64().and_then(|n| u32::try_from(n).ok())),
+        _ => None,
+    })
+}
+
+/// Wire the checkpoint's end-of-sentence token into the engine (RIL ISS-075)
+/// so a sequence stops as soon as the model emits it — `FinishReason::Stop`
+/// instead of burning the remaining `max_tokens` budget.
+///
+/// Like `configure_speculative`, this is a post-construction hook. When the
+/// checkpoint declares no `eos_token_id`, EOS-stop stays disabled and
+/// generation runs to `max_tokens` as before.
+pub fn configure_eos(loader: &ModelLoader, engine: &mut Engine) {
+    let eos_token_id = read_eos_token_id(loader.config_json());
+    if let Some(eos) = eos_token_id {
+        engine.set_eos_token_id(Some(eos));
+        tracing::info!(eos_token_id = eos, "EOS-stop detection enabled");
+    } else {
+        tracing::debug!("checkpoint declares no eos_token_id; EOS-stop disabled");
+    }
+}
+
 /// Wire optional speculative-decoding knobs onto a freshly constructed engine.
 pub fn configure_speculative(app_config: &AppConfig, engine: &mut Engine) {
     if app_config.engine.max_draft_tokens > 0 {
@@ -253,6 +296,38 @@ pub fn configure_speculative(app_config: &AppConfig, engine: &mut Engine) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// RIL ISS-075: the `eos_token_id` parser accepts the single-int
+    /// HuggingFace form.
+    #[test]
+    fn read_eos_token_id_accepts_single_id() {
+        let cfg: serde_json::Value = serde_json::json!({ "eos_token_id": 151645 });
+        assert_eq!(read_eos_token_id(&cfg), Some(151645));
+    }
+
+    /// RIL ISS-075: some checkpoints declare `eos_token_id` as a list — the
+    /// first parseable entry wins.
+    #[test]
+    fn read_eos_token_id_accepts_list_form() {
+        let cfg: serde_json::Value = serde_json::json!({ "eos_token_id": [151645, 151643] });
+        assert_eq!(read_eos_token_id(&cfg), Some(151645));
+    }
+
+    /// RIL ISS-075: absent / non-numeric ids keep EOS-stop disabled (stub or
+    /// GGUF checkpoints without `eos_token_id` — mirrors `max_model_len`'s
+    /// `None`-when-undeclared contract).
+    #[test]
+    fn read_eos_token_id_returns_none_when_absent_or_invalid() {
+        assert_eq!(read_eos_token_id(&serde_json::json!({})), None);
+        assert_eq!(
+            read_eos_token_id(&serde_json::json!({ "eos_token_id": "oops" })),
+            None
+        );
+        assert_eq!(
+            read_eos_token_id(&serde_json::json!({ "eos_token_id": ["oops"] })),
+            None
+        );
+    }
 
     /// RIL ISS-081: `engine.max_batch_size` must reach the engine's
     /// scheduler (as `max_num_seqs`, the cap the batch composer is wired
