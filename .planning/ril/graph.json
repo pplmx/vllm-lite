@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 85,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-31T14:21:59+00:00",
+  "updated_at": "2026-08-31T15:33:42+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -5106,11 +5106,11 @@
     "ISS-075": {
       "id": "ISS-075",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-15T09:04:09+00:00",
-      "updated_at": "2026-08-15T09:04:09+00:00",
-      "touched_round": 71,
+      "updated_at": "2026-08-31T15:33:42+00:00",
+      "touched_round": 85,
       "title": "No EOS-stop detection anywhere: the engine never stops a sequence on the model's end-of-sentence token -- every 'short' answer burns the full max_tokens budget, the EOS token is streamed to the client, and finish_reason reports 'length' instead of 'stop'. FinishReason doc (traits/types.rs:51-53) explicitly promises 'Model emitted an end-of-sentence token' but no code implements it.",
       "severity": 4,
       "confidence": 1.0
@@ -6152,6 +6152,43 @@
       "touched_round": 85,
       "commit": "387a3a85",
       "summary": "Clear 3 workspace clippy warnings: extract try_send_token in batch.rs (cognitive complexity 26->~7), backtick 100_000 in debug.rs doc, String::is_empty method-ref in batch handler.rs"
+    },
+    "TASK-109": {
+      "id": "TASK-109",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-31T14:44:39+00:00",
+      "updated_at": "2026-08-31T15:33:42+00:00",
+      "touched_round": 85,
+      "category": "core-feature",
+      "severity": 7.0,
+      "confidence": 1.0,
+      "effort": 2.0,
+      "note": "ISS-075: implement model-EOS stop detection. Engine gets eos_token_id (settable); finalize_stop_sequences also finalizes with FinishReason::Stop when the last generated token == eos; server wires eos_token_id from config_json. Streams EOS token like stop-sequences (documented; exclusion is a follow-up)."
+    },
+    "CHG-103": {
+      "id": "CHG-103",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-31T15:30:12+00:00",
+      "updated_at": "2026-08-31T15:30:12+00:00",
+      "touched_round": 85,
+      "commit": "e9bc48e8",
+      "summary": "Implement EOS-stop detection (ISS-075): Engine.eos_token_id + const setter; finalize_stop_sequences (shared by all step paths) finalizes with FinishReason::Stop when the last generated token == model EOS id; server wires eos_token_id from checkpoint config.json via configure_eos."
+    },
+    "EV-115": {
+      "id": "EV-115",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-31T15:30:12+00:00",
+      "updated_at": "2026-08-31T15:30:12+00:00",
+      "touched_round": 85,
+      "source": "e9bc48e8 + tests (engine::tests::test_eos_stop_finalizes_with_stop_reason, test_eos_stop_disabled_when_eos_unset; bootstrap::engine::tests::read_eos_token_id_*)",
+      "content": "TDD verified: engine test asserts FinishReason::Stop delivered via finish_reason oneshot before max_tokens, and running_count drops to 0; default-None keeps run-to-max_tokens; config_json parser handles single-int/list/absent/invalid. Core 454 + server-bin 9 + server-lib 502 tests, fmt + CI-tier clippy clean.",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -8770,6 +8807,24 @@
       "to": "TASK-108",
       "type": "implements",
       "created_at": "2026-08-31T14:20:40+00:00"
+    },
+    {
+      "from": "TASK-109",
+      "to": "ISS-075",
+      "type": "addresses",
+      "created_at": "2026-08-31T14:44:39+00:00"
+    },
+    {
+      "from": "CHG-103",
+      "to": "TASK-109",
+      "type": "implements",
+      "created_at": "2026-08-31T15:30:12+00:00"
+    },
+    {
+      "from": "CHG-103",
+      "to": "ISS-075",
+      "type": "resolves",
+      "created_at": "2026-08-31T15:30:12+00:00"
     }
   ]
 }
