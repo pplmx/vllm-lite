@@ -28,7 +28,7 @@ mod observability;
 mod server;
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Error type for `ConfigValidation`. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
@@ -119,6 +119,38 @@ impl Default for AppConfig {
     }
 }
 
+/// Read and parse a config file, returning `None` (with a `WARN` log — never
+/// a hard failure) when the file *exists* but cannot be read or parsed.
+///
+/// Missing files are not the caller's fault here — callers filter on
+/// `Path::exists()` first — so only read/parse failures hit this function,
+/// where the warning is exactly what an operator needs to notice a typo'd
+/// YAML that would otherwise silently fall back to defaults.
+fn load_config_file(path: &Path) -> Option<AppConfig> {
+    let contents = match std::fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(e) => {
+            tracing::warn!(
+                path = %path.display(),
+                error = %e,
+                "config load: cannot read config file; falling back to defaults"
+            );
+            return None;
+        }
+    };
+    match serde_saphyr::from_str::<AppConfig>(&contents) {
+        Ok(config) => Some(config),
+        Err(e) => {
+            tracing::warn!(
+                path = %path.display(),
+                error = %e,
+                "config load: failed to parse config file; falling back to defaults"
+            );
+            None
+        }
+    }
+}
+
 impl AppConfig {
     /// Load an [`AppConfig`] starting from `Self::default()` and layering
     /// optional overrides:
@@ -126,22 +158,24 @@ impl AppConfig {
     ///   2. YAML file at `$VLLM_CONFIG_PATH` (if the env var is set and the
     ///      file exists; takes precedence over `path`).
     ///
-    /// Missing files and parse errors are silently ignored — defaults win.
-    /// Use [`AppConfig::validate`] after loading to surface invalid configs.
+    /// Missing files are silently ignored — `--config` is optional and
+    /// defaults win. A file that *exists* but cannot be read or parsed is
+    /// **not** silent: it logs a `WARN` (via [`load_config_file`]) so an
+    /// operator's typo'd YAML surfaces instead of silently degrading to
+    /// defaults. Use [`AppConfig::validate`] after loading to surface
+    /// semantically invalid configs.
     #[must_use]
     pub fn load(path: Option<PathBuf>) -> Self {
         let config = path
             .filter(|config_path| config_path.exists())
-            .and_then(|config_path| std::fs::read_to_string(config_path).ok())
-            .and_then(|contents| serde_saphyr::from_str::<Self>(&contents).ok())
+            .and_then(|config_path| load_config_file(&config_path))
             .unwrap_or_default();
 
         std::env::var("VLLM_CONFIG_PATH")
             .ok()
             .map(PathBuf::from)
             .filter(|config_path| config_path.exists())
-            .and_then(|config_path| std::fs::read_to_string(config_path).ok())
-            .and_then(|contents| serde_saphyr::from_str::<Self>(&contents).ok())
+            .and_then(|config_path| load_config_file(&config_path))
             .unwrap_or(config)
     }
 

@@ -153,8 +153,15 @@ struct ServerArgs {
 }
 
 /// `ModelArgs`. See the type definition for fields and behavior.
+///
+/// The `required = true` lives on `--model` itself (not on the group):
+/// with a required group clap renders `--allow-stub` as an alternative to
+/// `--model` in the usage line (`<--model <MODEL>|--allow-stub>`), which
+/// misleadingly suggests running with only `--allow-stub` (no model) is
+/// valid. Dropping the group-level requirement keeps `--model` mandatory
+/// while making the usage line unambiguous.
 #[derive(clap::Args, Debug, Clone)]
-#[group(id = "model_args", required = true)]
+#[group(id = "model_args")]
 pub struct ModelArgs {
     #[arg(long, required = true, env = "VLLM_MODEL", short = 'm')]
     pub model: PathBuf,

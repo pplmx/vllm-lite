@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 84,
+  "round": 85,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-31T13:19:24+00:00",
+  "updated_at": "2026-08-31T13:28:44+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6090,6 +6090,22 @@
       "source": "3f60b992 + tests (test_to_app_config_preserves_yaml_values, test_to_app_config_keeps_config_defaults_when_unset, test_to_app_config_flag_overrides_yaml, test_adaptive_speculative_bool_flag_semantics, tests/cli_env_precedence.rs env_var_flows_into_resolved_config + explicit_flag_beats_env_var)",
       "content": "TDD RED->GREEN verified: before the fix the new tests failed (host clobbered to 0.0.0.0, adaptive default = false instead of true); after the Option<T> change all 738 server tests pass, fmt clean, CI-tier clippy (correctness/suspicious/perf) 0 errors, --all-features cargo check green, and cargo run --help shows each knob's effective default + env name.",
       "confidence": 1.0
+    },
+    "TASK-107": {
+      "id": "TASK-107",
+      "type": "task",
+      "status": "active",
+      "version": 3,
+      "created_at": "2026-08-31T13:26:40+00:00",
+      "updated_at": "2026-08-31T13:28:44+00:00",
+      "touched_round": 85,
+      "category": "dx",
+      "severity": 4.0,
+      "confidence": 1.0,
+      "effort": 1.0,
+      "note": "CLI/config usability polish: (1) fix misleading Usage line '<--model |--allow-stub>' (drop group required, keep arg required); (2) warn when --config file exists but cannot be read/parsed (currently silent -> defaults, a typo'd YAML footgun). Add/keep tests.",
+      "lock_owner": "session-round85",
+      "lock_until": "2026-08-31T13:58:44+00:00"
     }
   },
   "edges": [

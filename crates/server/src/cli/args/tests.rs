@@ -96,6 +96,26 @@ fn test_cli_required_model() {
     assert!(err_msg.contains("--model"));
 }
 
+/// RIL TASK-107: the missing-`--model` message must not render
+/// `--allow-stub` as an alternative to `--model` in the usage line
+/// (`<--model <MODEL>|--allow-stub>` made it look like running with only
+/// `--allow-stub`, no model, was valid). `--model` is required; `--allow-stub`
+/// is an optional flag.
+#[test]
+fn test_cli_required_model_usage_does_not_offer_allow_stub_alternative() {
+    let err_msg = CliArgs::try_parse_from(["vllm-server"])
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err_msg.contains("--model"),
+        "message must name --model: {err_msg}"
+    );
+    assert!(
+        !err_msg.contains("|--allow-stub"),
+        "usage must not present --allow-stub as an alternative to --model: {err_msg}"
+    );
+}
+
 #[test]
 fn test_cli_api_key_vec() {
     let cli = CliArgs::parse_from([

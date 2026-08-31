@@ -448,6 +448,27 @@ fn app_config_load_nonexistent_file_uses_defaults() {
     assert_eq!(config.server.port, 8000);
 }
 
+/// RIL TASK-107: a `--config` file that *exists* but fails to parse must
+/// degrade gracefully (fall back to defaults) rather than panic — and that
+/// failure is logged as a `WARN` by `load_config_file`, not swallowed
+/// silently. Guards the no-panic/fallback leg; the warning itself is the
+/// operator-facing affordance.
+#[test]
+fn app_config_load_malformed_file_degrades_to_defaults() {
+    let _guard = ENV_TEST_MUTEX.lock().unwrap();
+    let dir = tempfile::tempdir().expect("temp dir");
+    let file_path = dir.path().join("bad_config.yml");
+    // Classic YAML typo — `port` is a u16; a string fails schema parsing.
+    std::fs::write(&file_path, "server:\n  port: not-a-number\n").expect("write file");
+    remove_test_env("VLLM_CONFIG_PATH");
+
+    let config = AppConfig::load(Some(file_path));
+    assert_eq!(
+        config.server.port, 8000,
+        "malformed config must fall back to defaults, not panic or half-load"
+    );
+}
+
 #[test]
 fn app_config_load_from_file_with_env_override() {
     let _guard = ENV_TEST_MUTEX.lock().unwrap();
