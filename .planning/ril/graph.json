@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 85,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-31T15:58:46+00:00",
+  "updated_at": "2026-08-31T16:14:57+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6214,6 +6214,31 @@
       "touched_round": 85,
       "commit": "42c82b2b",
       "summary": "vllm config validate now parses via server AppConfig schema + runs AppConfig::validate() (no more hand-rolled stricter subset); vllm model info shows eos_token_id"
+    },
+    "TASK-111": {
+      "id": "TASK-111",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-08-31T16:12:36+00:00",
+      "updated_at": "2026-08-31T16:14:57+00:00",
+      "touched_round": 85,
+      "category": "maintainability",
+      "severity": 2.0,
+      "confidence": 1.0,
+      "effort": 1.0,
+      "note": "Clear the two remaining pre-existing clippy warnings in vllm-dist (distributed_kv/cache.rs fan-out deadline: single_match_else + option_if_let_else)."
+    },
+    "CHG-105": {
+      "id": "CHG-105",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-31T16:13:55+00:00",
+      "updated_at": "2026-08-31T16:13:55+00:00",
+      "touched_round": 85,
+      "commit": "4e7a1035",
+      "summary": "dist distributed_kv/cache.rs peer-fetch fan-out deadline: match -> unwrap_or_else (clears single_match_else + option_if_let_else)"
     }
   },
   "edges": [
@@ -8856,6 +8881,12 @@
       "to": "TASK-110",
       "type": "implements",
       "created_at": "2026-08-31T15:55:00+00:00"
+    },
+    {
+      "from": "CHG-105",
+      "to": "TASK-111",
+      "type": "implements",
+      "created_at": "2026-08-31T16:13:55+00:00"
     }
   ]
 }
