@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 83,
+  "round": 84,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-24T13:43:04+00:00",
+  "updated_at": "2026-08-31T13:19:24+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 71,
+      "touched_round": 84,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -66,7 +66,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 0,
+      "touched_round": 84,
       "title": "vllm-testing",
       "role": "test harness, factories, stubs"
     },
@@ -5530,11 +5530,11 @@
     "ISS-081": {
       "id": "ISS-081",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-18T21:31:38+00:00",
-      "updated_at": "2026-08-18T21:31:38+00:00",
-      "touched_round": 74,
+      "updated_at": "2026-08-31T13:09:19+00:00",
+      "touched_round": 84,
       "severity": 3,
       "confidence": 1.0,
       "title": "to_app_config clobbers the entire YAML config file with clap defaults: every non-Option flag has a hardcoded default_value (host 0.0.0.0, port 8000, log_level info, kv_blocks 1024, tensor_parallel 1, max_batch 256, max_waiting 10, max_draft 8, kv_quantization false, adaptive false) so clap always fills them and to_app_config (args.rs:238-281) unconditionally overwrites the values just parsed from --config / VLLM_CONFIG_PATH -- the documented YAML server/engine layer is inert for ten knobs and AppConfig::validate never sees them; --tensor-parallel-size / --max-batch-size / --max-waiting-batches are also parsed+validated+stored but never consumed by build_engine (SchedulerConfig::default() everywhere); VLLM_ADAPTIVE_SPECULATIVE default (false) is also inverted vs the config default (true)"
@@ -6030,6 +6030,65 @@
       "updated_at": "2026-08-24T13:40:28+00:00",
       "touched_round": 83,
       "source": "test:engine::tests::test_finalize_stop_sequences_ignores_prompt_only_match + 452 lib tests green + clippy clean",
+      "confidence": 1.0
+    },
+    "TASK-106": {
+      "id": "TASK-106",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-31T11:59:52+00:00",
+      "updated_at": "2026-08-31T13:06:29+00:00",
+      "touched_round": 84,
+      "category": "correctness",
+      "severity": 6.0,
+      "confidence": 1.0,
+      "effort": 2.0,
+      "note": "Make cli/args clobbering args Option<T> so to_app_config only overrides YAML values the user actually specified; fixes ISS-081 YAML clobber (10 knobs inert in YAML) + adaptive-speculative default inversion (documented true, clap forces false)"
+    },
+    "ISS-091": {
+      "id": "ISS-091",
+      "type": "issue",
+      "status": "active",
+      "version": 2,
+      "created_at": "2026-08-31T12:52:50+00:00",
+      "updated_at": "2026-08-31T12:59:40+00:00",
+      "touched_round": 84,
+      "title": "engine.tensor_parallel_size and engine.max_waiting_batches knobs have no production consumers",
+      "description": "After the ISS-081 YAML-clobber fix (TASK-106), an operator can now set engine.tensor_parallel_size and engine.max_waiting_batches via YAML/env/CLI and they land in AppConfig.engine — but nothing consumes them: tensor_parallel_size never wires into vllm-dist's tensor_parallel module (server picks no TP path), and max_waiting_batches has no core scheduler waiting-queue cap (only a request_queue with no config-driven limit). Both are silent no-op knobs: raising/lowering them changes nothing at runtime, unlike max_batch_size which maps to SchedulerConfig.max_num_seqs. DEFERRED: DEC-055 (documented-deferral — keep knobs for API stability, call out inertness in docs; wire when the owning feature lands). Anchored textually; RIL has no decision->issue edge."
+    },
+    "DEC-055": {
+      "id": "DEC-055",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-31T12:55:26+00:00",
+      "updated_at": "2026-08-31T12:55:26+00:00",
+      "touched_round": 84,
+      "rationale": "ISS-091 (inert tensor_parallel_size / max_waiting_batches knobs) is deferred: wiring tensor_parallel_size into a real TP path is a multi-node feature (vllm-dist module exists but the server has no TP selection surface), and max_waiting_batches needs a core scheduler waiting-queue cap that does not exist (request_queue is uncapped by config). Effort is feature-sized on both; the honest near-term resolution is documented-deferral with the knobs kept for API stability and the inertness called out in docs, mirroring ISS-089/DEC-053 and ISS-064/DEC-054 precedent. Fix when the owning feature (vLLM TP execution / bounded waiting queue) lands.",
+      "alternatives_rejected": "(a) Remove the knobs/CLI flags entirely — breaks documented env var + YAML API stability; (b) wire max_waiting_batches to a fake cap — creates a false sense of backpressure; (c) wire tensor_parallel_size to vllm-dist — requires TP model execution path, feature-sized, out of scope for a config-layer fix."
+    },
+    "CHG-100": {
+      "id": "CHG-100",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-31T13:04:54+00:00",
+      "updated_at": "2026-08-31T13:04:54+00:00",
+      "touched_round": 84,
+      "commit": "3f60b992",
+      "summary": "CLI args Option<T>: only override YAML/served config when operator explicitly specified a flag/env; fixes 10-knob YAML clobber + adaptive-spec default inversion"
+    },
+    "EV-113": {
+      "id": "EV-113",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-31T13:19:24+00:00",
+      "updated_at": "2026-08-31T13:19:24+00:00",
+      "touched_round": 84,
+      "source": "3f60b992 + tests (test_to_app_config_preserves_yaml_values, test_to_app_config_keeps_config_defaults_when_unset, test_to_app_config_flag_overrides_yaml, test_adaptive_speculative_bool_flag_semantics, tests/cli_env_precedence.rs env_var_flows_into_resolved_config + explicit_flag_beats_env_var)",
+      "content": "TDD RED->GREEN verified: before the fix the new tests failed (host clobbered to 0.0.0.0, adaptive default = false instead of true); after the Option<T> change all 738 server tests pass, fmt clean, CI-tier clippy (correctness/suspicious/perf) 0 errors, --all-features cargo check green, and cargo run --help shows each knob's effective default + env name.",
       "confidence": 1.0
     }
   },
@@ -8613,6 +8672,30 @@
       "to": "TASK-103",
       "type": "implements",
       "created_at": "2026-08-24T13:43:04+00:00"
+    },
+    {
+      "from": "TASK-106",
+      "to": "ISS-081",
+      "type": "addresses",
+      "created_at": "2026-08-31T12:00:51+00:00"
+    },
+    {
+      "from": "CHG-100",
+      "to": "TASK-106",
+      "type": "implements",
+      "created_at": "2026-08-31T13:06:29+00:00"
+    },
+    {
+      "from": "CHG-100",
+      "to": "ISS-081",
+      "type": "resolves",
+      "created_at": "2026-08-31T13:06:29+00:00"
+    },
+    {
+      "from": "ISS-091",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-08-31T13:07:37+00:00"
     }
   ]
 }
