@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 85,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-31T13:28:44+00:00",
+  "updated_at": "2026-08-31T13:53:03+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6095,17 +6095,38 @@
       "id": "TASK-107",
       "type": "task",
       "status": "active",
-      "version": 3,
+      "version": 4,
       "created_at": "2026-08-31T13:26:40+00:00",
-      "updated_at": "2026-08-31T13:28:44+00:00",
+      "updated_at": "2026-08-31T13:53:03+00:00",
       "touched_round": 85,
       "category": "dx",
       "severity": 4.0,
       "confidence": 1.0,
       "effort": 1.0,
-      "note": "CLI/config usability polish: (1) fix misleading Usage line '<--model |--allow-stub>' (drop group required, keep arg required); (2) warn when --config file exists but cannot be read/parsed (currently silent -> defaults, a typo'd YAML footgun). Add/keep tests.",
-      "lock_owner": "session-round85",
-      "lock_until": "2026-08-31T13:58:44+00:00"
+      "note": "CLI/config usability polish: (1) fix misleading Usage line '<--model |--allow-stub>' (drop group required, keep arg required); (2) warn when --config file exists but cannot be read/parsed (currently silent -> defaults, a typo'd YAML footgun). Add/keep tests."
+    },
+    "CHG-101": {
+      "id": "CHG-101",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-31T13:51:45+00:00",
+      "updated_at": "2026-08-31T13:51:45+00:00",
+      "touched_round": 85,
+      "commit": "c73baeb5",
+      "summary": "Usability polish: drop ModelArgs required-group so usage line no longer offers --allow-stub as a --model alternative; AppConfig::load now WARNs when an existing config file fails to read/parse (typo'd YAML no longer silently ignored)"
+    },
+    "EV-114": {
+      "id": "EV-114",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-31T13:51:45+00:00",
+      "updated_at": "2026-08-31T13:51:45+00:00",
+      "touched_round": 85,
+      "source": "c73baeb5 + tests (test_cli_required_model_usage_does_not_offer_allow_stub_alternative, app_config_load_malformed_file_degrades_to_defaults)",
+      "content": "Verified: missing-model error no longer contains '|--allow-stub'; malformed YAML config degrades to defaults without panic; 740 server tests pass, fmt clean, CI-tier clippy 0 errors.",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -8712,6 +8733,12 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-08-31T13:07:37+00:00"
+    },
+    {
+      "from": "CHG-101",
+      "to": "TASK-107",
+      "type": "implements",
+      "created_at": "2026-08-31T13:53:03+00:00"
     }
   ]
 }
