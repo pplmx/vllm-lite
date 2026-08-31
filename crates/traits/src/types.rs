@@ -50,23 +50,15 @@ pub enum BatchPhase {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FinishReason {
     /// Generation stopped because the engine judged the sequence
-    /// complete *before* hitting `max_tokens` — today via a configured
-    /// `stop` sequence match.
-    ///
-    /// **Note:** the "model emitted an end-of-sentence token" case is
-    /// **not** implemented (RIL ISS-075 / DEC-050): the engine does not
-    /// yet compare sampled tokens against a model EOS id, so an EOS
-    /// token is currently streamed as a normal token and the sequence
-    /// runs to `max_tokens` (reported as [`Self::Length`]). The server
-    /// hides the EOS *text* from clients (`should_skip_token_text` /
-    /// `clean_completion_text`), so the user-visible symptom today is a
-    /// wasted `max_tokens` budget for short completions, not corrupted
-    /// output. This doc was previously misleading by claiming EOS-stop
-    /// existed.
+    /// complete *before* hitting `max_tokens` — via a configured `stop`
+    /// sequence match (`SamplingParams::stop_token_sequences`) or because
+    /// the model emitted its end-of-sentence token (EOS-stop, RIL
+    /// ISS-075 / TASK-109; implemented in `Engine::finalize_stop_sequences`
+    /// when the engine's `eos_token_id` is set — the server wires it from
+    /// the checkpoint's `config.json`).
     Stop,
-    /// Sequence hit its `max_tokens` cap without a `stop`-sequence
-    /// match (and without EOS-stop, which is unimplemented per the
-    /// [`Self::Stop`] note).
+    /// Sequence hit its `max_tokens` cap without a `stop`-sequence match
+    /// and without the model emitting its EOS token.
     Length,
     /// Sequence was cancelled by an external request (client
     /// disconnect, admin shutdown, etc.). The HTTP layer does not
