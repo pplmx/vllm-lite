@@ -80,33 +80,20 @@ fn main() -> Result<()> {
 fn validate_config(path: &PathBuf) -> Result<()> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("reading config file {}", path.display()))?;
-    let parsed: Value = serde_saphyr::from_str(&content).context("parsing config YAML syntax")?;
-
-    let required_fields = ["server", "engine"];
-    for field in required_fields {
-        if parsed.get(field).is_none() {
-            anyhow::bail!("missing required field: {field}");
+    // Parse with the SAME schema the server uses (`AppConfig` applies
+    // `#[serde(default)]` to every section) and run the server's own
+    // validator. Hand-rolling the checks here drifted from the server — the
+    // tool rejected configs with no `server:`/`engine:` section (which the
+    // server defaults) and missed the upper bounds (port, num_kv_blocks) the
+    // server enforces — so `vllm config validate` must delegate or operators
+    // get false rejections / false passes vs the running server.
+    let config: vllm_server::config::AppConfig =
+        serde_saphyr::from_str(&content).context("parsing config YAML syntax")?;
+    if let Err(errors) = config.validate() {
+        for err in &errors.0 {
+            eprintln!("invalid: {err}");
         }
-    }
-
-    if let Some(p) = parsed
-        .get("server")
-        .and_then(|v| v.as_object())
-        .and_then(|server| server.get("port"))
-        .and_then(Value::as_i64)
-        && !(1..=65535).contains(&p)
-    {
-        anyhow::bail!("invalid port: {p}");
-    }
-
-    if let Some(n) = parsed
-        .get("engine")
-        .and_then(|v| v.as_object())
-        .and_then(|engine| engine.get("num_kv_blocks"))
-        .and_then(Value::as_i64)
-        && n < 1
-    {
-        anyhow::bail!("invalid kv_blocks: {n}");
+        anyhow::bail!("config validation failed with {} error(s)", errors.0.len());
     }
 
     Ok(())
@@ -171,6 +158,11 @@ fn show_model_info(path: &PathBuf) -> Result<()> {
             }
             if let Some(vocab_size) = obj.get("vocab_size") {
                 info.insert("vocab_size".to_string(), vocab_size.clone());
+            }
+            if let Some(eos) = obj.get("eos_token_id") {
+                // RIL ISS-075: the model's end-of-sentence token — the server
+                // now stops generation here (finish_reason=stop).
+                info.insert("eos_token_id".to_string(), eos.clone());
             }
         }
     }
@@ -327,7 +319,12 @@ engine:
     }
 
     #[test]
-    fn test_validate_config_missing_field() {
+    fn test_validate_config_missing_sections_use_defaults() {
+        // A config with only a partial `server:` section (no `engine`) is
+        // VALID — the server's AppConfig applies `#[serde(default)]` to every
+        // section, so the validator must agree instead of issuing a false
+        // rejection. Guards the RIL TASK-110 fix that replaced the hand-rolled
+        // required-field check with the server's real `validate()`.
         let temp = TempDir::new().unwrap();
         let config_path = temp.path().join("config.yaml");
         std::fs::write(
@@ -339,7 +336,28 @@ server:
         )
         .unwrap();
 
-        assert!(validate_config(&config_path).is_err());
+        assert!(validate_config(&config_path).is_ok());
+    }
+
+    #[test]
+    fn test_validate_config_rejects_invalid_values() {
+        // The server's validator (PortZero, KvBlocksTooLarge, ...) must be
+        // surfaced by `vllm config validate` — a config the running server
+        // would refuse must not pass the tool.
+        let temp = TempDir::new().unwrap();
+        let port_zero = temp.path().join("port_zero.yaml");
+        std::fs::write(&port_zero, "server:\n  port: 0\n").unwrap();
+        assert!(
+            validate_config(&port_zero).is_err(),
+            "port 0 must be rejected (server would refuse to start)"
+        );
+
+        let kv_too_large = temp.path().join("kv_too_large.yaml");
+        std::fs::write(&kv_too_large, "engine:\n  num_kv_blocks: 70000\n").unwrap();
+        assert!(
+            validate_config(&kv_too_large).is_err(),
+            "num_kv_blocks > 65536 must be rejected"
+        );
     }
 
     #[test]
