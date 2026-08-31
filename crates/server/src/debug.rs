@@ -104,7 +104,7 @@ pub struct MetricsSnapshotResponse {
     pub cuda_graph_hit_rate: f64,
 }
 
-/// Convert a fixed-point ratio gauge (stored × 100_000 — see
+/// Convert a fixed-point ratio gauge (stored × `100_000` — see
 /// `vllm_core::metrics::collector::sampler`, e.g.
 /// `record_packing_efficiency`) back to its float ratio for the JSON
 /// snapshot. The divisor must match the storage scale: `/debug/metrics`

@@ -62,7 +62,7 @@ pub async fn create_batch(
     // zero-token prefill the sync endpoint explicitly forbids, so reject
     // any empty string in the list before persisting (a single empty
     // prompt poisons the whole batch).
-    if req.prompts.iter().any(|p| p.is_empty()) {
+    if req.prompts.iter().any(String::is_empty) {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(
