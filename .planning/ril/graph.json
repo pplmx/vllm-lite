@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 85,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-31T15:33:42+00:00",
+  "updated_at": "2026-08-31T15:55:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6189,6 +6189,31 @@
       "source": "e9bc48e8 + tests (engine::tests::test_eos_stop_finalizes_with_stop_reason, test_eos_stop_disabled_when_eos_unset; bootstrap::engine::tests::read_eos_token_id_*)",
       "content": "TDD verified: engine test asserts FinishReason::Stop delivered via finish_reason oneshot before max_tokens, and running_count drops to 0; default-None keeps run-to-max_tokens; config_json parser handles single-int/list/absent/invalid. Core 454 + server-bin 9 + server-lib 502 tests, fmt + CI-tier clippy clean.",
       "confidence": 1.0
+    },
+    "TASK-110": {
+      "id": "TASK-110",
+      "type": "task",
+      "status": "active",
+      "version": 3,
+      "created_at": "2026-08-31T15:41:51+00:00",
+      "updated_at": "2026-08-31T15:55:00+00:00",
+      "touched_round": 85,
+      "category": "dx",
+      "severity": 5.0,
+      "confidence": 1.0,
+      "effort": 1.0,
+      "note": "vllm config validate hand-rolls checks that diverge from the server (requires server/engine sections the server defaults; misses port<=65535/num_kv_blocks cap checks). Replace with the real AppConfig::validate() so the tool and server always agree."
+    },
+    "CHG-104": {
+      "id": "CHG-104",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-31T15:55:00+00:00",
+      "updated_at": "2026-08-31T15:55:00+00:00",
+      "touched_round": 85,
+      "commit": "42c82b2b",
+      "summary": "vllm config validate now parses via server AppConfig schema + runs AppConfig::validate() (no more hand-rolled stricter subset); vllm model info shows eos_token_id"
     }
   },
   "edges": [
@@ -8825,6 +8850,12 @@
       "to": "ISS-075",
       "type": "resolves",
       "created_at": "2026-08-31T15:30:12+00:00"
+    },
+    {
+      "from": "CHG-104",
+      "to": "TASK-110",
+      "type": "implements",
+      "created_at": "2026-08-31T15:55:00+00:00"
     }
   ]
 }
