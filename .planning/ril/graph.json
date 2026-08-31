@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 85,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-31T15:55:00+00:00",
+  "updated_at": "2026-08-31T15:58:46+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6193,10 +6193,10 @@
     "TASK-110": {
       "id": "TASK-110",
       "type": "task",
-      "status": "active",
-      "version": 3,
+      "status": "resolved",
+      "version": 4,
       "created_at": "2026-08-31T15:41:51+00:00",
-      "updated_at": "2026-08-31T15:55:00+00:00",
+      "updated_at": "2026-08-31T15:58:46+00:00",
       "touched_round": 85,
       "category": "dx",
       "severity": 5.0,
