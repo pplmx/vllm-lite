@@ -460,17 +460,14 @@ impl DistributedKVCache {
         })
         .await;
 
-        match outcome {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                tracing::warn!(
-                    peers = peers.len(),
-                    "peer fan-out exceeded {PEER_FETCH_DEADLINE:?}; aborting remaining peers"
-                );
-                join_set.abort_all();
-                None
-            }
-        }
+        outcome.unwrap_or_else(|_| {
+            tracing::warn!(
+                peers = peers.len(),
+                "peer fan-out exceeded {PEER_FETCH_DEADLINE:?}; aborting remaining peers"
+            );
+            join_set.abort_all();
+            None
+        })
     }
 
     /// Process a single peer fetch result: verify the `chain_hash` and
