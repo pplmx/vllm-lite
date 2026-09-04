@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 85,
+  "round": 86,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-31T16:54:34+00:00",
+  "updated_at": "2026-09-04T23:44:36+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6251,6 +6251,31 @@
       "source": "a92654ad + b084b90b (CHANGELOG [Unreleased] + traits::FinishReason doc-truth); check-public-api.sh OK (vllm-core +4 covered); just doc-coverage-check 81.42% (>=65)",
       "content": "Docs/tooling closed out for rounds 84-88: CHANGELOG bullets for EOS-stop (incl. public-api: vllm-core added bullet satisfying the cargo-public-api baseline gate), YAML-clobber fix, vllm config validate, config-parse WARN + usage-line. FinishReason::Stop/Length docs now describe implemented EOS-stop. Full gate re-verified: 2216 workspace tests, fmt, CI-tier clippy, public-api OK, doc coverage 81.42%.",
       "confidence": 1.0
+    },
+    "TASK-112": {
+      "id": "TASK-112",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-04T23:35:13+00:00",
+      "updated_at": "2026-09-04T23:44:36+00:00",
+      "touched_round": 86,
+      "category": "maintainability",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1.0,
+      "title": "Fix CI-red on main: doc-check private-intra-doc-link (load_config_file) + restore zero-clippy-warnings (doc_markdown x3, unreadable_literal x2, manual_string_new x2) slipped in via TASK-107/EOS-stop commits"
+    },
+    "CHG-106": {
+      "id": "CHG-106",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-04T23:44:11+00:00",
+      "updated_at": "2026-09-04T23:44:11+00:00",
+      "touched_round": 86,
+      "commit": "c6616acc",
+      "title": "Fix CI-red on main: doc-check private-intra-doc-link (load_config_file) + clippy zero-warning restore (doc_markdown x3, unreadable_literal x2, manual_string_new x2); TASK-112"
     }
   },
   "edges": [
@@ -8899,6 +8924,12 @@
       "to": "TASK-111",
       "type": "implements",
       "created_at": "2026-08-31T16:13:55+00:00"
+    },
+    {
+      "from": "CHG-106",
+      "to": "TASK-112",
+      "type": "implements",
+      "created_at": "2026-09-04T23:44:36+00:00"
     }
   ]
 }
