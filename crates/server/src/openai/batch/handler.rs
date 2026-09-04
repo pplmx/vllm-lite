@@ -396,7 +396,7 @@ mod tests {
         let state = create_test_state();
         let manager = std::sync::Arc::clone(&state.batch_manager);
         let req = SimpleBatchRequest {
-            prompts: vec!["".to_string()],
+            prompts: vec![String::new()],
             endpoint: BatchEndpoint::Completion,
             model: Some("test-model".to_string()),
             max_tokens: Some(10),
@@ -423,11 +423,7 @@ mod tests {
         // batch (any of them would enqueue a zero-token prefill).
         let state = create_test_state();
         let req = SimpleBatchRequest {
-            prompts: vec![
-                "valid".to_string(),
-                "".to_string(),
-                "also valid".to_string(),
-            ],
+            prompts: vec!["valid".to_string(), String::new(), "also valid".to_string()],
             endpoint: BatchEndpoint::Chat,
             model: Some("test-model".to_string()),
             max_tokens: Some(10),

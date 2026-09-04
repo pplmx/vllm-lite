@@ -226,14 +226,14 @@ fn scheduler_config_from_app_config(app_config: &AppConfig) -> SchedulerConfig {
 /// so a sequence stops as soon as the model emits it — `FinishReason::Stop`
 /// instead of burning the remaining `max_tokens` budget.
 ///
-/// Reads `eos_token_id` from the checkpoint `config.json` (the HuggingFace
+/// Reads `eos_token_id` from the checkpoint `config.json` (the `HuggingFace`
 /// convention; Qwen3 / Llama / Mistral checkpoints all carry it). Like
 /// `configure_speculative`, this is a post-construction hook. The id may be a
 /// single number or a list (some checkpoints declare several); the first
 /// parseable entry wins. When the checkpoint declares none, EOS-stop stays
 /// disabled and generation runs to `max_tokens` as before.
 /// Read `eos_token_id` from a checkpoint `config.json` value, accepting the
-/// HuggingFace conventions: a single integer (`"eos_token_id": 151645`) or a
+/// `HuggingFace` conventions: a single integer (`"eos_token_id": 151645`) or a
 /// list of integers (`[151645, ...]` — some checkpoints declare several). The
 /// first parseable entry wins. `None` when absent or unparseable (stub/GGUF
 /// checkpoints, or ids outside the `u32` token range).
@@ -298,19 +298,19 @@ mod tests {
     use super::*;
 
     /// RIL ISS-075: the `eos_token_id` parser accepts the single-int
-    /// HuggingFace form.
+    /// `HuggingFace` form.
     #[test]
     fn read_eos_token_id_accepts_single_id() {
-        let cfg: serde_json::Value = serde_json::json!({ "eos_token_id": 151645 });
-        assert_eq!(read_eos_token_id(&cfg), Some(151645));
+        let cfg: serde_json::Value = serde_json::json!({ "eos_token_id": 151_645 });
+        assert_eq!(read_eos_token_id(&cfg), Some(151_645));
     }
 
     /// RIL ISS-075: some checkpoints declare `eos_token_id` as a list — the
     /// first parseable entry wins.
     #[test]
     fn read_eos_token_id_accepts_list_form() {
-        let cfg: serde_json::Value = serde_json::json!({ "eos_token_id": [151645, 151643] });
-        assert_eq!(read_eos_token_id(&cfg), Some(151645));
+        let cfg: serde_json::Value = serde_json::json!({ "eos_token_id": [151_645, 151_643] });
+        assert_eq!(read_eos_token_id(&cfg), Some(151_645));
     }
 
     /// RIL ISS-075: absent / non-numeric ids keep EOS-stop disabled (stub or

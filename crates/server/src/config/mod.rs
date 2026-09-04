@@ -160,7 +160,7 @@ impl AppConfig {
     ///
     /// Missing files are silently ignored — `--config` is optional and
     /// defaults win. A file that *exists* but cannot be read or parsed is
-    /// **not** silent: it logs a `WARN` (via [`load_config_file`]) so an
+    /// **not** silent: it logs a `WARN` (via `load_config_file`) so an
     /// operator's typo'd YAML surfaces instead of silently degrading to
     /// defaults. Use [`AppConfig::validate`] after loading to surface
     /// semantically invalid configs.
