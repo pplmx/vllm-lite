@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 91,
+  "round": 92,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T01:43:41+00:00",
+  "updated_at": "2026-09-05T01:55:21+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 90,
+      "touched_round": 91,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -6485,6 +6485,43 @@
       "touched_round": 90,
       "commit": "2d026ad0",
       "title": "WARN on unknown top-level config keys (ISS-097/TASK-117): unknown_top_level_keys best-effort JSON re-parse in load_config_file; lenient parse authoritative"
+    },
+    "ISS-098": {
+      "id": "ISS-098",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T01:50:35+00:00",
+      "updated_at": "2026-09-05T01:55:21+00:00",
+      "touched_round": 91,
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "/v1/models returns hardcoded created: 1_700_000_000 (2023-11-14) for every model/deployment — a stale fabricated epoch; clients display a fixed creation date. Report serving time (vLLM convention) instead"
+    },
+    "TASK-118": {
+      "id": "TASK-118",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T01:50:35+00:00",
+      "updated_at": "2026-09-05T01:55:21+00:00",
+      "touched_round": 91,
+      "category": "correctness",
+      "severity": 2,
+      "confidence": 1.0,
+      "effort": 1.0,
+      "title": "Fix /v1/models hardcoded created epoch (ISS-098): report unix_now_secs serving time (vLLM convention); regression assertion in context_length.rs models test"
+    },
+    "CHG-112": {
+      "id": "CHG-112",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T01:55:21+00:00",
+      "updated_at": "2026-09-05T01:55:21+00:00",
+      "touched_round": 91,
+      "commit": "9f1f85e9",
+      "title": "Report serving-time created epoch on /v1/models (ISS-098/TASK-118): unix_now_secs replacing stale hardcoded 1_700_000_000"
     }
   },
   "edges": [
@@ -9265,6 +9302,30 @@
       "to": "ISS-097",
       "type": "resolves",
       "created_at": "2026-09-05T01:43:41+00:00"
+    },
+    {
+      "from": "TASK-118",
+      "to": "ISS-098",
+      "type": "addresses",
+      "created_at": "2026-09-05T01:50:35+00:00"
+    },
+    {
+      "from": "ISS-098",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-05T01:50:35+00:00"
+    },
+    {
+      "from": "CHG-112",
+      "to": "TASK-118",
+      "type": "implements",
+      "created_at": "2026-09-05T01:55:21+00:00"
+    },
+    {
+      "from": "CHG-112",
+      "to": "ISS-098",
+      "type": "resolves",
+      "created_at": "2026-09-05T01:55:21+00:00"
     }
   ]
 }
