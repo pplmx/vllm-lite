@@ -77,6 +77,14 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting vllm-lite");
 
+    // RIL ISS-091: warn (once, at startup) for documented engine knobs this
+    // build does not apply — a silent no-op config is a config-honesty trap
+    // (mirrors the ISS-097 unknown-key WARN pattern). Non-default values
+    // only, so default configs start quiet.
+    for warning in bootstrap::engine::inert_engine_knob_warnings(&app_config) {
+        tracing::warn!("{warning}");
+    }
+
     // SEC-01 (technical due diligence): refuse to be quiet about an
     // unauthenticated bind to a non-loopback address. The previous
     // behavior was to start silently with no auth, which let any

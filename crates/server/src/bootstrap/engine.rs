@@ -222,6 +222,43 @@ fn scheduler_config_from_app_config(app_config: &AppConfig) -> SchedulerConfig {
         .build()
 }
 
+/// Return startup warnings for engine knobs that are **documented but not
+/// applied** by this build (RIL ISS-091) — an operator setting them today
+/// gets a silent no-op, which is a config-honesty trap. Each returned
+/// message is logged at `WARN` once at startup, before any traffic.
+///
+/// - `tensor_parallel_size > 1`: claims sharding that only the inert
+///   `multi-node` / `vllm-dist` path could implement — this build runs a
+///   single model worker on one device.
+/// - `max_waiting_batches != default`: claims waiting-queue backpressure
+///   the scheduler does not apply (it admits every queued request up to
+///   the KV/memory budget).
+///
+/// Warnings fire only for **non-default** values: setting a knob to its
+/// own default is a no-op by definition, and warning at every startup
+/// would just be noise.
+#[must_use]
+pub fn inert_engine_knob_warnings(app_config: &AppConfig) -> Vec<String> {
+    let mut warnings = Vec::new();
+    if app_config.engine.tensor_parallel_size > 1 {
+        warnings.push(format!(
+            "engine.tensor_parallel_size = {} is NOT applied: this build runs a single \
+             model worker on one device; tensor-parallel sharding (vllm-dist / multi-node) \
+             is not wired, so the knob changes nothing (RIL ISS-091)",
+            app_config.engine.tensor_parallel_size
+        ));
+    }
+    if app_config.engine.max_waiting_batches != AppConfig::default().engine.max_waiting_batches {
+        warnings.push(format!(
+            "engine.max_waiting_batches = {} is NOT applied: the scheduler admits every \
+             queued request up to the KV/memory budget and has no waiting-batch backpressure \
+             in this build, so the knob changes nothing (RIL ISS-091)",
+            app_config.engine.max_waiting_batches
+        ));
+    }
+    warnings
+}
+
 /// Wire the checkpoint's end-of-sentence token into the engine (RIL ISS-075)
 /// so a sequence stops as soon as the model emits it — `FinishReason::Stop`
 /// instead of burning the remaining `max_tokens` budget.
@@ -296,6 +333,49 @@ pub fn configure_speculative(app_config: &AppConfig, engine: &mut Engine) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// RIL ISS-091: the default configproduces no inert-knob warnings.
+    #[test]
+    fn inert_engine_knob_warnings_none_for_defaults() {
+        let app = AppConfig::default();
+        assert!(inert_engine_knob_warnings(&app).is_empty());
+    }
+
+    /// RIL ISS-091: `tensor_parallel_size > 1` is documented-but-inert and
+    /// must warn at startup instead of silently doing nothing.
+    #[test]
+    fn inert_engine_knob_warnings_flags_tensor_parallel() {
+        let mut app = AppConfig::default();
+        app.engine.tensor_parallel_size = 4;
+        let warnings = inert_engine_knob_warnings(&app);
+        assert_eq!(warnings.len(), 1, "exactly the TP warning: {warnings:?}");
+        assert!(warnings[0].contains("tensor_parallel_size"));
+    }
+
+    /// RIL ISS-091: a non-default `max_waiting_batches` is documented-but-
+    /// inert and must warn at startup.
+    #[test]
+    fn inert_engine_knob_warnings_flags_max_waiting_batches() {
+        let mut app = AppConfig::default();
+        app.engine.max_waiting_batches = 50;
+        let warnings = inert_engine_knob_warnings(&app);
+        assert_eq!(
+            warnings.len(),
+            1,
+            "exactly the waiting-batches warning: {warnings:?}"
+        );
+        assert!(warnings[0].contains("max_waiting_batches"));
+    }
+
+    /// RIL ISS-091: both inert knobs set → two warnings.
+    #[test]
+    fn inert_engine_knob_warnings_flags_both() {
+        let mut app = AppConfig::default();
+        app.engine.tensor_parallel_size = 2;
+        app.engine.max_waiting_batches = 7;
+        let warnings = inert_engine_knob_warnings(&app);
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+    }
 
     /// RIL ISS-075: the `eos_token_id` parser accepts the single-int
     /// `HuggingFace` form.
