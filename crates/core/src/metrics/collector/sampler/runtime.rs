@@ -19,6 +19,38 @@ impl EnhancedMetricsCollector {
         self.runtime.record_tokens(count);
     }
 
+    /// Split a scheduler `Batch` into prefill vs decode token counts and
+    /// record both (RIL ISS-095).
+    ///
+    /// **Prefill tokens** = Σ input-token lengths of the sequences in the
+    /// prefill phase (the vLLM convention: "prefill throughput" counts the
+    /// prompt/chunk tokens *processed*). **Decode tokens** = the number of
+    /// decode-phase sequences (each emits exactly one token per step).
+    ///
+    /// Called by every step path that composes a [`vllm_traits::Batch`]
+    /// (regular, speculative, CUDA-graph) so the exported
+    /// `prefill_throughput_tps` / `decode_throughput_tps` gauges are live
+    /// instead of the pinned-0 they were stuck at when the only writers
+    /// lived under `#[cfg(test)]`.
+    pub fn record_batch_phase_tokens(&self, batch: &vllm_traits::Batch) {
+        let mut prefill: u64 = 0;
+        let mut decode: u64 = 0;
+        for (i, is_prefill) in batch.is_prefill.iter().enumerate() {
+            if *is_prefill {
+                prefill +=
+                    u64::try_from(batch.input_tokens.get(i).map_or(0, Vec::len)).unwrap_or(0);
+            } else {
+                decode += 1;
+            }
+        }
+        if prefill > 0 {
+            self.runtime.record_prefill_tokens(prefill);
+        }
+        if decode > 0 {
+            self.runtime.record_decode_tokens(decode);
+        }
+    }
+
     /// Record the batch size of the most recent forward pass.
     pub fn record_batch_size(&self, size: usize) {
         self.runtime.record_batch_size(size);

@@ -205,6 +205,44 @@ fn test_tokens_total_counts_generated_not_input() {
 }
 
 #[test]
+fn test_prefill_and_decode_throughput_are_live() {
+    // RIL ISS-095: `prefill_throughput` / `decode_throughput` (exported
+    // on /metrics as prefill_throughput_tps / decode_throughput_tps) were
+    // pinned at 0.000 forever because the only recorders
+    // (`record_prefill_tokens` / `record_decode_tokens`) lived under
+    // `#[cfg(test)]` — no production step path called them. Every step
+    // path (regular, speculative, CUDA-graph) now records the phase split
+    // via `record_batch_phase_tokens`. A 40-token prompt with
+    // `max_tokens = 5` runs one prefill step (40 input positions) followed
+    // by four decode steps (1 token each), so both gauges must be positive
+    // after completion.
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![7; 40], 5), tx);
+    for _ in 0..40 {
+        let _ = engine.step();
+        if !engine.has_pending() {
+            break;
+        }
+    }
+    assert!(!engine.has_pending());
+    let snap = engine.scheduler.metrics.runtime_snapshot();
+    assert!(
+        snap.prefill_throughput > 0.0,
+        "prefill_throughput must be live after a 40-token prefill step \
+         (was pinned at 0 pre-fix); got {}",
+        snap.prefill_throughput
+    );
+    assert!(
+        snap.decode_throughput > 0.0,
+        "decode_throughput must be live after 4 decode steps (was pinned \
+         at 0 pre-fix); got {}",
+        snap.decode_throughput
+    );
+}
+
+#[test]
 fn test_requests_in_flight_live_and_balanced() {
     // RIL ISS-082: `requests_in_flight` (Prometheus gauge / OTLP
     // `inflight_requests`) must be a live signal. Pre-fix the only

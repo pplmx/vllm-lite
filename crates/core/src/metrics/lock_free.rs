@@ -351,22 +351,32 @@ impl LockFreeMetrics {
                 Some(v.saturating_sub(1))
             });
     }
-}
 
-#[cfg(test)]
-impl LockFreeMetrics {
-    /// Add `count` to the lifetime prefill-tokens counter.
+    /// Add `count` to the lifetime prefill-tokens counter — the basis for
+    /// the `prefill_throughput_tps` gauge (RIL ISS-095). Production callers
+    /// go through `EnhancedMetricsCollector::record_batch_phase_tokens`,
+    /// which reads a scheduler `Batch`'s phase flags and input-token
+    /// lengths to split a step's work into prefill vs decode.
     pub(crate) fn record_prefill_tokens(&self, count: u64) {
         self.prefill_tokens.fetch_add(count, Ordering::Relaxed);
     }
 
-    /// Add `count` to the lifetime decode-tokens counter.
+    /// Add `count` to the lifetime decode-tokens counter — the basis for
+    /// the `decode_throughput_tps` gauge (RIL ISS-095).
     pub(crate) fn record_decode_tokens(&self, count: u64) {
         self.decode_tokens.fetch_add(count, Ordering::Relaxed);
     }
+}
 
+#[cfg(test)]
+impl LockFreeMetrics {
     /// Record a scheduler-wait-time sample in milliseconds. Dropped if the
     /// channel is full.
+    ///
+    /// Test-only today (RIL ISS-095): production has no admission-wait
+    /// measurement yet, so `avg_scheduler_wait_time_ms` is a documented
+    /// follow-up rather than a fabricated value. Move this into the
+    /// production impl when a request's queue→admission wait is captured.
     pub(crate) fn record_scheduler_wait_time(&self, ms: f64) {
         let _ = self.scheduler_wait_sender.try_send(ms);
     }

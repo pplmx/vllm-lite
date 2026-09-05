@@ -194,3 +194,62 @@ fn test_collector_records_draft_failures() {
     assert_eq!(snap.load_failures_total, 2);
     assert_eq!(snap.runtime_errors_total, 1);
 }
+
+/// RIL ISS-095: `record_batch_phase_tokens` must split a scheduler
+/// `Batch` into the prefill (input positions processed) vs decode
+/// (1 token per decode seq) counters that feed `prefill_throughput` /
+/// `decode_throughput`. A pure-decode batch must move only the decode
+/// gauge; a pure-prefill batch only the prefill one.
+#[test]
+fn test_record_batch_phase_tokens_splits_prefill_and_decode() {
+    use vllm_traits::Batch;
+
+    // Pure-decode batch: two decode sequences, one emitted token each.
+    let mut decode_batch = Batch::empty();
+    decode_batch.seq_ids = vec![1, 2];
+    decode_batch.is_prefill = vec![false, false];
+    let decode_collector = EnhancedMetricsCollector::new();
+    decode_collector.record_batch_phase_tokens(&decode_batch);
+    let decode_snap = decode_collector.snapshot();
+    assert!(
+        decode_snap.decode_throughput > 0.0,
+        "decode-only batch must move decode_throughput; got {}",
+        decode_snap.decode_throughput
+    );
+    assert!(
+        decode_snap.prefill_throughput.abs() < f64::EPSILON,
+        "decode-only batch must NOT move prefill_throughput; got {}",
+        decode_snap.prefill_throughput
+    );
+
+    // Pure-prefill batch: one 3-token prompt processed in the prefill phase.
+    let mut prefill_batch = Batch::empty();
+    prefill_batch.seq_ids = vec![3];
+    prefill_batch.input_tokens = vec![vec![1, 2, 3]];
+    prefill_batch.is_prefill = vec![true];
+    let prefill_collector = EnhancedMetricsCollector::new();
+    prefill_collector.record_batch_phase_tokens(&prefill_batch);
+    let prefill_snap = prefill_collector.snapshot();
+    assert!(
+        prefill_snap.prefill_throughput > 0.0,
+        "prefill-only batch (3 input positions) must move prefill_throughput; got {}",
+        prefill_snap.prefill_throughput
+    );
+    assert!(
+        prefill_snap.decode_throughput.abs() < f64::EPSILON,
+        "prefill-only batch must NOT move decode_throughput; got {}",
+        prefill_snap.decode_throughput
+    );
+
+    // Mixed batch: 2 prefill (3 + 1 input positions) + 1 decode seq.
+    // Both gauges must move.
+    let mut mixed = Batch::empty();
+    mixed.seq_ids = vec![4, 5, 6];
+    mixed.input_tokens = vec![vec![7, 8, 9], vec![10], vec![11]];
+    mixed.is_prefill = vec![true, true, false];
+    let mixed_collector = EnhancedMetricsCollector::new();
+    mixed_collector.record_batch_phase_tokens(&mixed);
+    let mixed_snap = mixed_collector.snapshot();
+    assert!(mixed_snap.prefill_throughput > 0.0);
+    assert!(mixed_snap.decode_throughput > 0.0);
+}

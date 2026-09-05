@@ -255,6 +255,10 @@ impl crate::engine::Engine {
             self.scheduler
                 .metrics
                 .record_tokens(u64::try_from(results.len()).unwrap_or(0));
+            // RIL ISS-095: split the step into prefill (input positions
+            // processed) vs decode (1 token per decode seq) so the
+            // prefill/decode throughput gauges are live, not pinned at 0.
+            self.scheduler.metrics.record_batch_phase_tokens(batch);
             self.scheduler
                 .metrics
                 .record_batch_size(batch.seq_ids.len());

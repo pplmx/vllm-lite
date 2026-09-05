@@ -1120,6 +1120,7 @@ pub fn vllm_core::EnhancedMetricsCollector::inc_draft_runtime_error(&self)
 pub fn vllm_core::EnhancedMetricsCollector::new() -> Self
 pub fn vllm_core::EnhancedMetricsCollector::prefix_cache_hits(&self) -> u64
 pub fn vllm_core::EnhancedMetricsCollector::prefix_cache_requests(&self) -> u64
+pub fn vllm_core::EnhancedMetricsCollector::record_batch_phase_tokens(&self, &vllm_traits::types::Batch)
 pub fn vllm_core::EnhancedMetricsCollector::record_batch_size(&self, usize)
 pub fn vllm_core::EnhancedMetricsCollector::record_cuda_graph_hit(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_cuda_graph_miss(&self)

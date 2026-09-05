@@ -229,16 +229,17 @@ impl Engine {
         }
         self.scheduler.clear_finished();
 
-        self.record_batch_metrics(&results, start);
+        self.record_batch_metrics(&batch, &results, start);
 
         results
     }
 
-    /// Record batch metrics (token count, batch size, latency) for the
-    /// CUDA-Graph step path. No-op when `results` is empty.
+    /// Record batch metrics (token count, phase split, batch size, latency)
+    /// for the CUDA-Graph step path. No-op when `results` is empty.
     #[cfg(feature = "cuda-graph")]
     fn record_batch_metrics(
         &self,
+        batch: &vllm_traits::Batch,
         results: &[(vllm_traits::SeqId, SampledToken)],
         start: std::time::Instant,
     ) {
@@ -249,6 +250,8 @@ impl Engine {
         scheduler
             .metrics
             .record_tokens(u64::try_from(results.len()).unwrap_or(0));
+        // RIL ISS-095: prefill/decode phase split on the graph path too.
+        scheduler.metrics.record_batch_phase_tokens(batch);
         scheduler.metrics.record_batch_size(results.len());
         // invariant: elapsed millis fits in f64 mantissa (< 2^52 ms ≈ 142 years).
         #[allow(clippy::cast_precision_loss)]

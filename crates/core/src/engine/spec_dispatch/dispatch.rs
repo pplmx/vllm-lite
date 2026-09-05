@@ -177,6 +177,9 @@ impl crate::engine::Engine {
             self.scheduler
                 .metrics
                 .record_tokens(u64::try_from(results.len()).unwrap_or(0));
+            // RIL ISS-095: prefill/decode phase split so the throughput
+            // gauges are live on the speculative path too.
+            self.scheduler.metrics.record_batch_phase_tokens(&batch);
             self.scheduler
                 .metrics
                 .record_batch_size(batch.seq_ids.len());
