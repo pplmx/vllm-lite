@@ -1134,6 +1134,7 @@ pub fn vllm_core::EnhancedMetricsCollector::record_prefix_cache_hit(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_prefix_cache_nodes(&self, usize)
 pub fn vllm_core::EnhancedMetricsCollector::record_prefix_cache_request(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_request(&self)
+pub fn vllm_core::EnhancedMetricsCollector::record_scheduler_wait_time(&self, f64)
 pub fn vllm_core::EnhancedMetricsCollector::record_speculative_adjustment(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_speculative_efficiency(&self, f64)
 pub fn vllm_core::EnhancedMetricsCollector::record_tokens(&self, u64)
@@ -1391,7 +1392,7 @@ pub fn vllm_core::scheduler::radix_cache::tree::RadixTree::longest_prefix_match(
 pub fn vllm_core::scheduler::radix_cache::tree::RadixTree::new() -> Self
 pub fn vllm_core::scheduler::request_queue::RequestQueue::default() -> Self
 pub fn vllm_core::scheduler::request_queue::RequestQueue::dequeue(&mut self) -> core::option::Option<vllm_core::types::Sequence>
-pub fn vllm_core::scheduler::request_queue::RequestQueue::drain_by_phase(&mut self, vllm_core::types::Phase) -> alloc::vec::Vec<vllm_core::types::Sequence>
+pub fn vllm_core::scheduler::request_queue::RequestQueue::drain_by_phase(&mut self, vllm_core::types::Phase) -> alloc::vec::Vec<(vllm_core::types::Sequence, core::time::Duration)>
 pub fn vllm_core::scheduler::request_queue::RequestQueue::enqueue(&mut self, vllm_core::types::Sequence, &dyn vllm_core::scheduler::policy::trait_def::SchedulingPolicy, &vllm_core::scheduler::policy::trait_def::SchedulingContext)
 pub fn vllm_core::scheduler::request_queue::RequestQueue::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::scheduler::request_queue::RequestQueue::get_mut(&mut self, vllm_traits::types::SeqId) -> core::option::Option<&mut vllm_core::types::Sequence>
