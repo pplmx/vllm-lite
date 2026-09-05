@@ -33,11 +33,24 @@ pub struct HealthResponse {
 }
 
 /// Response payload for `HealthDetail`. Returned from handlers, serialized to JSON for the HTTP boundary.
+///
+/// Only fields with real backing data are reported. The former
+/// `gpu_available` (hardcoded `true`) and `gpu_utilization` (which
+/// returned `prefill_throughput` under a "GPU utilization" name — an ops
+/// dashboard reading it as a percentage saw a busy GPU report 0%, and a
+/// CPU build reported utilization for a GPU it did not have) were
+/// fabricated: vllm-lite does not sample real GPU state. They have been
+/// removed rather than perpetuated; GPU presence is still visible in the
+/// `Device initialized` startup log. (RIL ISS-092)
 #[derive(Debug, Serialize)]
 pub struct HealthDetailResponse {
     pub status: String,
-    pub gpu_available: bool,
-    pub gpu_utilization: Option<f32>,
+    /// Mean prefill-phase throughput in tokens per second over the
+    /// recent sampling window, when the engine answered `GetMetrics`.
+    /// `None` when the engine was mid-step and the bounded wait elapsed.
+    pub prefill_throughput: Option<f32>,
+    /// Fraction of KV-cache blocks currently in use (0.0–1.0 scale),
+    /// when the engine answered `GetMetrics`.
     pub kv_cache_usage_percent: Option<f32>,
 }
 
@@ -74,13 +87,15 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
         .flatten()
         .unwrap_or_default();
 
-    let gpu_utilization = metrics.prefill_throughput as f32;
-    let kv_cache_usage_percent = metrics.kv_cache_usage_percent as f32;
+    // RIL ISS-092: report only real data. vllm-lite does not sample GPU
+    // utilization, so `gpu_available`/`gpu_utilization` (previously a
+    // hardcoded `true` and `prefill_throughput` mislabeled as a "% util")
+    // are not emitted at all — an ops dashboard reading `gpu_utilization`
+    // as a percentage saw a busy server report 0% forever.
     Json(HealthDetailResponse {
         status: "ok".to_string(),
-        gpu_available: true,
-        gpu_utilization: Some(gpu_utilization),
-        kv_cache_usage_percent: Some(kv_cache_usage_percent),
+        prefill_throughput: Some(metrics.prefill_throughput as f32),
+        kv_cache_usage_percent: Some(metrics.kv_cache_usage_percent as f32),
     })
 }
 

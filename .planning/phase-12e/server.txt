@@ -912,6 +912,7 @@ pub const fn vllm_server::health::HealthStatus::as_str(&self) -> &'static str
 pub const fn vllm_server::health::HealthStatus::http_status(&self) -> u16
 pub const fn vllm_server::health::HealthStatus::is_ok(&self) -> bool
 pub const fn vllm_server::openai::batch::types::BatchEndpoint::as_str(&self) -> &'static str
+pub const fn vllm_server::openai::batch::types::BatchJob::is_terminal(&self) -> bool
 pub const fn vllm_server::openai::chat_template::ChatTemplate::for_architecture(vllm_model::config::architecture::Architecture) -> Self
 pub const fn vllm_server::security::jwt::JwtValidator::new(vllm_server::security::jwt::JwtConfig) -> Self
 pub const fn vllm_server::security::rbac::Role::can_access_admin(&self) -> bool
@@ -946,6 +947,7 @@ pub fn vllm_server::api::HealthResponse::serialize<__S>(&self, __S) -> core::res
 pub fn vllm_server::ApiState::clone(&self) -> vllm_server::ApiState
 pub fn vllm_server::ApiState::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::app::build_app(vllm_server::ApiState, core::option::Option<alloc::sync::Arc<vllm_server::auth::AuthMiddleware>>, alloc::sync::Arc<vllm_server::security::audit::AuditLogger>, &vllm_server::security::cors::CorsConfig) -> axum::routing::Router
+pub fn vllm_server::app::build_auth_middleware(&vllm_server::AuthConfig) -> core::option::Option<alloc::sync::Arc<vllm_server::auth::AuthMiddleware>>
 pub fn vllm_server::auth::AuthMiddleware::api_keys(&self) -> &[alloc::string::String]
 pub fn vllm_server::auth::AuthMiddleware::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::auth::AuthMiddleware::new(alloc::vec::Vec<alloc::string::String>, usize, u64) -> Self
@@ -1381,9 +1383,8 @@ pub struct vllm_server::security::rbac::RbacMiddleware
 pub struct vllm_server::security::TlsConfig
 pub struct vllm_server::security::tls::TlsConfig
 pub type vllm_server::api::EngineHandle = tokio::sync::mpsc::bounded::Sender<vllm_core::types::messages::EngineMessage>
-pub vllm_server::api::HealthDetailResponse::gpu_available: bool
-pub vllm_server::api::HealthDetailResponse::gpu_utilization: core::option::Option<f32>
 pub vllm_server::api::HealthDetailResponse::kv_cache_usage_percent: core::option::Option<f32>
+pub vllm_server::api::HealthDetailResponse::prefill_throughput: core::option::Option<f32>
 pub vllm_server::api::HealthDetailResponse::status: alloc::string::String
 pub vllm_server::api::HealthResponse::status: alloc::string::String
 pub vllm_server::ApiState::arch_capabilities: core::option::Option<vllm_model::arch::capabilities::ArchCapabilities>
@@ -1525,6 +1526,7 @@ pub vllm_server::openai::batch::types::BatchJob::cancel_requested: alloc::sync::
 pub vllm_server::openai::batch::types::BatchJob::completed_at: core::option::Option<i64>
 pub vllm_server::openai::batch::types::BatchJob::created_at: i64
 pub vllm_server::openai::batch::types::BatchJob::endpoint: vllm_server::openai::batch::types::BatchEndpoint
+pub vllm_server::openai::batch::types::BatchJob::expires_at: i64
 pub vllm_server::openai::batch::types::BatchJob::id: alloc::string::String
 pub vllm_server::openai::batch::types::BatchJob::max_tokens: core::option::Option<i64>
 pub vllm_server::openai::batch::types::BatchJob::model: core::option::Option<alloc::string::String>

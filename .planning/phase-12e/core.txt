@@ -931,6 +931,7 @@ pub const fn vllm_core::engine::Engine::distributed_kv_enabled(&self) -> bool
 pub const fn vllm_core::engine::Engine::enable_speculative(&mut self)
 pub const fn vllm_core::engine::Engine::is_adaptive_speculative_enabled(&self) -> bool
 pub const fn vllm_core::engine::Engine::is_healthy(&self) -> bool
+pub const fn vllm_core::engine::Engine::set_eos_token_id(&mut self, core::option::Option<u32>)
 pub const fn vllm_core::error::EngineError::with_request_id(self, u64) -> Self
 pub const fn vllm_core::error::EngineError::with_seq_id(self, u64) -> Self
 pub const fn vllm_core::metrics::PrometheusExporter::new(alloc::sync::Arc<vllm_core::EnhancedMetricsCollector>, u16) -> Self
@@ -1122,6 +1123,7 @@ pub fn vllm_core::EnhancedMetricsCollector::prefix_cache_requests(&self) -> u64
 pub fn vllm_core::EnhancedMetricsCollector::record_batch_size(&self, usize)
 pub fn vllm_core::EnhancedMetricsCollector::record_cuda_graph_hit(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_cuda_graph_miss(&self)
+pub fn vllm_core::EnhancedMetricsCollector::record_dropped_token(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_inference_latency(&self, u64)
 pub fn vllm_core::EnhancedMetricsCollector::record_kv_cache_usage(&self, u64, u64)
 pub fn vllm_core::EnhancedMetricsCollector::record_latency(&self, f64)
@@ -1780,6 +1782,7 @@ pub vllm_core::engine::Engine::adaptive_decoder: core::option::Option<vllm_core:
 pub vllm_core::engine::Engine::draft_model: core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>>>>
 pub vllm_core::engine::Engine::draft_registry: alloc::sync::Arc<vllm_core::speculative::registry::DraftModelRegistry>
 pub vllm_core::engine::Engine::draft_resolver: core::option::Option<alloc::sync::Arc<vllm_core::speculative::draft_resolver::DraftResolver>>
+pub vllm_core::engine::Engine::eos_token_id: core::option::Option<u32>
 pub vllm_core::engine::Engine::error_count: usize
 pub vllm_core::engine::Engine::finish_reason_txs: std::collections::hash::map::HashMap<vllm_traits::types::SeqId, tokio::sync::oneshot::Sender<vllm_traits::types::FinishReason>>
 pub vllm_core::engine::Engine::last_error: core::option::Option<alloc::string::String>
@@ -1788,6 +1791,7 @@ pub vllm_core::engine::Engine::response_txs: std::collections::hash::map::HashMa
 pub vllm_core::engine::Engine::scheduler: vllm_core::scheduler::engine::state::SchedulerEngine
 pub vllm_core::engine::Engine::speculative_mode: bool
 pub vllm_core::engine::Engine::target_model: alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>>>
+pub vllm_core::Engine::eos_token_id: core::option::Option<u32>
 pub vllm_core::EngineError::BackendUnavailable
 pub vllm_core::EngineError::BackendUnavailable::backend: alloc::string::String
 pub vllm_core::EngineError::Cancelled

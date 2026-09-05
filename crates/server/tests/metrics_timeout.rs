@@ -104,3 +104,35 @@ async fn metrics_endpoint_returns_promptly_when_engine_unresponsive() {
         "/metrics must return the zero engine snapshot without an engine round-trip: {body}"
     );
 }
+
+/// RIL ISS-092: `/health/details` must not report fabricated GPU state.
+///
+/// The pre-fix response carried `gpu_available: true` (hardcoded) and
+/// `gpu_utilization` (which was `prefill_throughput`, mislabeled as a
+/// "% GPU utilization" — an ops dashboard reading it as a percentage saw
+/// a busy server report 0% forever, and a CPU-only build reported a GPU
+/// it did not have). vllm-lite does not sample real GPU utilization, so
+/// the honest endpoint omits both fields and exposes `prefill_throughput`
+/// under its own name.
+#[tokio::test]
+async fn health_details_omits_fabricated_gpu_fields() {
+    let (app, _engine_rx) = app_with_dead_engine();
+    let (status, body) = collect(get(&app, "/health/details").await).await;
+    assert_eq!(status, axum::http::StatusCode::OK);
+    assert!(
+        body.contains("prefill_throughput"),
+        "health/details must expose prefill_throughput under its own name: {body}"
+    );
+    assert!(
+        body.contains("kv_cache_usage_percent"),
+        "health/details must keep kv_cache_usage_percent: {body}"
+    );
+    assert!(
+        !body.contains("gpu_utilization"),
+        "health/details must NOT emit the fabricated gpu_utilization field: {body}"
+    );
+    assert!(
+        !body.contains("gpu_available"),
+        "health/details must NOT emit the hardcoded gpu_available field: {body}"
+    );
+}
