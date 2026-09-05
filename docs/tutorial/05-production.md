@@ -65,12 +65,19 @@ helm install vllm-lite k8s/charts/vllm-lite/ \
 
 ## Observability
 
-vllm-lite exports metrics in Prometheus format on `/metrics`:
+vllm-lite exports metrics in Prometheus format on `/metrics` (served on
+the main HTTP server port — there is no separate metrics listener):
 
-- `vllm:request_total` — total requests processed
-- `vllm:request_duration_seconds` — request latency histogram
-- `vllm:prefix_cache_hit_rate` — prefix cache effectiveness
-- `vllm:kv_cache_utilization` — KV cache memory usage
+- `requests_total` — total requests processed
+- `tokens_total` — total tokens generated
+- `avg_latency_ms` / `latency_p50_ms` / `latency_p90_ms` / `latency_p99_ms` — inference latency
+- `prefix_cache_hit_rate` — prefix cache effectiveness (0–100)
+- `kv_cache_usage_percent` — KV cache block usage (0–100)
+- `prefill_throughput_tps` / `decode_throughput_tps` — per-phase throughput
+- `avg_batch_size` / `current_batch_size` — batch sizing
+- `requests_in_flight` / `request_queue_depth` / `active_sequences` — load
+- `avg_scheduler_wait_time_ms` — queue→admission delay
+- `dropped_tokens_total` — tokens dropped on a full client channel
 
 Grafana dashboards in `docs/grafana/`. Import into your Grafana
 instance.

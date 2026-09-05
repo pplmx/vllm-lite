@@ -1,7 +1,13 @@
 global:
   scrape_interval: 15s
 
+# vllm-lite serves `/metrics` on the main HTTP server port (default
+# 8000) — there is no separate metrics listener. In docker-compose the
+# server service is named `vllm-server` (see docker-compose.yml), so
+# scrape that name on the server port. The previous `vllm:9090` target
+# pointed at a port nothing bound and a host that didn't exist, so the
+# target was permanently DOWN (RIL ISS-102).
 scrape_configs:
   - job_name: 'vllm'
     static_configs:
-      - targets: ['vllm:9090']
+      - targets: ['vllm-server:8000']

@@ -532,6 +532,19 @@ fn test_unknown_top_level_keys_detects_typo_sections() {
 }
 
 #[test]
+fn test_unknown_top_level_keys_flags_fabricated_metrics_section() {
+    // RIL ISS-102: the shipped `k8s/configmap.yaml` used to declare a
+    // `metrics: {enabled: true, port: 9090}` section that the server does
+    // not recognise (no metrics listener exists; /metrics is on the main
+    // HTTP port). Guard so the fabricated section is always surfaced as a
+    // WARN instead of silently doing exactly nothing (and pointing
+    // Prometheus at a dead port).
+    let keys =
+        unknown_top_level_keys("server:\n  port: 8000\nmetrics:\n  enabled: true\n  port: 9090\n");
+    assert_eq!(keys, vec!["metrics".to_string()]);
+}
+
+#[test]
 fn test_unknown_top_level_keys_empty_for_recognised_sections() {
     let keys = unknown_top_level_keys(
         "server:\n  port: 8000\nengine:\n  num_kv_blocks: 100\nauth:\n  api_keys: [sk-1]\ncors:\n  allow_origins: [\"*\"]\n",

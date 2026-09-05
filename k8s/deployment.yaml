@@ -17,13 +17,33 @@ spec:
         - name: vllm
           image: vllm-lite:latest
           ports:
+            # `/metrics` is served by the same axum router on the main HTTP
+            # server port — there is no separate metrics listener (the old
+            # `9090` containerPort pointed at a port nothing bound, RIL
+            # ISS-102).
             - containerPort: 8000
               name: http
-            - containerPort: 9090
-              name: metrics
+          env:
+            # Make the mounted configmap actually take effect — without this
+            # the file was mounted but never read, so the whole ConfigMap was
+            # dead weight (RIL ISS-102).
+            - name: VLLM_CONFIG_PATH
+              value: /app/config/production.yaml
+            # REQUIRED for startup: the server refuses to start without a
+            # resolvable model path. Point this at your weights directory
+            # (the directory containing tokenizer.json + safetensors).
+            - name: VLLM_MODEL
+              value: /models/default
+            # Bounded engine mailbox; raise under sustained load (default
+            # 256, see crates/server/src/config/engine.rs).
+            - name: VLLM_ENGINE_MAILBOX_CAPACITY
+              value: "256"
           volumeMounts:
             - name: config
               mountPath: /app/config
+            - name: model
+              mountPath: /models
+              readOnly: true
           resources:
             requests:
               memory: "4Gi"
@@ -47,3 +67,10 @@ spec:
         - name: config
           configMap:
             name: vllm-config
+        - name: model
+          # Weights directory on the worker node holding the model files
+          # (tokenizer.json + safetensors). Adjust the path for your host;
+          # prefer a PVC / NFS for multi-node or managed clusters.
+          hostPath:
+            path: /models
+            type: Directory

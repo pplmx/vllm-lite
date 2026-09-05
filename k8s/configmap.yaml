@@ -4,10 +4,17 @@ metadata:
   name: vllm-config
   namespace: vllm
 data:
+  # Loaded by the server when `VLLM_CONFIG_PATH=/app/config/production.yaml`
+  # (set in deployment.yaml). `metrics:` was a fabricated section — the
+  # server has no metrics listener; `/metrics` is served on the main HTTP
+  # port (`server.port`) by the same axum router, and `AppConfig` does not
+  # recognise a top-level `metrics` key (RIL ISS-102 / ISS-097 WARN).
   production.yaml: |
     server:
       host: 0.0.0.0
       port: 8000
-    metrics:
-      enabled: true
-      port: 9090
+    engine:
+      # The model directory (mounted read-only from the host via
+      # `VLLM_MODEL` / deployment volume). The server refuses to start
+      # without a resolvable model path.
+      max_model_len: 8192

@@ -10,7 +10,12 @@ spec:
     - port: 80
       targetPort: 8000
       name: http
+    # `/metrics` lives on the main HTTP server port (8000); the old
+    # `9090 → 9090` mapping pointed at a port nothing binds, so a
+    # Prometheus scraping the metrics port got connection-refused (RIL
+    # ISS-102). 9090 is kept as the external (cluster-internal) metrics
+    # Service port but now routes to the real endpoint.
     - port: 9090
-      targetPort: 9090
+      targetPort: 8000
       name: metrics
   type: ClusterIP
