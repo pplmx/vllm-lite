@@ -115,17 +115,16 @@ fn fixed_ratio_to_f64(fixed: u64) -> f64 {
     fixed as f64 / 100_000.0
 }
 
-/// Admin-only endpoint: return a JSON snapshot of key metrics counters and gauges.
-#[allow(clippy::unused_async)]
-pub async fn metrics_snapshot(
-    State(state): State<ApiState>,
-    headers: axum::http::HeaderMap,
-) -> Response {
-    if let Err(response) = require_admin(&state, &headers) {
-        return response;
-    }
-    let metrics = state.metrics;
-    let counters: HashMap<String, u64> = [
+/// The counters surfaced by `/debug/metrics`. Every name here must have a
+/// real storage arm in `EnhancedMetricsCollector::get_counter` — a name with
+/// no writer would fabricate a permanent `0` (RIL ISS-101 removed
+/// `packing_sequences_total`: it had no storage arm, no writer anywhere, and
+/// was pinned at 0 forever; same class as ISS-090 `errors_total` /
+/// ISS-093 `spans_active`).
+fn snapshot_counter_entries(
+    metrics: &vllm_core::metrics::EnhancedMetricsCollector,
+) -> HashMap<String, u64> {
+    [
         (
             "cuda_graph_hits_total".to_string(),
             metrics.get_counter("cuda_graph_hits_total"),
@@ -133,10 +132,6 @@ pub async fn metrics_snapshot(
         (
             "cuda_graph_misses_total".to_string(),
             metrics.get_counter("cuda_graph_misses_total"),
-        ),
-        (
-            "packing_sequences_total".to_string(),
-            metrics.get_counter("packing_sequences_total"),
         ),
         (
             "speculative_adjustments_total".to_string(),
@@ -152,7 +147,20 @@ pub async fn metrics_snapshot(
         ),
     ]
     .into_iter()
-    .collect();
+    .collect()
+}
+
+/// Admin-only endpoint: return a JSON snapshot of key metrics counters and gauges.
+#[allow(clippy::unused_async)]
+pub async fn metrics_snapshot(
+    State(state): State<ApiState>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers) {
+        return response;
+    }
+    let metrics = state.metrics;
+    let counters = snapshot_counter_entries(&metrics);
 
     let gauges: HashMap<String, f64> = [
         // invariant: gauge values are bounded counts/ratios; u64 -> f64 precision
@@ -370,6 +378,42 @@ mod tests {
         assert!(json.contains("requests_total"));
         assert!(json.contains("active_sequences"));
         assert!(json.contains("cuda_graph_hit_rate"));
+    }
+
+    #[test]
+    fn test_snapshot_counters_have_no_fabricated_zero() {
+        // RIL ISS-101: `/debug/metrics` previously reported a permanent
+        // `packing_sequences_total: 0` counter — `get_counter` has no
+        // storage arm for that name (falls through to `_ => 0`) and no
+        // writer exists anywhere, so the snapshot fabricated a value that
+        // could never change. Same class as the ISS-090 / ISS-093
+        // removals. The snapshot must only surface counters with real
+        // backing storage.
+        use vllm_core::metrics::EnhancedMetricsCollector;
+        let collector = EnhancedMetricsCollector::default();
+        let counters = snapshot_counter_entries(&collector);
+        assert!(
+            !counters.contains_key("packing_sequences_total"),
+            "packing_sequences_total must not appear in the snapshot (fabricated 0 pre-fix)"
+        );
+        // Every remaining counter must have an actual storage arm — each
+        // one can be driven to a non-default value by its real writer, so
+        // verify they resolve to a real field (a would-be fabricated name
+        // would be caught by this set membership check as the list is
+        // explicit).
+        for name in counters.keys() {
+            assert!(
+                matches!(
+                    name.as_str(),
+                    "cuda_graph_hits_total"
+                        | "cuda_graph_misses_total"
+                        | "speculative_adjustments_total"
+                        | "requests_total"
+                        | "errors_total"
+                ),
+                "counter {name} in the snapshot must be a recognised live counter"
+            );
+        }
     }
 
     #[test]
