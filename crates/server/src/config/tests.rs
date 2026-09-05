@@ -286,7 +286,7 @@ fn resolve_api_keys_missing_env_var_ignored() {
 
 #[test]
 fn resolve_api_keys_from_env_var() {
-    let _guard = ENV_TEST_MUTEX.lock().unwrap();
+    let _guard = crate::test_fixtures::ENV_TEST_LOCK.lock().unwrap();
     set_test_env(
         "__VLLM_TEST_AUTH_ENV_KEYS__",
         "env-key-1, env-key-2 , , env-key-3",
@@ -332,7 +332,7 @@ fn resolve_api_keys_missing_file_ignored() {
 
 #[test]
 fn resolve_api_keys_combined_sources() {
-    let _guard = ENV_TEST_MUTEX.lock().unwrap();
+    let _guard = crate::test_fixtures::ENV_TEST_LOCK.lock().unwrap();
     set_test_env("__VLLM_TEST_AUTH_COMBINED_ENV__", "env-key");
     let dir = tempfile::tempdir().expect("temp dir");
     let file_path = dir.path().join("keys.txt");
@@ -432,18 +432,21 @@ auth:
 /// to a temp file, and `app_config_load_nonexistent_file_uses_defaults`
 /// can observe the env var before it's removed, loading the wrong port
 /// and failing its assertion.
-static ENV_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+///
+/// RIL ISS-109: uses the crate-wide `test_fixtures::ENV_TEST_LOCK` so the
+/// cli::args tests that parse `env = "VLLM_*"` args (and expect the env
+/// unset) serialize against these setters under `cargo test` too.
 
 #[test]
 fn app_config_load_defaults_when_no_path() {
-    let _guard = ENV_TEST_MUTEX.lock().unwrap();
+    let _guard = crate::test_fixtures::ENV_TEST_LOCK.lock().unwrap();
     let config = AppConfig::load(None);
     assert_eq!(config.server.port, 8000);
 }
 
 #[test]
 fn app_config_load_nonexistent_file_uses_defaults() {
-    let _guard = ENV_TEST_MUTEX.lock().unwrap();
+    let _guard = crate::test_fixtures::ENV_TEST_LOCK.lock().unwrap();
     let config = AppConfig::load(Some("/__nonexistent__/config.yml".into()));
     assert_eq!(config.server.port, 8000);
 }
@@ -455,7 +458,7 @@ fn app_config_load_nonexistent_file_uses_defaults() {
 /// operator-facing affordance.
 #[test]
 fn app_config_load_malformed_file_degrades_to_defaults() {
-    let _guard = ENV_TEST_MUTEX.lock().unwrap();
+    let _guard = crate::test_fixtures::ENV_TEST_LOCK.lock().unwrap();
     let dir = tempfile::tempdir().expect("temp dir");
     let file_path = dir.path().join("bad_config.yml");
     // Classic YAML typo — `port` is a u16; a string fails schema parsing.
@@ -471,7 +474,7 @@ fn app_config_load_malformed_file_degrades_to_defaults() {
 
 #[test]
 fn app_config_load_from_file_with_env_override() {
-    let _guard = ENV_TEST_MUTEX.lock().unwrap();
+    let _guard = crate::test_fixtures::ENV_TEST_LOCK.lock().unwrap();
     let dir = tempfile::tempdir().expect("temp dir");
     let file_path = dir.path().join("config.yml");
     std::fs::write(&file_path, "server:\n  port: 9999\n  host: 0.0.0.0\n").expect("write file");

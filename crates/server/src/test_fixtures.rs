@@ -163,3 +163,17 @@ pub fn api_state_with_mock_engine(
     };
     (state, handle)
 }
+
+/// Serializes `vllm-server` unit tests that read or write **process-wide**
+/// environment variables (`std::env::set_var` / `remove_var`, and clap args
+/// declared with `env = "VLLM_*"`, which read `std::env` at parse time).
+///
+/// Without a single shared lock, `cargo test` (one process, many threads)
+/// races an unguarded reader (e.g. `cli/args/tests.rs` asserting a YAML
+/// port) against a sibling test's `set_var` (e.g. `config/tests.rs`
+/// writing `VLLM_CONFIG_PATH`) and fails intermittently — `nextest`
+/// (per-process) is immune because each test binary starts with a clean env
+/// (RIL ISS-109). **Every** server-crate unit test that touches `VLLM_*`
+/// must take this lock; it is the single gate for the whole crate.
+#[cfg(test)]
+pub(crate) static ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
