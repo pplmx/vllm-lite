@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 93,
+  "round": 94,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T06:32:54+00:00",
+  "updated_at": "2026-09-05T07:54:38+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6526,17 +6526,53 @@
     "TASK-119": {
       "id": "TASK-119",
       "type": "task",
-      "status": "active",
-      "version": 2,
+      "status": "resolved",
+      "version": 4,
       "created_at": "2026-09-05T06:30:45+00:00",
-      "updated_at": "2026-09-05T06:32:54+00:00",
+      "updated_at": "2026-09-05T07:29:31+00:00",
       "touched_round": 93,
       "category": "observability",
       "severity": 2,
       "confidence": 1.0,
-      "title": "Wire production recorder for avg_scheduler_wait_time_ms (ISS-095 follow-up): RequestQueue tracks arrival_time per seq but record_scheduler_wait_time is cfg(test)-only, so the gauge drains to 0 in production",
+      "title": "Wire production recorder for avg_scheduler_wait_time_ms (ISS-095 follow-up): RequestQueue tracks arrival_time per seq but record_scheduler_wait_time is cfg(test)-only, so the gauge drains to 0 in production"
+    },
+    "ISS-099": {
+      "id": "ISS-099",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T07:17:26+00:00",
+      "updated_at": "2026-09-05T07:28:30+00:00",
+      "touched_round": 93,
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "avg_scheduler_wait_time_ms is pinned at 0.000 in production: RequestQueue tracks each queued request's arrival_time but record_scheduler_wait_time is cfg(test)-only, so no production path feeds the ring channel (ISS-095 documented-follow-up, now closed by TASK-119)"
+    },
+    "CHG-113": {
+      "id": "CHG-113",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T07:25:00+00:00",
+      "updated_at": "2026-09-05T07:25:00+00:00",
+      "touched_round": 93,
+      "commit": "34f5df2f",
+      "title": "Live avg_scheduler_wait_time_ms (ISS-099/TASK-119): drain_by_phase returns per-seq waits; both batch builders record them; recorder promoted from cfg(test)"
+    },
+    "TASK-120": {
+      "id": "TASK-120",
+      "type": "task",
+      "status": "active",
+      "version": 2,
+      "created_at": "2026-09-05T07:54:38+00:00",
+      "updated_at": "2026-09-05T07:54:38+00:00",
+      "touched_round": 94,
+      "category": "observability",
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "Speculative emission path (emit_verified_tokens) swallows TrySendError::Full with let _, silently losing tokens to a slow consumer — no warn, no dropped_tokens_total (ISS-074 symmetry gap); mirror the regular try_send_token contract",
       "lock_owner": "graph-eng",
-      "lock_until": "2026-09-05T07:17:54+00:00"
+      "lock_until": "2026-09-05T08:39:38+00:00"
     }
   },
   "edges": [
@@ -9341,6 +9377,24 @@
       "to": "ISS-098",
       "type": "resolves",
       "created_at": "2026-09-05T01:55:21+00:00"
+    },
+    {
+      "from": "TASK-119",
+      "to": "ISS-099",
+      "type": "addresses",
+      "created_at": "2026-09-05T07:19:54+00:00"
+    },
+    {
+      "from": "CHG-113",
+      "to": "TASK-119",
+      "type": "implements",
+      "created_at": "2026-09-05T07:26:47+00:00"
+    },
+    {
+      "from": "CHG-113",
+      "to": "ISS-099",
+      "type": "resolves",
+      "created_at": "2026-09-05T07:26:47+00:00"
     }
   ]
 }

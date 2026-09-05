@@ -599,6 +599,53 @@ fn test_speculative_step_produces_output() {
     assert_eq!(received.map(|s| s.token), Some(42));
 }
 
+/// Regression (RIL TASK-120): the speculative emission path
+/// must count a Full token response channel in `dropped_tokens_total`, the
+/// same ISS-074 observability contract the regular path enforces. Pre-fix
+/// `emit_verified_tokens` did `let _ = tx.try_send(...)` and swallowed
+/// `TrySendError::Full`, so a speculative decode (which bursts several
+/// accepted tokens per step) silently lost tokens to a slow consumer with
+/// zero signal — the identical overload the regular `try_send_token` logs
+/// and counts.
+#[test]
+fn test_speculative_full_response_channel_records_dropped_token() {
+    use vllm_traits::SampledToken;
+
+    let target = FakeModel::new(42);
+    let draft = FakeModel::new(42); // drafts match target argmax => accepted
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 3;
+    engine.enable_speculative();
+
+    // Capacity-1 channel, pre-filled and NOT drained: the receiver stays
+    // alive (so try_send gives Full, not Closed) but is never read — every
+    // accepted-token emission hits a full mailbox.
+    let (tx, _rx) = tokio_mpsc::channel::<SampledToken>(1);
+    let _ = tx.try_send(SampledToken {
+        token: 999,
+        logprob: 0.0,
+        top_logprobs: Vec::new(),
+    });
+
+    engine.add_request(Request::new(1, vec![10, 20], 5), tx);
+    // Drive to completion: prefill emits no tokens, then each decode step
+    // tries to emit accepted drafts + the bonus token against the full
+    // channel.
+    for _ in 0..20 {
+        let _ = engine.step();
+        if !engine.has_pending() {
+            break;
+        }
+    }
+    assert!(!engine.has_pending());
+    assert!(
+        engine.scheduler.metrics.get_counter("dropped_tokens_total") >= 1,
+        "a Full try_send on the speculative path must be counted as a dropped \
+         token (RIL ISS-074 contract); pre-fix emit_verified_tokens ignored \
+         TrySendError::Full"
+    );
+}
+
 /// Regression: a long prompt in speculative mode must complete prefill in a
 /// single step (`num_computed_tokens >= prompt_len` and status `Decoding`).
 ///

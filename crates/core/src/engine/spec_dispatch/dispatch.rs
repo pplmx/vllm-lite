@@ -219,7 +219,25 @@ impl crate::engine::Engine {
                     "Drawing stale mid-chunk prediction (not real output); not emitting"
                 );
             } else if let Some(tx) = self.response_txs.get(seq_id) {
-                let _ = tx.try_send(sampled.clone());
+                // RIL TASK-120: mirror the regular path's ISS-074 contract —
+                // a `Full` channel means the consumer drains slower than the
+                // speculative path emits (accepted drafts burst several
+                // tokens per step), and the token is lost to the client
+                // stream. Log AND count it (same as `scheduler::batch::try_send_token`)
+                // so the gap is observable on `/metrics`; `Closed` (receiver
+                // dropped — client gone/cancelled) stays a silent no-op.
+                match tx.try_send(sampled.clone()) {
+                    Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                        tracing::warn!(
+                            seq_id = %seq_id,
+                            token = %sampled.token,
+                            "speculative response channel full; dropped token from client \
+                             stream (consumer too slow)"
+                        );
+                        self.scheduler.metrics.record_dropped_token();
+                    }
+                    Ok(()) | Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {}
+                }
             }
             results.push((*seq_id, sampled.clone()));
         }
