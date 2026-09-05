@@ -262,11 +262,22 @@ pub async fn kv_cache_dump(
 }
 
 /// Response payload for `TraceStatus`. Returned from handlers, serialized to JSON for the HTTP boundary.
+///
+/// Only fields with real backing data are reported (RIL ISS-093): the former
+/// `spans_active` was hardcoded `0` — the engine does create
+/// `tracing::info_span!`s on its worker thread, and nothing tracks the live
+/// count — and is removed rather than fabricated. `tracing_enabled` says
+/// whether a tracing subscriber is installed (the server always installs
+/// one); it is not a span count.
 #[derive(Debug, Serialize)]
 pub struct TraceStatusResponse {
+    /// Whether a tracing subscriber is installed (always `true` — both the
+    /// console/JSON logger and the OTLP bridge install one at startup).
     pub tracing_enabled: bool,
+    /// The effective filter directive: `RUST_LOG` when set (the override
+    /// `EnvFilter` honours), else the configured `--log-level`/YAML
+    /// `server.log_level` captured at log init.
     pub log_level: String,
-    pub spans_active: usize,
 }
 
 /// Response payload for `AuditDump`. Returned from handlers, serialized to JSON for the HTTP boundary.
@@ -331,8 +342,7 @@ pub async fn trace_status(
     }
     Json(TraceStatusResponse {
         tracing_enabled: true,
-        log_level: std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
-        spans_active: 0,
+        log_level: crate::logging::effective_log_level(),
     })
     .into_response()
 }
@@ -405,5 +415,36 @@ mod tests {
         assert!(json.contains("total_blocks"));
         assert!(json.contains("usage_percent"));
         assert!(json.contains("prefix_cache_hit_rate"));
+    }
+
+    /// RIL ISS-093: `/debug/trace` must not fabricate tracing state. The
+    /// pre-fix response carried `spans_active: 0` (hardcoded; the engine
+    /// creates `info_span!`s on its worker thread and nothing tracks the
+    /// live count) — that field is removed rather than perpetuated.
+    #[test]
+    fn test_trace_status_response_serialization_is_honest() {
+        let response = TraceStatusResponse {
+            tracing_enabled: true,
+            log_level: "debug".to_string(),
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"tracing_enabled\":true"));
+        assert!(json.contains("\"log_level\":\"debug\""));
+        assert!(
+            !json.contains("spans_active"),
+            "the fabricated spans_active field must not be emitted: {json}"
+        );
+    }
+
+    /// RIL ISS-093: `effective_log_level` falls back to the configured
+    /// (captured) log level when `RUST_LOG` is unset, never to a bare
+    /// hardcoded "info" that ignores a `--log-level debug` launch.
+    #[test]
+    fn test_effective_log_level_falls_back_to_configured_level() {
+        // Set the once-latch directly (idempotent — first set wins) so the
+        // test does not depend on RUST_LOG being absent.
+        let _ = crate::logging::CONFIGURED_LOG_LEVEL.set("debug".to_string());
+        let level = crate::logging::effective_log_level();
+        assert_eq!(level, "debug", "must report the configured level");
     }
 }

@@ -1502,7 +1502,6 @@ pub vllm_server::debug::MetricsSnapshotResponse::cuda_graph_hit_rate: f64
 pub vllm_server::debug::MetricsSnapshotResponse::gauges: std::collections::hash::map::HashMap<alloc::string::String, f64>
 pub vllm_server::debug::MetricsSnapshotResponse::queue_depth: u64
 pub vllm_server::debug::TraceStatusResponse::log_level: alloc::string::String
-pub vllm_server::debug::TraceStatusResponse::spans_active: usize
 pub vllm_server::debug::TraceStatusResponse::tracing_enabled: bool
 pub vllm_server::health::HealthStatus::NotReady
 pub vllm_server::health::HealthStatus::Ok

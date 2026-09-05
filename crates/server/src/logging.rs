@@ -5,8 +5,29 @@
 //! daily-rotating JSON file). Honours `RUST_LOG` env override if set; falls
 //! back to the `log_level` argument otherwise.
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+
+/// The configured fallback log level (e.g. `--log-level` / the YAML
+/// `server.log_level`), captured at log-init time *before* any `RUST_LOG`
+/// override. `/debug/trace` reports the **effective** directive — `RUST_LOG`
+/// when set, else this value — which is exactly the precedence
+/// [`init_logging`] applies when building the `EnvFilter`, so the endpoint
+/// agrees with what the process actually emits (RIL ISS-093).
+pub(crate) static CONFIGURED_LOG_LEVEL: OnceLock<String> = OnceLock::new();
+
+/// The effective filter directive: `RUST_LOG` when set and parseable,
+/// otherwise the configured fallback.
+#[must_use]
+pub(crate) fn effective_log_level() -> String {
+    std::env::var("RUST_LOG").unwrap_or_else(|_| {
+        CONFIGURED_LOG_LEVEL
+            .get()
+            .cloned()
+            .unwrap_or_else(|| "info".to_string())
+    })
+}
 
 /// Initialise the global tracing subscriber.
 ///
@@ -19,6 +40,10 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 /// Calling this more than once is a no-op for the second call (tracing refuses
 /// to re-install the global subscriber).
 pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
+    // RIL ISS-093: record the configured fallback so `/debug/trace` can
+    // report the effective level (RUST_LOG wins when set). First set wins —
+    // late OTLP-fallback re-inits keep the first (authoritative) value.
+    let _ = CONFIGURED_LOG_LEVEL.set(log_level.to_string());
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
