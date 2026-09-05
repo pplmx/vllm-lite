@@ -110,7 +110,14 @@ impl SchedulerEngine {
             Vec::new()
         };
 
-        let mut new_sequences = self.request_queue.drain_by_phase(phase);
+        let (mut new_sequences, waits): (Vec<Sequence>, Vec<std::time::Duration>) =
+            self.request_queue.drain_by_phase(phase).into_iter().unzip();
+        // RIL TASK-119: record each freshly-drained sequence's wait so the
+        // CUDA-Graph admission path feeds `avg_scheduler_wait_time_ms` too.
+        for wait in waits {
+            self.metrics
+                .record_scheduler_wait_time(wait.as_secs_f64() * 1000.0);
+        }
 
         // RIL ISS-055/056: memory-pressure admission gate, demanding only
         // the ADDITIONAL blocks each sequence still needs. Pre-fix this

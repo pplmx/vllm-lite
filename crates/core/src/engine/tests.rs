@@ -243,6 +243,32 @@ fn test_prefill_and_decode_throughput_are_live() {
 }
 
 #[test]
+fn test_scheduler_wait_time_is_live() {
+    // RIL TASK-119: `avg_scheduler_wait_time_ms` was pinned at 0.000 in
+    // production because the only recorder (`record_scheduler_wait_time`)
+    // lived under `#[cfg(test)]` — no admission path measured queue→drain
+    // delay. Both scheduler batch builders now record each drained
+    // sequence's `arrival_time`→drain elapsed via
+    // `RequestQueue::drain_by_phase`. We sleep after enqueue so the drain
+    // wait is deterministically > 0 (no reliance on clock tick granularity).
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![7; 16], 2), tx);
+    std::thread::sleep(std::time::Duration::from_millis(10));
+
+    let _ = engine.step();
+
+    let snap = engine.scheduler.metrics.runtime_snapshot();
+    assert!(
+        snap.avg_scheduler_wait_time_ms >= 5.0,
+        "avg_scheduler_wait_time_ms must be live after admitting a queued \
+         request that waited 10ms (was pinned at 0 pre-fix); got {}",
+        snap.avg_scheduler_wait_time_ms
+    );
+}
+
+#[test]
 fn test_requests_in_flight_live_and_balanced() {
     // RIL ISS-082: `requests_in_flight` (Prometheus gauge / OTLP
     // `inflight_requests`) must be a live signal. Pre-fix the only

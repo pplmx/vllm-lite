@@ -52,8 +52,16 @@ impl SchedulerEngine {
             Vec::new()
         };
 
-        // Get sequences for this phase from the queue
-        let mut new_sequences = self.request_queue.drain_by_phase(phase);
+        // Get sequences for this phase from the queue, paired with each
+        // one's queue→admission wait (RIL TASK-119). Record the waits so
+        // `avg_scheduler_wait_time_ms` is live in production; every sample
+        // is a real delay before an admission attempt.
+        let (mut new_sequences, waits): (Vec<crate::types::Sequence>, Vec<std::time::Duration>) =
+            self.request_queue.drain_by_phase(phase).into_iter().unzip();
+        for wait in waits {
+            self.metrics
+                .record_scheduler_wait_time(wait.as_secs_f64() * 1000.0);
+        }
 
         // Update metrics: queue depth after draining
         self.metrics

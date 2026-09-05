@@ -83,10 +83,6 @@ pub struct LockFreeMetrics {
     /// Receiver side of the bounded batch-size ring channel.
     batch_size_receiver: Receiver<usize>,
     /// Sender side of the bounded scheduler-wait ring channel.
-    // Only read by `record_scheduler_wait_time` (test-only); rustc reports
-    // the field as never-read in non-test builds because the only consumer
-    // is reachable only under cfg(test).
-    #[allow(dead_code)]
     scheduler_wait_sender: Sender<f64>,
     /// Receiver side of the bounded scheduler-wait ring channel.
     scheduler_wait_receiver: Receiver<f64>,
@@ -366,17 +362,18 @@ impl LockFreeMetrics {
     pub(crate) fn record_decode_tokens(&self, count: u64) {
         self.decode_tokens.fetch_add(count, Ordering::Relaxed);
     }
-}
 
-#[cfg(test)]
-impl LockFreeMetrics {
-    /// Record a scheduler-wait-time sample in milliseconds. Dropped if the
-    /// channel is full.
+    /// Record a scheduler-wait-time sample in milliseconds (queue→admission
+    /// delay). Dropped if the ring channel is full, keeping the hot path
+    /// lock-free.
     ///
-    /// Test-only today (RIL ISS-095): production has no admission-wait
-    /// measurement yet, so `avg_scheduler_wait_time_ms` is a documented
-    /// follow-up rather than a fabricated value. Move this into the
-    /// production impl when a request's queue→admission wait is captured.
+    /// RIL TASK-119: production callers are the two scheduler batch builders
+    /// (`build_batch` and `build_batch_with_graph`/`select_sequences_for_phase`),
+    /// which now measure each drained sequence's `arrival_time`→now elapsed
+    /// via `RequestQueue::drain_by_phase` and forward it here — previously the
+    /// only recorder lived under `#[cfg(test)]`, so
+    /// `avg_scheduler_wait_time_ms` was pinned at 0 in production (the
+    /// ISS-095 documented-follow-up is now closed).
     pub(crate) fn record_scheduler_wait_time(&self, ms: f64) {
         let _ = self.scheduler_wait_sender.try_send(ms);
     }

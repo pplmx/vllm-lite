@@ -46,6 +46,21 @@ fn test_metrics_snapshot_new_fields() {
     // RIL ISS-040: real prefix-cache entry count rides on the snapshot so
     // kv_cache_dump stops fabricating `prefix_cache_nodes: 0`.
     assert_eq!(snapshot.prefix_cache_nodes, 7);
+    // RIL TASK-119: the production scheduler-wait recorder's sample must
+    // ride through to the snapshot driving `avg_scheduler_wait_time_ms`.
+    assert!((snapshot.avg_scheduler_wait_time_ms - 10.0).abs() < 0.01);
+}
+
+#[test]
+fn test_scheduler_wait_time_average() {
+    let collector = MetricsCollector::new();
+
+    collector.record_scheduler_wait_time(4.0);
+    collector.record_scheduler_wait_time(10.0);
+    collector.record_scheduler_wait_time(16.0);
+
+    let snapshot = collector.snapshot();
+    assert!((snapshot.avg_scheduler_wait_time_ms - 10.0).abs() < 0.01);
 }
 
 #[test]

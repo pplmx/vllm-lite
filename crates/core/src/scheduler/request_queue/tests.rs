@@ -147,7 +147,10 @@ fn test_drain_by_phase() {
 
     let prefill_seqs = queue.drain_by_phase(Phase::Prefill);
     assert_eq!(prefill_seqs.len(), 1);
-    assert_eq!(prefill_seqs[0].id, 1);
+    assert_eq!(prefill_seqs[0].0.id, 1);
+    // The drained sequence must carry a wall-clock admission-wait sample
+    // (elapsed since enqueue), which is never negative.
+    assert!(prefill_seqs[0].1 >= Duration::ZERO);
     assert_eq!(queue.phase_len(Phase::Prefill), 0);
     assert_eq!(queue.phase_len(Phase::Decode), 1);
 }

@@ -4,7 +4,7 @@
 //! `RequestQueue` exposes `push`, `pop_next`, `peek`, and `remove` for the
 //! preemption path. Pure data; no I/O.
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::scheduler::policy::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::{Phase, SeqId, Sequence, Status};
@@ -53,6 +53,9 @@ pub struct RequestQueue {
     priority_queue: BinaryHeap<ScheduledSequence>,
     phase_index: HashMap<Phase, HashSet<SeqId>>,
     in_queue: HashSet<SeqId>,
+    /// Per-sequence arrival instant (parallel to the priority heap), so the
+    /// admission path can measure queue→admission wait (RIL TASK-119).
+    arrivals: HashMap<SeqId, Instant>,
 }
 
 impl RequestQueue {
@@ -64,6 +67,7 @@ impl RequestQueue {
             priority_queue: BinaryHeap::new(),
             phase_index: HashMap::new(),
             in_queue: HashSet::new(),
+            arrivals: HashMap::new(),
         }
     }
 
@@ -98,6 +102,7 @@ impl RequestQueue {
             arrival_time: Instant::now(),
         };
 
+        self.arrivals.insert(seq_id, scheduled.arrival_time);
         self.sequences.insert(seq_id, seq);
         self.priority_queue.push(scheduled);
         self.phase_index.entry(phase).or_default().insert(seq_id);
@@ -115,6 +120,7 @@ impl RequestQueue {
                     set.remove(&seq_id);
                 }
                 self.in_queue.remove(&seq_id);
+                self.arrivals.remove(&seq_id);
                 return Some(seq);
             }
         }
@@ -141,6 +147,7 @@ impl RequestQueue {
                 set.remove(&seq_id);
             }
             self.in_queue.remove(&seq_id);
+            self.arrivals.remove(&seq_id);
             Some(seq)
         } else {
             None
@@ -148,9 +155,10 @@ impl RequestQueue {
     }
 
     /// Remove and return every sequence currently in `phase`, in arbitrary
-    /// order. Lazy-cleans the priority heap afterwards to reclaim stale
-    /// entries.
-    pub fn drain_by_phase(&mut self, phase: Phase) -> Vec<Sequence> {
+    /// order, paired with the wall-clock time it spent waiting in the queue
+    /// (`arrival_time` → now, the admission-wait sample; RIL TASK-119).
+    /// Lazy-cleans the priority heap afterwards to reclaim stale entries.
+    pub fn drain_by_phase(&mut self, phase: Phase) -> Vec<(Sequence, std::time::Duration)> {
         let ids: Vec<_> = self
             .phase_index
             .remove(&phase)
@@ -158,11 +166,16 @@ impl RequestQueue {
             .into_iter()
             .collect();
         let mut result = Vec::with_capacity(ids.len());
+        let now = Instant::now();
 
         for id in ids {
             if let Some(seq) = self.sequences.remove(&id) {
                 self.in_queue.remove(&id);
-                result.push(seq);
+                let wait = self
+                    .arrivals
+                    .remove(&id)
+                    .map_or_else(|| Duration::ZERO, |arrived| now - arrived);
+                result.push((seq, wait));
             }
         }
 

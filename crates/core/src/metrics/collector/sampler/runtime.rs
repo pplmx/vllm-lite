@@ -61,6 +61,14 @@ impl EnhancedMetricsCollector {
         self.runtime.record_latency(ms);
     }
 
+    /// Record a scheduler queue→admission wait sample in milliseconds
+    /// (RIL TASK-119). Called by the scheduler's batch builders for every
+    /// sequence freshly drained from the request queue, so the exported
+    /// `avg_scheduler_wait_time_ms` gauge reflects real admission delay.
+    pub fn record_scheduler_wait_time(&self, ms: f64) {
+        self.runtime.record_scheduler_wait_time(ms);
+    }
+
     /// Update KV-cache occupancy counters (`used` blocks vs `total` capacity).
     pub fn record_kv_cache_usage(&self, used: u64, total: u64) {
         self.runtime.record_kv_cache_usage(used, total);

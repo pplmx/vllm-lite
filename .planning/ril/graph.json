@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 92,
+  "round": 93,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T01:55:21+00:00",
+  "updated_at": "2026-09-05T06:32:54+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6522,6 +6522,21 @@
       "touched_round": 91,
       "commit": "9f1f85e9",
       "title": "Report serving-time created epoch on /v1/models (ISS-098/TASK-118): unix_now_secs replacing stale hardcoded 1_700_000_000"
+    },
+    "TASK-119": {
+      "id": "TASK-119",
+      "type": "task",
+      "status": "active",
+      "version": 2,
+      "created_at": "2026-09-05T06:30:45+00:00",
+      "updated_at": "2026-09-05T06:32:54+00:00",
+      "touched_round": 93,
+      "category": "observability",
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "Wire production recorder for avg_scheduler_wait_time_ms (ISS-095 follow-up): RequestQueue tracks arrival_time per seq but record_scheduler_wait_time is cfg(test)-only, so the gauge drains to 0 in production",
+      "lock_owner": "graph-eng",
+      "lock_until": "2026-09-05T07:17:54+00:00"
     }
   },
   "edges": [
