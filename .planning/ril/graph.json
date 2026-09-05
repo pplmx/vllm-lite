@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 87,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T00:26:00+00:00",
+  "updated_at": "2026-09-05T00:39:24+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6322,7 +6322,7 @@
       "version": 1,
       "created_at": "2026-09-05T00:22:56+00:00",
       "updated_at": "2026-09-05T00:22:56+00:00",
-      "touched_round": 86,
+      "touched_round": 87,
       "severity": 3,
       "confidence": 1.0,
       "title": "/v1/completions echoes literal 'default' as the model when omitted (completions.rs x3) — chat rejects missing model with 400; completions accepts + fakes an id indistinguishable from a real one"
@@ -6361,6 +6361,20 @@
       "touched_round": 86,
       "commit": "d5caa91f",
       "title": "Remove fabricated GPU fields from /health/details (ISS-092/TASK-113): drop gpu_available + gpu_utilization, expose prefill_throughput honestly; regression test + CHANGELOG + API baseline"
+    },
+    "TASK-114": {
+      "id": "TASK-114",
+      "type": "task",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T00:39:24+00:00",
+      "updated_at": "2026-09-05T00:39:24+00:00",
+      "touched_round": 87,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1.0,
+      "title": "Stop /v1/completions echoing literal 'default' as the model when omitted (ISS-094): report the actually-serving model via response_model() (Tokenizer::model_name, mirroring /v1/models); never a fake placeholder"
     }
   },
   "edges": [
@@ -9063,6 +9077,12 @@
       "to": "ISS-092",
       "type": "resolves",
       "created_at": "2026-09-05T00:25:28+00:00"
+    },
+    {
+      "from": "TASK-114",
+      "to": "ISS-094",
+      "type": "addresses",
+      "created_at": "2026-09-05T00:39:24+00:00"
     }
   ]
 }

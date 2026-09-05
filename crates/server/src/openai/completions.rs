@@ -433,6 +433,28 @@ fn tokenize_stop_sequences(
 /// rationale; the alternative — per-candidate `seq_id` tracking +
 /// cancel — adds significant complexity for a corner case).
 ///
+/// Resolve the model id reported on a `/v1/completions` response
+/// (RIL ISS-094).
+///
+/// The legacy endpoint's `model` field is optional by design (see the
+/// [`CompletionRequest`] field doc), but a missing value must NOT echo
+/// the literal placeholder `"default"` — a client keying off
+/// `response.model` (routing, billing, logging) previously saw a fake
+/// id indistinguishable from a real one. When the client omits `model`,
+/// report the model actually serving (`state.tokenizer.model_name()`,
+/// the same source as `GET /v1/models`); `"unknown"` only when even the
+/// tokenizer has no name (stub loaders). A client-provided `model` is
+/// echoed verbatim (proxy convention; request/loaded-model conformance
+/// is a separate contract).
+fn response_model(req: &CompletionRequest, state: &ApiState) -> String {
+    req.model.clone().unwrap_or_else(|| {
+        state
+            .tokenizer
+            .model_name()
+            .unwrap_or_else(|| "unknown".to_string())
+    })
+}
+
 /// **Streaming interaction:** `n > 1` + `stream = true` is handled
 /// by the streaming wire-through (Task 5), which uses a separate
 /// helper that interleaves N SSE channels. This helper is
@@ -546,7 +568,7 @@ async fn run_n_parallel_completions(
     let usage = Usage::new(prompt_tokens_len, total_completion_tokens);
     let response = CompletionResponse::new(
         format!("cmpl-{}", uuid::Uuid::new_v4()),
-        req.model.unwrap_or_else(|| "default".to_string()),
+        response_model(&req, &state),
         choices,
         usage,
     );
@@ -1317,7 +1339,7 @@ async fn run_best_of(
     let usage = Usage::new(prompt_tokens_len, best_tokens.len());
     let response = CompletionResponse::new(
         format!("cmpl-{}", uuid::Uuid::new_v4()),
-        req.model.unwrap_or_else(|| "default".to_string()),
+        response_model(&req, &state),
         vec![choice],
         usage,
     );
@@ -1794,7 +1816,7 @@ pub async fn completions(
     let usage = Usage::new(prompt_tokens_len, tokens.len());
     let response = CompletionResponse::new(
         format!("cmpl-{}", uuid::Uuid::new_v4()),
-        req.model.unwrap_or_else(|| "default".to_string()),
+        response_model(&req, &state),
         vec![choice],
         usage,
     );

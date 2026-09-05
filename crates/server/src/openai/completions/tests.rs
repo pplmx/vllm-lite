@@ -436,3 +436,72 @@ fn test_completion_choice_logprobs_suppressed_when_speculative_placeholder_prese
     let mock_like = build_completion_choice_logprobs(&tokenizer, &[sampled(2, 0.0)], Some(1));
     assert!(mock_like.is_some());
 }
+
+// =============================================================================
+
+// RIL ISS-094: a `/v1/completions` response must never report the literal
+// placeholder `"default"` as the model. When the legacy endpoint's optional
+// `model` field is omitted, the response reports the model actually serving
+// (`Tokenizer::model_name()`, the same source as `GET /v1/models`); `"unknown"`
+// when even the tokenizer has no name. The pre-fix path
+// `req.model.unwrap_or_else(|| "default".to_string())` leaked a fake id
+// indistinguishable from a real one into `response.model`.
+#[test]
+fn test_response_model_never_reports_placeholder_default() {
+    let state = create_test_state(); // fixture tokenizer has no model name
+    let req = CompletionRequest {
+        model: None,
+        prompt: "Hello".to_string(),
+        temperature: None,
+        top_p: None,
+        max_tokens: Some(100),
+        stream: None,
+        n: None,
+        stop: None,
+        user: None,
+        seed: None,
+        frequency_penalty: None,
+        presence_penalty: None,
+        logit_bias: None,
+        logprobs: None,
+        echo: None,
+        suffix: None,
+        best_of: None,
+    };
+
+    let model = response_model(&req, &state);
+    assert_ne!(
+        model, "default",
+        "omitted model must not echo the literal 'default' placeholder"
+    );
+    assert_eq!(
+        model, "unknown",
+        "fixture tokenizer has no name; the honest fallback mirrors /v1/models"
+    );
+}
+
+#[test]
+fn test_response_model_echoes_client_model_when_provided() {
+    let state = create_test_state();
+    let req = CompletionRequest {
+        model: Some("gpt-3.5-turbo".to_string()),
+        prompt: "Hello".to_string(),
+        temperature: None,
+        top_p: None,
+        max_tokens: Some(100),
+        stream: None,
+        n: None,
+        stop: None,
+        user: None,
+        seed: None,
+        frequency_penalty: None,
+        presence_penalty: None,
+        logit_bias: None,
+        logprobs: None,
+        echo: None,
+        suffix: None,
+        best_of: None,
+    };
+
+    assert_eq!(response_model(&req, &state), "gpt-3.5-turbo");
+}
