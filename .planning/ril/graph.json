@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 97,
+  "round": 98,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T21:57:15+00:00",
+  "updated_at": "2026-09-05T22:28:31+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6622,11 +6622,11 @@
     "ISS-103": {
       "id": "ISS-103",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-05T14:41:15+00:00",
-      "updated_at": "2026-09-05T14:41:15+00:00",
-      "touched_round": 94,
+      "updated_at": "2026-09-05T22:27:04+00:00",
+      "touched_round": 97,
       "severity": 3,
       "confidence": 1.0,
       "title": "OTLP exporter omits every headline engine metric and exports 5 always-0 instruments: SCHEMA_MAP (otlp.rs) lacks tokens_total, avg/p50/p90/p99 latency, kv_cache_usage_percent, prefix_cache_hit_rate, prefill/decode_throughput_tps, avg/current_batch_size, requests_in_flight, avg_scheduler_wait_time_ms, dropped_tokens_total — all live on /metrics but absent from OTLP. gpu_memory_used/total_bytes, is_leader (never 1 even on the elected leader), inflight_requests, scheduler_queue_size have zero writers. The guard test pins this wrong parity as passing. Behind the opentelemetry feature"
@@ -6902,6 +6902,29 @@
       "touched_round": 96,
       "commit": "9d5d42b6",
       "title": "removed duplicate speculative_efficiency gauge end-to-end (collector/dedup producer/prometheus/OTLP): speculative_acceptance_rate is the single accepted/drafted wire name (ISS-108)"
+    },
+    "TASK-129": {
+      "id": "TASK-129",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T22:27:04+00:00",
+      "updated_at": "2026-09-05T22:27:04+00:00",
+      "touched_round": 97,
+      "category": "observability",
+      "severity": 7,
+      "title": "OTLP exporter omits every headline engine metric and exports 5 always-0 instruments; wire the runtime snapshot into the schema map (ISS-103)"
+    },
+    "CHG-123": {
+      "id": "CHG-123",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T22:27:04+00:00",
+      "updated_at": "2026-09-05T22:27:04+00:00",
+      "touched_round": 97,
+      "commit": "d46ce7fb",
+      "title": "OTLP SCHEMA_MAP source-tagged (Atomic|Snapshot): run loop reads runtime_snapshot() each tick and records tokens/latency/throughput/KV-prefix/in-flight/wait + dropped_tokens; 5 fabricated always-0 instruments removed; parity pinned by test parsing live PrometheusExporter output (ISS-103)"
     }
   },
   "edges": [
@@ -9934,6 +9957,24 @@
       "to": "ISS-108",
       "type": "resolves",
       "created_at": "2026-09-05T21:55:15+00:00"
+    },
+    {
+      "from": "TASK-129",
+      "to": "ISS-103",
+      "type": "addresses",
+      "created_at": "2026-09-05T22:27:04+00:00"
+    },
+    {
+      "from": "CHG-123",
+      "to": "TASK-129",
+      "type": "implements",
+      "created_at": "2026-09-05T22:27:04+00:00"
+    },
+    {
+      "from": "CHG-123",
+      "to": "ISS-103",
+      "type": "resolves",
+      "created_at": "2026-09-05T22:27:04+00:00"
     }
   ]
 }
