@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 88,
+  "round": 89,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T00:41:13+00:00",
+  "updated_at": "2026-09-05T01:12:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6330,11 +6330,11 @@
     "ISS-095": {
       "id": "ISS-095",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-05T00:22:56+00:00",
-      "updated_at": "2026-09-05T00:22:56+00:00",
-      "touched_round": 86,
+      "updated_at": "2026-09-05T01:12:00+00:00",
+      "touched_round": 88,
       "severity": 3,
       "confidence": 1.0,
       "title": "prefill_throughput / decode_throughput / avg_scheduler_wait_time_ms have zero production recorders: record_{prefill,decode}_tokens + record_scheduler_wait_time are #[cfg(test)]-only; /metrics pins these at 0.000 forever while the model generates (ISS-089 sibling class)"
@@ -6342,14 +6342,14 @@
     "ISS-096": {
       "id": "ISS-096",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "abandoned",
+      "version": 2,
       "created_at": "2026-09-05T00:22:56+00:00",
-      "updated_at": "2026-09-05T00:22:56+00:00",
-      "touched_round": 86,
+      "updated_at": "2026-09-05T00:45:01+00:00",
+      "touched_round": 88,
       "severity": 4,
       "confidence": 1.0,
-      "title": "OpenAI feature fields silently accepted + ignored: response_format.json_object and tools/tool_choice pass validation and return a free-text 200 with no tool_calls / no JSON — contradicts the repo's 'honest 400 > silent degradation' rule (API-01)"
+      "title": "(ABANDONED — documented-deferred, not a lie) OpenAI feature fields tools/tool_choice/response_format accepted but honoring a documented no-op: openai-compatibility.md L39-41 explicitly says 'Honoring is a no-op today' (P33/P22 declaration+validation, engine wire-through v32+ grammar-constrained decoder; wire contract intentionally locked so senders don't regress to serde rejection). Rejecting would contradict the locked decision; implementing is v32+."
     },
     "CHG-107": {
       "id": "CHG-107",
@@ -6386,6 +6386,43 @@
       "touched_round": 87,
       "commit": "a7cd1d4b",
       "title": "Stop /v1/completions echoing literal 'default' model (ISS-094/TASK-114): response_model() reports the actually-serving model (Tokenizer::model_name, mirrors /v1/models)"
+    },
+    "EV-117": {
+      "id": "EV-117",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T00:44:23+00:00",
+      "updated_at": "2026-09-05T00:44:23+00:00",
+      "touched_round": 88,
+      "source": "docs/reference/openai-compatibility.md L39-41+L149-153: tools/tool_choice/response_format 'Honoring is a no-op today' — documented P33/P22 declaration-only decision, engine wire-through v32+",
+      "content": "ISS-096 misclassified documented-deferred behavior as a silent lie: the compatibility matrix explicitly documents honoring as a no-op; rejecting would contradict the locked P33 decision (wire contract kept parseable for existing callers); implementing is v32+ architecture work",
+      "confidence": 1.0
+    },
+    "TASK-115": {
+      "id": "TASK-115",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T00:49:51+00:00",
+      "updated_at": "2026-09-05T01:12:00+00:00",
+      "touched_round": 88,
+      "category": "performance",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 2.0,
+      "title": "Wire prefill/decode token recorders in production (ISS-095): record_prefill_tokens/record_decode_tokens are #[cfg(test)]-only so /metrics prefill_throughput_tps + decode_throughput_tps pin 0.000 forever. Add EnhancedMetricsCollector::record_batch_phase_tokens(Batch) (prefill += sum input lengths for is_prefill seqs; decode += decode-seq count) called from regular/spec/cuda-graph step sites; avg_scheduler_wait_time_ms stays a documented follow-up (no admission-wait measurement exists)"
+    },
+    "CHG-109": {
+      "id": "CHG-109",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T01:12:00+00:00",
+      "updated_at": "2026-09-05T01:12:00+00:00",
+      "touched_round": 88,
+      "commit": "8c3b6d1e",
+      "title": "Live prefill/decode throughput gauges (ISS-095/TASK-115): EnhancedMetricsCollector::record_batch_phase_tokens called at all 3 step sites; recorders moved out of #[cfg(test)]"
     }
   },
   "edges": [
@@ -9106,6 +9143,24 @@
       "to": "ISS-094",
       "type": "resolves",
       "created_at": "2026-09-05T00:41:13+00:00"
+    },
+    {
+      "from": "TASK-115",
+      "to": "ISS-095",
+      "type": "addresses",
+      "created_at": "2026-09-05T00:49:51+00:00"
+    },
+    {
+      "from": "CHG-109",
+      "to": "TASK-115",
+      "type": "implements",
+      "created_at": "2026-09-05T01:12:00+00:00"
+    },
+    {
+      "from": "CHG-109",
+      "to": "ISS-095",
+      "type": "resolves",
+      "created_at": "2026-09-05T01:12:00+00:00"
     }
   ]
 }
