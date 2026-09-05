@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 98,
+  "round": 99,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T22:28:31+00:00",
+  "updated_at": "2026-09-05T23:51:49+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2562,7 +2562,7 @@
       "version": 1,
       "created_at": "2026-08-10T11:42:18+00:00",
       "updated_at": "2026-08-10T11:42:18+00:00",
-      "touched_round": 94,
+      "touched_round": 98,
       "title": "vllm-server openai streaming SSE",
       "role": "chat/completions SSE 流式响应"
     },
@@ -5796,11 +5796,11 @@
     "ISS-089": {
       "id": "ISS-089",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-19T03:42:44+00:00",
-      "updated_at": "2026-08-19T03:42:44+00:00",
-      "touched_round": 75,
+      "updated_at": "2026-09-05T23:47:31+00:00",
+      "touched_round": 98,
       "severity": 2,
       "confidence": 1.0,
       "title": "Batch efficiency and throughput speedup gauges have no production recorders: packing_efficiency and throughput_speedup_ratio are exposed on Prometheus /metrics + OTLP but have zero non-test call sites (pinned at 0.0 forever). Root: packing_efficiency feeds from SequencePacker::pack_sequences (never called, sequence packing ISS-064 inert) and throughput_speedup_ratio needs an A/B non-spec baseline (MTRC-03, feature-sized). Same observed class as ISS-082/084 (documented metric silently dead)."
@@ -6049,11 +6049,11 @@
     "ISS-091": {
       "id": "ISS-091",
       "type": "issue",
-      "status": "active",
-      "version": 2,
+      "status": "resolved",
+      "version": 3,
       "created_at": "2026-08-31T12:52:50+00:00",
-      "updated_at": "2026-08-31T12:59:40+00:00",
-      "touched_round": 84,
+      "updated_at": "2026-09-05T23:41:49+00:00",
+      "touched_round": 98,
       "title": "engine.tensor_parallel_size and engine.max_waiting_batches knobs have no production consumers",
       "description": "After the ISS-081 YAML-clobber fix (TASK-106), an operator can now set engine.tensor_parallel_size and engine.max_waiting_batches via YAML/env/CLI and they land in AppConfig.engine — but nothing consumes them: tensor_parallel_size never wires into vllm-dist's tensor_parallel module (server picks no TP path), and max_waiting_batches has no core scheduler waiting-queue cap (only a request_queue with no config-driven limit). Both are silent no-op knobs: raising/lowering them changes nothing at runtime, unlike max_batch_size which maps to SchedulerConfig.max_num_seqs. DEFERRED: DEC-055 (documented-deferral — keep knobs for API stability, call out inertness in docs; wire when the owning feature lands). Anchored textually; RIL has no decision->issue edge."
     },
@@ -6815,11 +6815,11 @@
     "ISS-109": {
       "id": "ISS-109",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-05T16:57:10+00:00",
-      "updated_at": "2026-09-05T16:57:10+00:00",
-      "touched_round": 95,
+      "updated_at": "2026-09-05T23:41:49+00:00",
+      "touched_round": 98,
       "severity": 1,
       "confidence": 1.0,
       "title": "Flaky env-var test isolation in cli/args/tests.rs under `cargo test` (single process): to_app_config reads clap `env = VLLM_*`, so test_to_app_config_preserves_yaml_values / flag_overrides_yaml intermittently fail when a sibling test in the same binary sets VLLM_* vars — e.g. observed test_to_app_config_preserves_yaml_values failing then passing in isolation. nextest (per-process) is immune; only `cargo test` users hit it. Fix: ENV_TEST_MUTEX guard (the sequence_packing.rs / config/tests.rs precedent) or explicit env removal in these tests"
@@ -6925,6 +6925,76 @@
       "touched_round": 97,
       "commit": "d46ce7fb",
       "title": "OTLP SCHEMA_MAP source-tagged (Atomic|Snapshot): run loop reads runtime_snapshot() each tick and records tokens/latency/throughput/KV-prefix/in-flight/wait + dropped_tokens; 5 fabricated always-0 instruments removed; parity pinned by test parsing live PrometheusExporter output (ISS-103)"
+    },
+    "TASK-130": {
+      "id": "TASK-130",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T23:41:48+00:00",
+      "updated_at": "2026-09-05T23:41:49+00:00",
+      "touched_round": 98,
+      "category": "test-quality",
+      "severity": 4,
+      "title": "Flaky env-var test isolation: cli/args tests parse clap env=VLLM_* args unguarded and race config/tests.rs set_var under cargo test (single process); share one crate-wide ENV_TEST_LOCK"
+    },
+    "TASK-131": {
+      "id": "TASK-131",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T23:41:48+00:00",
+      "updated_at": "2026-09-05T23:41:49+00:00",
+      "touched_round": 98,
+      "category": "usability",
+      "severity": 5,
+      "title": "engine.tensor_parallel_size and engine.max_waiting_batches are documented-but-inert knobs (silent no-ops); warn once at startup when set to non-default values"
+    },
+    "CHG-124": {
+      "id": "CHG-124",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T23:41:48+00:00",
+      "updated_at": "2026-09-05T23:41:48+00:00",
+      "touched_round": 98,
+      "commit": "1e6578ce",
+      "title": "Shared test_fixtures::ENV_TEST_LOCK gates every server unit test that reads/writes VLLM_* env; config/tests.rs + all 33 cli/args tests use it; cargo test --lib 517 tests green (ISS-109)"
+    },
+    "CHG-125": {
+      "id": "CHG-125",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T23:41:49+00:00",
+      "updated_at": "2026-09-05T23:41:49+00:00",
+      "touched_round": 98,
+      "commit": "876d39ba",
+      "title": "inert_engine_knob_warnings() + main.rs startup WARN for non-default tensor_parallel_size>1 / max_waiting_batches; 4 unit tests (ISS-091)"
+    },
+    "DEC-056": {
+      "id": "DEC-056",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T23:46:41+00:00",
+      "updated_at": "2026-09-05T23:46:41+00:00",
+      "touched_round": 98,
+      "rationale": "packing_efficiency and throughput_speedup_ratio gauges are documented (Plan 17.4-F/MTRC) but have no production recorder; both root causes are already deferred — packing_efficiency needs the inert sequence-packing feature (ISS-064) and throughput_speedup_ratio needs an A/B non-spec baseline run (feature-sized). Code comments at both producers already document the deferral (sampler/packing.rs, sampler/speculative.rs). Removing the gauges would break the documented metric contract for a latent (not fabricated) source, so keep them exposed and pinned, and defer wiring files both as the backs of ISS-064 and a baseline-benchmark task.",
+      "alternatives_rejected": "Remove gauges (ISS-101/108 removal class): they are latent-not-fabricated and part of the metric contract; removing breaks dashboards for zero current gain beyond silence.",
+      "title": "ISS-089 deferral: keep packing_efficiency/throughput_speedup_ratio exposed but known-inert; wire when sequence-packing (ISS-064) ships / when a non-spec baseline benchmark exists"
+    },
+    "EV-118": {
+      "id": "EV-118",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T23:46:41+00:00",
+      "updated_at": "2026-09-05T23:46:41+00:00",
+      "touched_round": 98,
+      "source": "grep crates --include=*.rs record_packing_efficiency/record_throughput_speedup (2026-09-06): zero production call sites, only tests + debug.rs test helper; sampler/packing.rs and sampler/speculative.rs both carry ISS-089 deferral comments",
+      "title": "No production caller exists for packing_efficiency or throughput_speedup_ratio; both producers document the deferral",
+      "confidence": 1.0
     }
   },
   "edges": [
@@ -9975,6 +10045,48 @@
       "to": "ISS-103",
       "type": "resolves",
       "created_at": "2026-09-05T22:27:04+00:00"
+    },
+    {
+      "from": "TASK-130",
+      "to": "ISS-109",
+      "type": "addresses",
+      "created_at": "2026-09-05T23:41:49+00:00"
+    },
+    {
+      "from": "TASK-131",
+      "to": "ISS-091",
+      "type": "addresses",
+      "created_at": "2026-09-05T23:41:49+00:00"
+    },
+    {
+      "from": "CHG-124",
+      "to": "TASK-130",
+      "type": "implements",
+      "created_at": "2026-09-05T23:41:49+00:00"
+    },
+    {
+      "from": "CHG-125",
+      "to": "TASK-131",
+      "type": "implements",
+      "created_at": "2026-09-05T23:41:49+00:00"
+    },
+    {
+      "from": "CHG-124",
+      "to": "ISS-109",
+      "type": "resolves",
+      "created_at": "2026-09-05T23:41:49+00:00"
+    },
+    {
+      "from": "CHG-125",
+      "to": "ISS-091",
+      "type": "resolves",
+      "created_at": "2026-09-05T23:41:49+00:00"
+    },
+    {
+      "from": "DEC-056",
+      "to": "COMP-014",
+      "type": "governs",
+      "created_at": "2026-09-05T23:47:31+00:00"
     }
   ]
 }
