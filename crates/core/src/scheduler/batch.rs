@@ -319,7 +319,7 @@ impl crate::engine::Engine {
     /// every step is free. Called from every step path (regular,
     /// speculative, and the CUDA-graph `step_with_graph`), on success and
     /// error alike — the allocator state is whatever the step left behind.
-    fn record_step_metrics(&mut self) {
+    pub(crate) fn record_step_metrics(&self) {
         let (used, total) = self.scheduler.get_kv_cache_usage();
         self.scheduler.metrics.record_kv_cache_usage(used, total);
     }

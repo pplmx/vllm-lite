@@ -284,13 +284,14 @@ fn test_kv_cache_usage_is_live_without_get_metrics() {
     let (tx, _rx) = mpsc::channel(64);
 
     // Nothing admitted yet → no blocks allocated → usage is 0.
-    assert_eq!(
+    assert!(
         engine
             .scheduler
             .metrics
             .runtime_snapshot()
-            .kv_cache_usage_percent,
-        0.0,
+            .kv_cache_usage_percent
+            .abs()
+            < f64::EPSILON,
         "pre-step: no blocks should be allocated"
     );
 
