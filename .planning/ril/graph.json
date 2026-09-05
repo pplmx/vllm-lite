@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 94,
+  "round": 95,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T08:02:33+00:00",
+  "updated_at": "2026-09-05T15:35:29+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 86,
+      "touched_round": 94,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 91,
+      "touched_round": 94,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -1821,7 +1821,7 @@
       "version": 1,
       "created_at": "2026-08-10T10:39:57+00:00",
       "updated_at": "2026-08-10T10:39:57+00:00",
-      "touched_round": 73,
+      "touched_round": 94,
       "title": "vllm-core engine/speculative dispatch + scheduler update",
       "role": "speculative decoding step orchestration and scheduler state fold"
     },
@@ -2562,7 +2562,7 @@
       "version": 1,
       "created_at": "2026-08-10T11:42:18+00:00",
       "updated_at": "2026-08-10T11:42:18+00:00",
-      "touched_round": 29,
+      "touched_round": 94,
       "title": "vllm-server openai streaming SSE",
       "role": "chat/completions SSE 流式响应"
     },
@@ -6582,6 +6582,192 @@
       "touched_round": 94,
       "commit": "9fd797b7",
       "title": "Speculative Full-channel token drops now logged + counted in dropped_tokens_total (TASK-120): emit_verified_tokens mirrors regular try_send_token's ISS-074 contract"
+    },
+    "ISS-100": {
+      "id": "ISS-100",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T14:41:15+00:00",
+      "updated_at": "2026-09-05T14:41:15+00:00",
+      "touched_round": 94,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "kv_cache_usage_percent stays 0.000 on /metrics only: the sole production writer record_kv_cache_usage lives in the engine GetMetrics arm (run.rs), but the /metrics handler renders runtime_snapshot() without a GetMetrics round-trip — under a /metrics-only scrape schedule the gauge never refreshes (health/details and /debug/kv-cache do refresh it)"
+    },
+    "ISS-101": {
+      "id": "ISS-101",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T14:41:15+00:00",
+      "updated_at": "2026-09-05T14:41:15+00:00",
+      "touched_round": 94,
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "/debug/metrics fabricates packing_sequences_total: 0 forever — metrics_snapshot reads get_counter('packing_sequences_total') which has no storage arm (falls to _ => 0); no writer exists anywhere (sequence packing is inert per DEC-054). Same fabricated-zero class as ISS-090 errors_total and ISS-093 spans_active — remove from the surface"
+    },
+    "ISS-102": {
+      "id": "ISS-102",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T14:41:15+00:00",
+      "updated_at": "2026-09-05T14:41:15+00:00",
+      "touched_round": 94,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "Monitoring/deploy artifacts target a non-existent metrics port 9090: /metrics is served only on the main axum router (server.port, 8000 default); PrometheusExporter stores a port but never binds. Yet config/prometheus.yml targets vllm:9090 (compose service is vllm-server, no 9090 published), and plain k8s manifests declare containerPort 9090 (deployment), metrics port 9090 (service mapping to 9090), and a fake metrics:{port:9090} section (configmap) that AppConfig does not recognise (ISS-097 WARN) — while the configmap is itself never loaded (no --config/VLLM_CONFIG_PATH in the deployment). Prometheus target permanently DOWN; the helm chart is clean"
+    },
+    "ISS-103": {
+      "id": "ISS-103",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T14:41:15+00:00",
+      "updated_at": "2026-09-05T14:41:15+00:00",
+      "touched_round": 94,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "OTLP exporter omits every headline engine metric and exports 5 always-0 instruments: SCHEMA_MAP (otlp.rs) lacks tokens_total, avg/p50/p90/p99 latency, kv_cache_usage_percent, prefix_cache_hit_rate, prefill/decode_throughput_tps, avg/current_batch_size, requests_in_flight, avg_scheduler_wait_time_ms, dropped_tokens_total — all live on /metrics but absent from OTLP. gpu_memory_used/total_bytes, is_leader (never 1 even on the elected leader), inflight_requests, scheduler_queue_size have zero writers. The guard test pins this wrong parity as passing. Behind the opentelemetry feature"
+    },
+    "ISS-104": {
+      "id": "ISS-104",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T14:41:15+00:00",
+      "updated_at": "2026-09-05T14:41:15+00:00",
+      "touched_round": 94,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "axum default Json rejections produce non-OpenAI plain-text 422/415 bodies leaking serde internals: POST /v1/chat/completions (and siblings) use bare Json<T> extractors with no WithRejection/custom rejection; a wrong-shaped body (e.g. messages as a string) returns 422 'Failed to deserialize the JSON body into the target type: ...' leaking internal type names; MissingJsonContentType -> 415. OpenAI clients/SDKs break; the repo's own hand-written 4xx contract is OpenAI ErrorResponse. Fix: shared Json rejection wrapper"
+    },
+    "ISS-105": {
+      "id": "ISS-105",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T14:41:15+00:00",
+      "updated_at": "2026-09-05T14:41:15+00:00",
+      "touched_round": 94,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "Streaming output corrupts multi-byte UTF-8: SSE paths decode each sampled token in isolation (chat.rs:2053, completions.rs:1669 etc -> tokenizer.decode(&[token])), and HF ByteLevel decoders flush their pending-prefix buffer (as U+FFFD/lossy bytes) at each call boundary — a CJK/emoji char split across two byte-level merges becomes mojibake. The non-streaming path decodes the full token list and is correct, so stream and non-stream diverge for the same prompt. Fix: incremental/carrying decoder for the stream path"
+    },
+    "ISS-106": {
+      "id": "ISS-106",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T14:41:16+00:00",
+      "updated_at": "2026-09-05T14:41:16+00:00",
+      "touched_round": 94,
+      "severity": 1,
+      "confidence": 1.0,
+      "title": "GET /v1/models/{id} route missing entirely: app.rs only registers /v1/models (list); the id the server advertises cannot be fetched, and SDKs/agents that resolve a model by id get axum's default empty 404 (no OpenAI error body)"
+    },
+    "ISS-107": {
+      "id": "ISS-107",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T14:41:16+00:00",
+      "updated_at": "2026-09-05T14:41:16+00:00",
+      "touched_round": 94,
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "Destructive ring-channel sampling: snapshot() drains the latency/batch/wait bounded ring channels and resets them (lock_free.rs), so /metrics, /health/details and /debug/kv-cache consumers corrupt each other's windows — the gauge value is 'average since the last arbitrary consumer', not a fixed window, and the same gauge disagrees across endpoints"
+    },
+    "ISS-108": {
+      "id": "ISS-108",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T14:41:16+00:00",
+      "updated_at": "2026-09-05T14:41:16+00:00",
+      "touched_round": 94,
+      "severity": 1,
+      "confidence": 1.0,
+      "title": "speculative_acceptance_rate and speculative_efficiency are duplicate gauges with identical values: both written from the same counts with the same formula (accepted/draft, same fixed-point scale) in dispatch.rs — two names on dashboards for one quantity, oncall ambiguity"
+    },
+    "TASK-121": {
+      "id": "TASK-121",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-09-05T14:43:47+00:00",
+      "updated_at": "2026-09-05T15:34:55+00:00",
+      "touched_round": 94,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "Record KV-cache usage at every engine step so /metrics kv_cache_usage_percent is live: get_kv_cache_usage() is O(1) (allocator counter) and the atomics persist; add record_kv_cache_usage after each step in run.rs (ISS-100). Keep the GetMetrics arm recording for freshness. Test: engine-level /metrics contains live value without any GetMetrics round-trip",
+      "lock_owner": "graph-eng",
+      "lock_until": "2026-09-05T15:14:29+00:00"
+    },
+    "TASK-122": {
+      "id": "TASK-122",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-09-05T14:43:47+00:00",
+      "updated_at": "2026-09-05T15:34:56+00:00",
+      "touched_round": 94,
+      "category": "correctness",
+      "severity": 2,
+      "confidence": 1.0,
+      "title": "Remove fabricated packing_sequences_total from /debug/metrics counters: get_counter has no storage arm (always 0, no writer, sequence packing inert per DEC-054) — delete the key so the surface reports only real counters (ISS-101, ISS-090/093 precedent). Test: snapshot no longer contains the key",
+      "lock_owner": "graph-eng",
+      "lock_until": "2026-09-05T15:26:00+00:00"
+    },
+    "TASK-123": {
+      "id": "TASK-123",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-09-05T14:43:47+00:00",
+      "updated_at": "2026-09-05T15:34:56+00:00",
+      "touched_round": 94,
+      "category": "correctness",
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "Make monitoring/deploy artifacts match reality: /metrics is on the server port (8000), nothing binds 9090. Fix config/prometheus.yml target to vllm-server:8000 (compose), fix plain k8s service.yaml metrics targetPort 9090->8000 and deployment containerPort 9090 (drop or repoint), remove the fake metrics:{port:9090} section from configmap.yaml, and either wire VLLM_CONFIG_PATH into the deployment or drop the inert configmap (ISS-102). Helm chart already clean. Test: config validate + artifact grep checks",
+      "lock_owner": "graph-eng",
+      "lock_until": "2026-09-05T15:30:03+00:00"
+    },
+    "CHG-115": {
+      "id": "CHG-115",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T15:33:50+00:00",
+      "updated_at": "2026-09-05T15:33:50+00:00",
+      "touched_round": 94,
+      "commit": "16c34301",
+      "title": "Record KV-cache block usage after every Engine::step (regular/speculative + CUDA-graph step_with_graph) via record_step_metrics; /metrics kv_cache_usage_percent is now live without a GetMetrics round-trip"
+    },
+    "CHG-116": {
+      "id": "CHG-116",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T15:33:50+00:00",
+      "updated_at": "2026-09-05T15:33:50+00:00",
+      "touched_round": 94,
+      "commit": "1e5d9d85",
+      "title": "Removed fabricated packing_sequences_total from /debug/metrics; counter list extracted to snapshot_counter_entries(); regression test asserts absence + every surviving counter is live"
+    },
+    "CHG-117": {
+      "id": "CHG-117",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T15:33:50+00:00",
+      "updated_at": "2026-09-05T15:33:50+00:00",
+      "touched_round": 94,
+      "commit": "8716bcaf",
+      "title": "Corrected monitoring/deploy artifacts pointing at the non-existent 9090 metrics port: prometheus.yml -> vllm-server:8000, dropped dead 9090 containerPort/service mapping, removed fake configmap metrics section (now wired via VLLM_CONFIG_PATH), fixed tutorial metric names"
     }
   },
   "edges": [
@@ -9410,6 +9596,114 @@
       "to": "TASK-120",
       "type": "implements",
       "created_at": "2026-09-05T07:57:47+00:00"
+    },
+    {
+      "from": "ISS-100",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-09-05T14:42:01+00:00"
+    },
+    {
+      "from": "ISS-101",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-05T14:42:01+00:00"
+    },
+    {
+      "from": "ISS-102",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-05T14:42:01+00:00"
+    },
+    {
+      "from": "ISS-103",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-09-05T14:42:01+00:00"
+    },
+    {
+      "from": "ISS-104",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-05T14:42:01+00:00"
+    },
+    {
+      "from": "ISS-105",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-09-05T14:42:01+00:00"
+    },
+    {
+      "from": "ISS-106",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-05T14:42:01+00:00"
+    },
+    {
+      "from": "ISS-107",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-09-05T14:42:01+00:00"
+    },
+    {
+      "from": "ISS-108",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-09-05T14:42:01+00:00"
+    },
+    {
+      "from": "TASK-121",
+      "to": "ISS-100",
+      "type": "addresses",
+      "created_at": "2026-09-05T14:43:47+00:00"
+    },
+    {
+      "from": "TASK-122",
+      "to": "ISS-101",
+      "type": "addresses",
+      "created_at": "2026-09-05T14:43:47+00:00"
+    },
+    {
+      "from": "TASK-123",
+      "to": "ISS-102",
+      "type": "addresses",
+      "created_at": "2026-09-05T14:43:47+00:00"
+    },
+    {
+      "from": "CHG-115",
+      "to": "TASK-121",
+      "type": "implements",
+      "created_at": "2026-09-05T15:33:50+00:00"
+    },
+    {
+      "from": "CHG-116",
+      "to": "TASK-122",
+      "type": "implements",
+      "created_at": "2026-09-05T15:33:50+00:00"
+    },
+    {
+      "from": "CHG-117",
+      "to": "TASK-123",
+      "type": "implements",
+      "created_at": "2026-09-05T15:33:50+00:00"
+    },
+    {
+      "from": "CHG-115",
+      "to": "ISS-100",
+      "type": "resolves",
+      "created_at": "2026-09-05T15:34:56+00:00"
+    },
+    {
+      "from": "CHG-116",
+      "to": "ISS-101",
+      "type": "resolves",
+      "created_at": "2026-09-05T15:34:56+00:00"
+    },
+    {
+      "from": "CHG-117",
+      "to": "ISS-102",
+      "type": "resolves",
+      "created_at": "2026-09-05T15:34:56+00:00"
     }
   ]
 }
