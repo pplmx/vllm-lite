@@ -305,6 +305,22 @@ impl crate::engine::Engine {
         if result.is_err() {
             self.scheduler.requeue_stuck_prefills();
         }
+        self.record_step_metrics();
         result
+    }
+
+    /// Record post-step observability so the `/metrics` snapshot reflects
+    /// current allocator state without a `GetMetrics` round-trip (RIL
+    /// ISS-100). `kv_cache_usage_percent` was pinned at 0.000 under a
+    /// /metrics-only scrape because the sole production writer
+    /// (`record_kv_cache_usage`) lived inside the `EngineMessage::GetMetrics`
+    /// arm of `run()` — the /metrics handler renders the snapshot directly.
+    /// `get_kv_cache_usage` is O(1) (an allocator counter), so calling it
+    /// every step is free. Called from every step path (regular,
+    /// speculative, and the CUDA-graph `step_with_graph`), on success and
+    /// error alike — the allocator state is whatever the step left behind.
+    fn record_step_metrics(&mut self) {
+        let (used, total) = self.scheduler.get_kv_cache_usage();
+        self.scheduler.metrics.record_kv_cache_usage(used, total);
     }
 }

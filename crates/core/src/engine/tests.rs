@@ -269,6 +269,46 @@ fn test_scheduler_wait_time_is_live() {
 }
 
 #[test]
+fn test_kv_cache_usage_is_live_without_get_metrics() {
+    // RIL ISS-100: `kv_cache_usage_percent` (exported on /metrics) was
+    // pinned at 0.000 whenever an operator scraped only /metrics: the sole
+    // production writer (`record_kv_cache_usage`) lived inside the
+    // `EngineMessage::GetMetrics` arm of `run()`, but the /metrics handler
+    // renders the runtime snapshot directly with no round-trip. So the
+    // gauge was only ever refreshed by /health/details or /debug/kv-cache
+    // probes. Every `Engine::step` now records allocator usage, so a step
+    // that allocates KV blocks must leave the snapshot non-zero with no
+    // GetMetrics involved.
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let (tx, _rx) = mpsc::channel(64);
+
+    // Nothing admitted yet → no blocks allocated → usage is 0.
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .runtime_snapshot()
+            .kv_cache_usage_percent,
+        0.0,
+        "pre-step: no blocks should be allocated"
+    );
+
+    engine.add_request(Request::new(1, vec![7; 16], 2), tx);
+    // One step: prefill a 16-token prompt (allocates 1 block) + pull the
+    // first sampled token. No `GetMetrics` message is sent anywhere.
+    let _ = engine.step();
+
+    let snap = engine.scheduler.metrics.runtime_snapshot();
+    assert!(
+        snap.kv_cache_usage_percent > 0.0,
+        "kv_cache_usage_percent must be live after a step that allocated KV \
+         blocks (was pinned at 0 pre-fix — only GetMetrics refreshed it); got {}",
+        snap.kv_cache_usage_percent
+    );
+}
+
+#[test]
 fn test_requests_in_flight_live_and_balanced() {
     // RIL ISS-082: `requests_in_flight` (Prometheus gauge / OTLP
     // `inflight_requests`) must be a live signal. Pre-fix the only

@@ -80,6 +80,10 @@ impl Engine {
         if result.is_err() {
             self.scheduler.requeue_stuck_prefills();
         }
+        // RIL ISS-100: keep the /metrics KV-usage gauge fresh on the
+        // CUDA-graph step path too (the regular/speculative path does
+        // this in `Engine::step`).
+        self.record_step_metrics();
         result
     }
 
