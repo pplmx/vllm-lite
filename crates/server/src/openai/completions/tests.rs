@@ -381,7 +381,7 @@ fn test_skipped_token_chunk_is_valid_json_with_empty_text() {
 #[test]
 fn test_parallel_finish_choice_always_carries_text_field() {
     for (index, reason) in [(0usize, "length"), (1, "stop"), (7, "stop")] {
-        let choice = parallel_finish_choice(index, reason);
+        let choice = parallel_finish_choice(index, reason, "");
         assert_eq!(
             choice["text"],
             serde_json::Value::String(String::new()),

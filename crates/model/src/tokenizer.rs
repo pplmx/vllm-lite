@@ -158,6 +158,75 @@ impl Default for Tokenizer {
     }
 }
 
+/// Incremental token-stream decoder that never splits a multi-byte UTF-8
+/// character across SSE chunks (RIL ISS-105).
+///
+/// The naive streaming path decodes each sampled token in isolation
+/// (`tokenizer.decode(&[t])`). For byte-level BPE tokenizers (the shipped
+/// Qwen defaults) a single Unicode char can be split across two
+/// consecutive byte-merges; HF's `ByteLevel` decoder flushes its pending
+/// prefix as `U+FFFD` at the end of each `decode` call, so the stream
+/// emits corruption (`�`) while the non-streaming path (full-list decode)
+/// is correct. This is exactly the mismatch observed for split chars.
+///
+/// Strategy (tokenizer-agnostic — no byte-level knowledge needed): keep
+/// the un-emitted tokens pending; decode the window, and only emit a
+/// prefix whose decode does **not** end in a lossy `U+FFFD`. A partial
+/// char at the window tail always lossy-decodes to a trailing `U+FFFD`,
+/// so that tail is held back and re-decoded once the next token arrives.
+/// A *genuine* `U+FFFD` emitted by the model (complete `EF BF BD` bytes)
+/// is also held for one step and then re-decodes identically — delayed by
+/// one token, never corrupted. Deterministic for every tokenizer format.
+#[derive(Debug, Default)]
+pub struct StreamingDecoder {
+    /// Tokens received since the last emission that have not yet been
+    /// confirmed to end on a complete character boundary.
+    pending: Vec<u32>,
+}
+
+impl StreamingDecoder {
+    /// Create an empty streaming decoder.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            pending: Vec::new(),
+        }
+    }
+
+    /// Handle the next sampled token, returning the decodable output
+    /// emitted at this step (possibly empty while awaiting the bytes that
+    /// complete a multi-byte char).
+    #[must_use]
+    pub fn push(&mut self, tokenizer: &Tokenizer, token: u32) -> String {
+        self.pending.push(token);
+        // Find the longest prefix that decodes with no trailing lossy
+        // replacement char. Typical step: 0–1 iterations (the last token
+        // is almost always complete); a mid-char split needs 1–2 more.
+        let mut emit_inclusive = self.pending.len(); // exclusive end
+        while emit_inclusive > 0 {
+            let s = tokenizer.decode(&self.pending[..emit_inclusive]);
+            if !s.ends_with('\u{FFFD}') {
+                break;
+            }
+            emit_inclusive -= 1;
+        }
+        let emitted = tokenizer.decode(&self.pending[..emit_inclusive]);
+        self.pending.drain(..emit_inclusive);
+        emitted
+    }
+
+    /// Flush any held-back suffix (stream end). Emits the remaining tokens
+    /// as-is — at the true end of the stream there is no future byte to
+    /// complete a partial char, so whatever the lossy decode yields is the
+    /// best available output.
+    #[must_use]
+    pub fn flush(&mut self, tokenizer: &Tokenizer) -> String {
+        let out = tokenizer.decode(&self.pending);
+        self.pending.clear();
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -258,5 +327,159 @@ mod tests {
             let decoded = tokenizer.decode(&tokens);
             assert!(!decoded.is_empty(), "Should be able to decode tokens");
         }
+    }
+}
+
+#[cfg(test)]
+mod streaming_decode_tests {
+    use super::*;
+    use tokenizers::decoders::byte_level::ByteLevel as ByteLevelDecoder;
+    use tokenizers::models::bpe::BPE;
+    use tokenizers::pre_tokenizers::byte_level::ByteLevel as ByteLevelPT;
+    use tokenizers::tokenizer::Tokenizer as HFT;
+
+    /// Reproduce the GPT2/byte-level byte→char encoding (`bytes_char()`
+    /// in the tokenizers crate): printable ASCII → itself, Latin-1
+    /// 0xA1..=0xAC and 0xAE..=0xFF → itself, every other byte b → the
+    /// char 0x100+n in encounter order. Used to build vocab entries the
+    /// `ByteLevel` decoder maps back to raw bytes.
+    fn byte_char(b: u8) -> char {
+        if (0x21..=0x7E).contains(&b) || (0xA1..=0xAC).contains(&b) || (0xAE..=0xFF).contains(&b) {
+            char::from(b)
+        } else {
+            // Count prior non-self bytes to compute the 0x100+n slot.
+            let n = (0..b)
+                .filter(|x| {
+                    !(0x21..=0x7E).contains(x)
+                        && !(0xA1..=0xAC).contains(x)
+                        && !(0xAE..=0xFF).contains(x)
+                })
+                .count() as u32;
+            char::from_u32(0x100 + n).unwrap_or('\u{FFFD}')
+        }
+    }
+
+    /// Build a byte-level BPE whose vocab contains the raw bytes of U+4F60
+    /// (你, bytes E4 BD A0) as three SEPARATE tokens (the merges never
+    /// combined them) — the scenario where a streamed generation emits a
+    /// multi-byte char across consecutive tokens. Wrapped in the
+    /// `vllm_model::tokenizer::Tokenizer` so the production decode path is
+    /// exercised end-to-end.
+    fn split_char_tokenizer() -> Tokenizer {
+        let mut vocab = ahash::AHashMap::default();
+        vocab.insert("h".to_string(), 0);
+        vocab.insert("i".to_string(), 1);
+        vocab.insert(byte_char(0xe4).to_string(), 2);
+        vocab.insert(byte_char(0xbd).to_string(), 3);
+        vocab.insert(byte_char(0xa0).to_string(), 4);
+        let mut hf = HFT::new(
+            BPE::builder()
+                .vocab_and_merges(vocab, tokenizers::models::bpe::Merges::default())
+                .build()
+                .unwrap(),
+        );
+        hf.with_pre_tokenizer(Some(ByteLevelPT::default()));
+        hf.with_decoder(Some(ByteLevelDecoder::default()));
+        Tokenizer {
+            inner: Some(Box::new(hf)),
+            vocab_size: 5,
+            special_tokens: Vec::new(),
+            model_name: None,
+        }
+    }
+
+    /// Regression for RIL ISS-105: streaming the three split-byte tokens
+    /// one at a time through `StreamingDecoder` must reassemble 你 — the
+    /// naive per-token `decode(&[t])` path produced `���`.
+    #[test]
+    fn streaming_decoder_reassembles_split_char() {
+        let tokenizer = split_char_tokenizer();
+        // Prove the premise: whole-list decode is correct...
+        assert_eq!(tokenizer.decode(&[2, 3, 4]), "你");
+        // ...but naive per-token decode corrupts it.
+        assert_eq!(
+            format!(
+                "{}{}{}",
+                tokenizer.decode(&[2]),
+                tokenizer.decode(&[3]),
+                tokenizer.decode(&[4])
+            ),
+            "���",
+            "premise: per-token decode must split the char (what streaming fix replaces)"
+        );
+
+        let mut dec = StreamingDecoder::new();
+        let mut out = String::new();
+        for tok in [2u32, 3, 4] {
+            out.push_str(&dec.push(&tokenizer, tok));
+        }
+        out.push_str(&dec.flush(&tokenizer));
+        assert_eq!(
+            out, "你",
+            "streaming decoder must reassemble the split char: got {out:?}"
+        );
+    }
+
+    /// Streaming every token must equal the whole-list decode for a normal
+    /// (already-merged) multi-byte sequence, and buffered output must not
+    /// introduce stray characters.
+    #[test]
+    fn streaming_decoder_matches_whole_list_decode() {
+        let tokenizer = split_char_tokenizer();
+        let seq = [0u32, 1, 2, 3, 4, 0, 1]; // "hi" + 你 + "hi"
+        let expected = tokenizer.decode(&seq);
+        let mut dec = StreamingDecoder::new();
+        let mut out = String::new();
+        for &tok in &seq {
+            out.push_str(&dec.push(&tokenizer, tok));
+        }
+        out.push_str(&dec.flush(&tokenizer));
+        assert_eq!(out, expected, "streaming must equal whole-list decode");
+    }
+
+    /// A genuine U+FFFD emitted by the model (complete EF BF BD bytes) is
+    /// held for at most one step but never corrupted, and never blocks the
+    /// following complete token. In a byte-level vocab each raw byte has
+    /// exactly one token id, so the BD byte of 你 and the BD byte of the
+    /// literal "�" are the SAME token (id 3).
+    #[test]
+    fn streaming_decoder_preserves_genuine_replacement_char() {
+        // tokens: h(0) i(1) | 你 = [2,3,4] | literal "�" = [EF,BF,BD] where
+        // EF=6 and BF=7 are not yet in the base vocab — add them, reusing
+        // BD=3 for the shared third byte.
+        let mut v = ahash::AHashMap::default();
+        v.insert("h".to_string(), 0);
+        v.insert("i".to_string(), 1);
+        v.insert(byte_char(0xe4).to_string(), 2);
+        v.insert(byte_char(0xbd).to_string(), 3);
+        v.insert(byte_char(0xa0).to_string(), 4);
+        v.insert(byte_char(0xef).to_string(), 6);
+        v.insert(byte_char(0xbf).to_string(), 7);
+        let mut hf = HFT::new(
+            BPE::builder()
+                .vocab_and_merges(v, tokenizers::models::bpe::Merges::default())
+                .build()
+                .unwrap(),
+        );
+        hf.with_pre_tokenizer(Some(ByteLevelPT::default()));
+        hf.with_decoder(Some(ByteLevelDecoder::default()));
+        let tokenizer = Tokenizer {
+            inner: Some(Box::new(hf)),
+            vocab_size: 8,
+            special_tokens: Vec::new(),
+            model_name: None,
+        };
+        // 你 (tokens 2,3,4) followed by a genuine replacement char
+        // (tokens 6,7,3 = EF BF BD) — the literal "你�".
+        let stream = [2u32, 3, 4, 6, 7, 3];
+        let expected = tokenizer.decode(&stream);
+        assert_eq!(expected, "你\u{FFFD}");
+        let mut dec = StreamingDecoder::new();
+        let mut out = String::new();
+        for tok in stream {
+            out.push_str(&dec.push(&tokenizer, tok));
+        }
+        out.push_str(&dec.flush(&tokenizer));
+        assert_eq!(out, "你\u{FFFD}", "genuine U+FFFD must survive streaming");
     }
 }

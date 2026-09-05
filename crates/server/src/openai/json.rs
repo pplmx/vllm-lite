@@ -9,7 +9,8 @@
 //! {message, type, code}}` and mostly treat non-200 / non-400 as
 //! opaque, so these defaults break client error handling (RIL ISS-104).
 //!
-//! This wrapper intercepts every [`JsonRejection`] and maps it to the
+//! This wrapper intercepts every
+//! [`JsonRejection`](axum::extract::rejection::JsonRejection) and maps it to the
 //! same OpenAI-format `ErrorResponse` the handlers' own validation
 //! paths produce: `400 invalid_request_error` for syntax and
 //! shape-mismatch failures (client-correctable input), `415` for a

@@ -34,10 +34,12 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
 /// entry to carry a `text` field (even an empty string) so clients that
 /// concatenate chunk texts never hit a missing key. The token chunks all
 /// emit `text`; the finish events must too (RIL ISS-047).
-fn parallel_finish_choice(index: usize, finish_reason: &str) -> serde_json::Value {
+fn parallel_finish_choice(index: usize, finish_reason: &str, text: &str) -> serde_json::Value {
     serde_json::json!({
         "index": index,
-        "text": "",
+        // RIL ISS-105: `text` carries a candidate's held-back tail (or "")
+        // so buffered partial bytes are not dropped at finish.
+        "text": text,
         "finish_reason": finish_reason,
     })
 }
@@ -637,6 +639,8 @@ enum NParallelSseEvent {
 struct NParallelStreamingState {
     rx: mpsc::Receiver<NParallelSseEvent>,
     tokenizer: std::sync::Arc<vllm_model::tokenizer::Tokenizer>,
+    /// Per-candidate incremental UTF-8-safe stream decoders (RIL ISS-105).
+    decoders: Vec<vllm_model::tokenizer::StreamingDecoder>,
     /// `finish_reasons[i]` = `Some(reason)` once candidate `i` has
     /// emitted its `Finished` event; `None` while still active.
     /// Used to assemble the final SSE event once ALL N candidates
@@ -1065,6 +1069,9 @@ async fn stream_n_parallel_completions(
         NParallelStreamingState {
             rx: sse_rx,
             tokenizer,
+            decoders: (0..n)
+                .map(|_| vllm_model::tokenizer::StreamingDecoder::new())
+                .collect(),
             finish_reasons: vec![None; n],
             cancel_guards,
             terminal: NParallelTerminal::Streaming,
@@ -1087,7 +1094,7 @@ async fn stream_n_parallel_completions(
                         // single-shot `stream_completion` chunk —
                         // just narrower (1 choice per event instead
                         // of 1).
-                        let text = state.tokenizer.decode(&[token.token]);
+                        let text = state.decoders[index].push(&state.tokenizer, token.token);
                         let choice = if should_skip_token_text(&state.tokenizer, &text) {
                             // Special-token / empty text — emit
                             // `text: ""` so the chunk's wire shape
@@ -1116,6 +1123,9 @@ async fn stream_n_parallel_completions(
                         // finish event or the consolidated final
                         // event (all N finish_reasons).
                         state.finish_reasons[index] = Some(finish_reason);
+                        // RIL ISS-105: flush this candidate's held-back
+                        // tail so it is not dropped at finish.
+                        let tail = state.decoders[index].flush(&state.tokenizer);
                         let all_done = state.finish_reasons.iter().all(Option::is_some);
                         let reason_string = match finish_reason {
                             vllm_traits::FinishReason::Length => "length",
@@ -1151,7 +1161,11 @@ async fn stream_n_parallel_completions(
                                         vllm_traits::FinishReason::Stop
                                         | vllm_traits::FinishReason::Cancelled => "stop",
                                     };
-                                    parallel_finish_choice(i, reason_str)
+                                    parallel_finish_choice(
+                                        i,
+                                        reason_str,
+                                        &state.decoders[i].flush(&state.tokenizer),
+                                    )
                                 })
                                 .collect();
                             let chunk = serde_json::json!({
@@ -1176,7 +1190,7 @@ async fn stream_n_parallel_completions(
                             let chunk = serde_json::json!({
                                 "id": "cmpl-stream",
                                 "object": "text_completion",
-                                "choices": [parallel_finish_choice(index, reason_string)],
+                                "choices": [parallel_finish_choice(index, reason_string, &tail)],
                             });
                             Some((Ok(Event::default().data(chunk.to_string())), state))
                         }
@@ -1649,8 +1663,17 @@ pub async fn completions(
                 Some(finish_reason_rx),
                 Terminal::Streaming,
                 false, // first_chunk_sent
+                // RIL ISS-105: incremental UTF-8-safe decoder for this stream.
+                vllm_model::tokenizer::StreamingDecoder::new(),
             ),
-            move |(mut rx, cancel_guard, mut reason_rx_opt, mut terminal, mut first_chunk_sent)| {
+            move |(
+                mut rx,
+                cancel_guard,
+                mut reason_rx_opt,
+                mut terminal,
+                mut first_chunk_sent,
+                mut decoder,
+            )| {
                 let tokenizer = tokenizer.clone();
                 let prompt_text = prompt_text.clone();
                 let echo_flag = echo_flag;
@@ -1662,12 +1685,19 @@ pub async fn completions(
                             terminal = Terminal::Done;
                             Some((
                                 Ok::<Event, Infallible>(Event::default().data("[DONE]")),
-                                (rx, cancel_guard, reason_rx_opt, terminal, first_chunk_sent),
+                                (
+                                    rx,
+                                    cancel_guard,
+                                    reason_rx_opt,
+                                    terminal,
+                                    first_chunk_sent,
+                                    decoder,
+                                ),
                             ))
                         }
                         Terminal::Streaming => {
                             if let Some(sampled) = rx.recv().await {
-                                let text = tokenizer.decode(&[sampled.token]);
+                                let text = decoder.push(&tokenizer, sampled.token);
                                 if should_skip_token_text(&tokenizer, &text) {
                                     // RIL ISS-035: emit a well-formed chunk
                                     // with empty text instead of a bare
@@ -1692,6 +1722,7 @@ pub async fn completions(
                                             reason_rx_opt,
                                             terminal,
                                             first_chunk_sent,
+                                            decoder,
                                         ),
                                     ));
                                 }
@@ -1721,9 +1752,42 @@ pub async fn completions(
                                 let sse_payload = chunk.to_string();
                                 Some((
                                     Ok(Event::default().data(sse_payload)),
-                                    (rx, cancel_guard, reason_rx_opt, terminal, first_chunk_sent),
+                                    (
+                                        rx,
+                                        cancel_guard,
+                                        reason_rx_opt,
+                                        terminal,
+                                        first_chunk_sent,
+                                        decoder,
+                                    ),
                                 ))
                             } else {
+                                // RIL ISS-105: flush any held-back bytes
+                                // (a partial char) before the finish chunk
+                                // so they are not dropped at channel close.
+                                let tail = decoder.flush(&tokenizer);
+                                if !tail.is_empty() {
+                                    let tail_chunk = serde_json::json!({
+                                        "id": "cmpl-stream",
+                                        "object": "text_completion",
+                                        "choices": [{
+                                            "text": tail,
+                                            "index": 0,
+                                        }]
+                                    });
+                                    let tail_payload = tail_chunk.to_string();
+                                    return Some((
+                                        Ok(Event::default().data(tail_payload)),
+                                        (
+                                            rx,
+                                            cancel_guard,
+                                            reason_rx_opt,
+                                            terminal,
+                                            first_chunk_sent,
+                                            decoder,
+                                        ),
+                                    ));
+                                }
                                 let reason_string = if let Some(rx) = reason_rx_opt.take() {
                                     match rx.await {
                                         Ok(vllm_traits::FinishReason::Length) => "length",
@@ -1759,7 +1823,14 @@ pub async fn completions(
                                 terminal = Terminal::EmitDoneSentinel;
                                 Some((
                                     Ok(Event::default().data(sse_payload)),
-                                    (rx, cancel_guard, reason_rx_opt, terminal, first_chunk_sent),
+                                    (
+                                        rx,
+                                        cancel_guard,
+                                        reason_rx_opt,
+                                        terminal,
+                                        first_chunk_sent,
+                                        decoder,
+                                    ),
                                 ))
                             }
                         }

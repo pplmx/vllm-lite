@@ -1070,6 +1070,11 @@ enum ChatNParallelSseEvent {
 struct ChatNParallelStreamingState {
     rx: mpsc::Receiver<ChatNParallelSseEvent>,
     tokenizer: std::sync::Arc<vllm_model::tokenizer::Tokenizer>,
+    /// Per-candidate incremental UTF-8-safe stream decoders (index-aligned
+    /// with the candidates). A multi-byte char split across two byte-level
+    /// BPE tokens must not be flushed as `U+FFFD` between SSE chunks (RIL
+    /// ISS-105).
+    decoders: Vec<vllm_model::tokenizer::StreamingDecoder>,
     /// `finish_reasons[i]` = `Some(reason)` once candidate `i` has
     /// emitted its `Finished` event; `None` while still active.
     /// Used to assemble the final SSE event once ALL N candidates
@@ -1518,6 +1523,9 @@ async fn stream_n_parallel_chat(
         ChatNParallelStreamingState {
             rx: sse_rx,
             tokenizer,
+            decoders: (0..n)
+                .map(|_| vllm_model::tokenizer::StreamingDecoder::new())
+                .collect(),
             finish_reasons: vec![None; n],
             first_emitted: vec![false; n],
             cancel_guards,
@@ -1545,7 +1553,10 @@ async fn stream_n_parallel_chat(
                             // carries `role: "assistant"` per the
                             // OpenAI chat streaming convention;
                             // subsequent events carry `content` only.
-                            let text = state.tokenizer.decode(&[token.token]);
+                            // RIL ISS-105: decode through the per-candidate
+                            // streaming decoder so a multi-byte char split
+                            // across two tokens is not flushed as U+FFFD.
+                            let text = state.decoders[index].push(&state.tokenizer, token.token);
                             let delta = if state.first_emitted[index] {
                                 // Subsequent event: content only.
                                 ChatMessage {
@@ -1600,6 +1611,10 @@ async fn stream_n_parallel_chat(
                             // only) finish event or the consolidated
                             // final event (all N finish_reasons).
                             state.finish_reasons[index] = Some(finish_reason);
+                            // RIL ISS-105: flush this candidate's held-back
+                            // bytes (a partial char at stream end) so they
+                            // are emitted with its finish event, not dropped.
+                            let tail = state.decoders[index].flush(&state.tokenizer);
                             let all_done = state.finish_reasons.iter().all(Option::is_some);
                             let reason_string = match finish_reason {
                                 vllm_traits::FinishReason::Length => "length",
@@ -1641,7 +1656,13 @@ async fn stream_n_parallel_chat(
                                         };
                                         serde_json::json!({
                                             "index": i,
-                                            "delta": {},
+                                            // RIL ISS-105: preserve each
+                                            // candidate's held-back tail in
+                                            // its final delta.
+                                            "delta": {
+                                                "content": state.decoders[i].flush(&state.tokenizer),
+                                                "role": "",
+                                            },
                                             "finish_reason": reason_str,
                                         })
                                     })
@@ -1673,7 +1694,9 @@ async fn stream_n_parallel_chat(
                                         index: index as i32,
                                         delta: ChatMessage {
                                             role: String::new(),
-                                            content: String::new(),
+                                            // RIL ISS-105: preserve the
+                                            // candidate's held-back tail.
+                                            content: tail,
                                             name: None,
                                         },
                                         finish_reason: Some(reason_string.to_string()),
@@ -2025,8 +2048,10 @@ async fn stream_chat_completion(
             cancel_guard,
             Some(finish_reason_rx),
             Terminal::Streaming,
+            // RIL ISS-105: incremental UTF-8-safe decoder for this stream.
+            vllm_model::tokenizer::StreamingDecoder::new(),
         ),
-        move |(mut rx, cancel_guard, mut reason_rx_opt, mut terminal)| {
+        move |(mut rx, cancel_guard, mut reason_rx_opt, mut terminal, mut decoder)| {
             let tokenizer = tokenizer.clone();
             let model = model.clone();
             let request_id = request_id.clone();
@@ -2046,12 +2071,12 @@ async fn stream_chat_completion(
                         terminal = Terminal::Done;
                         Some((
                             Ok::<Event, Infallible>(Event::default().data("[DONE]")),
-                            (rx, cancel_guard, reason_rx_opt, terminal),
+                            (rx, cancel_guard, reason_rx_opt, terminal, decoder),
                         ))
                     }
                     Terminal::Streaming => {
                         if let Some(sampled) = rx.recv().await {
-                            let text = tokenizer.decode(&[sampled.token]);
+                            let text = decoder.push(&tokenizer, sampled.token);
                             if should_skip_token_text(&tokenizer, &text) {
                                 // RIL ISS-035: emit a well-formed chunk with
                                 // empty content instead of a bare `data: `
@@ -2078,7 +2103,7 @@ async fn stream_chat_completion(
                                     .expect("Failed to serialize chat chunk");
                                 return Some((
                                     Ok::<Event, Infallible>(Event::default().data(sse_payload)),
-                                    (rx, cancel_guard, reason_rx_opt, terminal),
+                                    (rx, cancel_guard, reason_rx_opt, terminal, decoder),
                                 ));
                             }
                             // P36 v0.3 wire-type follow-up engine
@@ -2113,7 +2138,7 @@ async fn stream_chat_completion(
                                 .expect("Failed to serialize chat chunk");
                             Some((
                                 Ok(Event::default().data(sse_payload)),
-                                (rx, cancel_guard, reason_rx_opt, terminal),
+                                (rx, cancel_guard, reason_rx_opt, terminal, decoder),
                             ))
                         } else {
                             // Channel closed by the engine. Block on
@@ -2134,6 +2159,38 @@ async fn stream_chat_completion(
                             } else {
                                 "stop"
                             };
+                            // RIL ISS-105: flush any held-back bytes (a
+                            // partial char that never completed) so they
+                            // reach the client instead of vanishing with
+                            // the channel close.
+                            let tail = decoder.flush(&tokenizer);
+                            if !tail.is_empty() {
+                                // Emit the tail as a normal content chunk;
+                                // the channel stays closed so the NEXT
+                                // unfold call takes this same branch and
+                                // emits the finish chunk.
+                                let tail_chunk = ChatChunk::new(
+                                    "chatcmpl-stream".to_string(),
+                                    model.clone(),
+                                    ChatChunkChoice {
+                                        index: 0,
+                                        delta: ChatMessage {
+                                            role: "assistant".to_string(),
+                                            content: tail,
+                                            name: None,
+                                        },
+                                        finish_reason: None,
+                                        logprobs: None,
+                                    },
+                                );
+                                let tail_payload = serde_json::to_string(&tail_chunk)
+                                    // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                                    .expect("Failed to serialize chat chunk");
+                                return Some((
+                                    Ok(Event::default().data(tail_payload)),
+                                    (rx, cancel_guard, reason_rx_opt, terminal, decoder),
+                                ));
+                            }
                             cancel_guard.disarm();
                             let chunk = ChatChunk::new(
                                 "chatcmpl-stream".to_string(),
@@ -2170,7 +2227,7 @@ async fn stream_chat_completion(
                             terminal = Terminal::EmitDoneSentinel;
                             Some((
                                 Ok(Event::default().data(sse_payload)),
-                                (rx, cancel_guard, reason_rx_opt, terminal),
+                                (rx, cancel_guard, reason_rx_opt, terminal, decoder),
                             ))
                         }
                     }

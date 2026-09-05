@@ -29,6 +29,7 @@ parking_lot = { workspace = true }
 tempfile = "3"
 vllm-testing = { path = "../testing", version = "0.1.0" }
 criterion = "0.8"
+ahash = "0.8.11"
 
 [[bench]]
 name = "gqa_forward"
