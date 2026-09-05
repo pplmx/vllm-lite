@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 94,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T07:54:38+00:00",
+  "updated_at": "2026-09-05T08:02:33+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6527,11 +6527,11 @@
       "id": "TASK-119",
       "type": "task",
       "status": "resolved",
-      "version": 4,
+      "version": 5,
       "created_at": "2026-09-05T06:30:45+00:00",
-      "updated_at": "2026-09-05T07:29:31+00:00",
-      "touched_round": 93,
-      "category": "observability",
+      "updated_at": "2026-09-05T08:02:33+00:00",
+      "touched_round": 94,
+      "category": "performance",
       "severity": 2,
       "confidence": 1.0,
       "title": "Wire production recorder for avg_scheduler_wait_time_ms (ISS-095 follow-up): RequestQueue tracks arrival_time per seq but record_scheduler_wait_time is cfg(test)-only, so the gauge drains to 0 in production"
@@ -6562,17 +6562,26 @@
     "TASK-120": {
       "id": "TASK-120",
       "type": "task",
-      "status": "active",
-      "version": 2,
+      "status": "resolved",
+      "version": 5,
       "created_at": "2026-09-05T07:54:38+00:00",
-      "updated_at": "2026-09-05T07:54:38+00:00",
+      "updated_at": "2026-09-05T08:02:33+00:00",
       "touched_round": 94,
-      "category": "observability",
+      "category": "performance",
       "severity": 2,
       "confidence": 1.0,
-      "title": "Speculative emission path (emit_verified_tokens) swallows TrySendError::Full with let _, silently losing tokens to a slow consumer — no warn, no dropped_tokens_total (ISS-074 symmetry gap); mirror the regular try_send_token contract",
-      "lock_owner": "graph-eng",
-      "lock_until": "2026-09-05T08:39:38+00:00"
+      "title": "Speculative emission path (emit_verified_tokens) swallows TrySendError::Full with let _, silently losing tokens to a slow consumer — no warn, no dropped_tokens_total (ISS-074 symmetry gap); mirror the regular try_send_token contract"
+    },
+    "CHG-114": {
+      "id": "CHG-114",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T07:57:47+00:00",
+      "updated_at": "2026-09-05T07:57:47+00:00",
+      "touched_round": 94,
+      "commit": "9fd797b7",
+      "title": "Speculative Full-channel token drops now logged + counted in dropped_tokens_total (TASK-120): emit_verified_tokens mirrors regular try_send_token's ISS-074 contract"
     }
   },
   "edges": [
@@ -9395,6 +9404,12 @@
       "to": "ISS-099",
       "type": "resolves",
       "created_at": "2026-09-05T07:26:47+00:00"
+    },
+    {
+      "from": "CHG-114",
+      "to": "TASK-120",
+      "type": "implements",
+      "created_at": "2026-09-05T07:57:47+00:00"
     }
   ]
 }
