@@ -30,12 +30,6 @@ impl EnhancedMetricsCollector {
         self.speculative_adjustments.fetch_add(1, Ordering::Relaxed);
     }
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    pub fn record_speculative_efficiency(&self, efficiency: f64) {
-        let fixed = (efficiency * 100_000.0) as u64;
-        self.speculative_efficiency.store(fixed, Ordering::Relaxed);
-    }
-
     /// Records the spec-vs-non-spec throughput speedup ratio (1.0 = same).
     ///
     /// RIL ISS-089: no production caller exists. MTRC-03 documents this as

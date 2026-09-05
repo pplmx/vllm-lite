@@ -206,12 +206,6 @@ const SCHEMA_MAP: &[(&str, &str, InstrumentKind, &str)] = &[
         "{ratio}",
     ),
     (
-        "speculative_efficiency",
-        "speculative.efficiency",
-        InstrumentKind::Gauge,
-        "{ratio}",
-    ),
-    (
         "throughput_speedup_ratio",
         "throughput.speedup_ratio",
         InstrumentKind::Gauge,
@@ -666,7 +660,6 @@ mod tests {
             "draft_runtime_errors_total",
             "packing_efficiency",
             "speculative_acceptance_rate",
-            "speculative_efficiency",
             "throughput_speedup_ratio",
             "speculative_per_request_count",
             "request_queue_depth",

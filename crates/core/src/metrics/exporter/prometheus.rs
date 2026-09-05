@@ -138,12 +138,10 @@ impl PrometheusExporter {
         let rate = self.collector.get_gauge("speculative_acceptance_rate") as f64 / 100_000.0;
         let _ = write!(output, "speculative_acceptance_rate {rate:.3}\n");
 
-        output.push_str(
-            "# HELP speculative_efficiency Draft token efficiency, accepted/drafted (0-1)\n",
-        );
-        output.push_str("# TYPE speculative_efficiency gauge\n");
-        let eff = self.collector.get_gauge("speculative_efficiency") as f64 / 100_000.0;
-        let _ = write!(output, "speculative_efficiency {eff:.3}\n");
+        // RIL ISS-108: the duplicated `speculative_efficiency` gauge (same
+        // value, same HELP text) is intentionally NOT exported — the
+        // accepted/drafted ratio has the single name
+        // `speculative_acceptance_rate`.
 
         output.push_str(
             "# HELP throughput_speedup_ratio Speculative speedup vs baseline (1.0 = same)\n",
@@ -323,5 +321,26 @@ mod tests {
         );
         assert!(out.contains("avg_latency_ms 0.000\n"));
         assert!(out.contains("kv_cache_usage_percent 0.000\n"));
+    }
+
+    /// RIL ISS-108: the accepted/drafted ratio must appear exactly once on
+    /// the wire — `speculative_acceptance_rate`. The duplicate
+    /// `speculative_efficiency` gauge (same value, same HELP text) must not
+    /// be emitted at all, so dashboards keyed on the duplicated name stop
+    /// tracking a copy of a value that already has a canonical name.
+    #[tokio::test]
+    async fn export_does_not_emit_duplicate_speculative_gauge() {
+        let collector = EnhancedMetricsCollector::new();
+        collector.record_speculative_acceptance(8, 10);
+        let exporter = PrometheusExporter::new(std::sync::Arc::new(collector), 9090);
+        let out = exporter.export_to_string().await;
+        assert!(
+            out.contains("speculative_acceptance_rate 0.800\n"),
+            "accepted/drafted gauge must be the single source: {out}"
+        );
+        assert!(
+            !out.contains("speculative_efficiency"),
+            "duplicate speculative_efficiency gauge must be gone: {out}"
+        );
     }
 }

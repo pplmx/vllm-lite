@@ -53,9 +53,10 @@ pub struct EnhancedMetricsCollector {
     /// Packing efficiency percentage × 100 (fixed-point).
     packing_efficiency: AtomicU64,
     /// Speculative acceptance rate (accepted / drafted) × `100_000` (fixed-point).
+    /// The single wire name for the accepted/drafted ratio — the duplicate
+    /// `speculative_efficiency` gauge (fed the identical value) was removed
+    /// (RIL ISS-108).
     speculative_acceptance_rate: AtomicU64,
-    /// Speculative efficiency (accepted / drafted) × `100_000` (fixed-point).
-    speculative_efficiency: AtomicU64,
     /// Throughput speedup vs. greedy decoding × 100 (fixed-point).
     throughput_speedup_ratio: AtomicU64,
     /// Current depth of the scheduler's request queue.
@@ -93,7 +94,6 @@ impl EnhancedMetricsCollector {
             speculative_adjustments: AtomicU64::new(0),
             packing_efficiency: AtomicU64::new(0),
             speculative_acceptance_rate: AtomicU64::new(0),
-            speculative_efficiency: AtomicU64::new(0),
             throughput_speedup_ratio: AtomicU64::new(0),
             request_queue_depth: AtomicU64::new(0),
             active_sequences: AtomicU64::new(0),
@@ -127,7 +127,6 @@ impl EnhancedMetricsCollector {
             "speculative_acceptance_rate" => {
                 self.speculative_acceptance_rate.load(Ordering::Relaxed)
             }
-            "speculative_efficiency" => self.speculative_efficiency.load(Ordering::Relaxed),
             "throughput_speedup_ratio" => self.throughput_speedup_ratio.load(Ordering::Relaxed),
             "request_queue_depth" => self.request_queue_depth.load(Ordering::Relaxed),
             "active_sequences" => self.active_sequences.load(Ordering::Relaxed),
@@ -175,7 +174,7 @@ impl Default for EnhancedMetricsCollector {
 // Unit tests are extracted to `tests.rs` to keep this file under the
 // 800-line soft cap. See `tests.rs` for the test surface
 // (cuda_graph_hit counter, packing_efficiency / speculative_acceptance /
-// speculative_efficiency / throughput_speedup gauges, inference
+// throughput_speedup gauges, inference
 // latency samples, draft-resolution metrics counters and
 // DraftResolutionKind parse / Display).
 #[cfg(test)]

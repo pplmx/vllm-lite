@@ -389,11 +389,12 @@ fn test_warmup_draft_kv_invokes_draft_per_sequence() {
 }
 
 /// RIL ISS-084: speculative metrics must report actual draft acceptance.
-/// `speculative_efficiency` must be accepted/drafted (all drafts accepted ->
-/// 1.0) and `speculative_acceptance_rate` must have a live production recorder
-/// (pre-fix it was never written and stayed 0). The pre-fix efficiency
-/// formula draft/(draft+accepted) scored a perfect draft model 0.5 — an
-/// inverted metric where a worse draft model reports *higher* efficiency.
+/// `speculative_acceptance_rate` must be accepted/drafted (all drafts
+/// accepted -> 1.0; the pre-fix draft/(draft+accepted) formula scored a
+/// perfect draft model 0.5 — an inverted metric where a worse draft model
+/// reports *higher* acceptance) and must have a live production recorder
+/// (pre-fix it was never written and stayed 0). The duplicated
+/// `speculative_efficiency` gauge is absent (RIL ISS-108).
 #[test]
 fn test_speculative_metrics_all_drafts_accepted() {
     let target = FakeModel::new(42);
@@ -409,17 +410,14 @@ fn test_speculative_metrics_all_drafts_accepted() {
     let _ = engine.step().unwrap();
     let _ = engine.step().unwrap();
 
+    // RIL ISS-108: the accepted/drafted ratio has a single wire name —
+    // `speculative_acceptance_rate` (the duplicate `speculative_efficiency`
+    // gauge was removed; it was fed the identical value).
     // Gauges are fixed-point ratios × 100_000; accepted/drafted = 1.0.
-    let efficiency = engine.scheduler.metrics.get_gauge("speculative_efficiency");
     let acceptance = engine
         .scheduler
         .metrics
         .get_gauge("speculative_acceptance_rate");
-    assert_eq!(
-        efficiency, 100_000,
-        "efficiency must be accepted/drafted = 1.0 when every draft is accepted; \
-         got {efficiency} (pre-fix it recorded draft/(draft+accepted) = 0.5)"
-    );
     assert_eq!(
         acceptance, 100_000,
         "acceptance-rate gauge must be live (accepted/drafted = 1.0); \
@@ -444,11 +442,6 @@ fn test_speculative_metrics_no_drafts_accepted() {
     let _ = engine.step().unwrap();
     let _ = engine.step().unwrap();
 
-    assert_eq!(
-        engine.scheduler.metrics.get_gauge("speculative_efficiency"),
-        0,
-        "efficiency must be 0 when no draft is accepted"
-    );
     assert_eq!(
         engine
             .scheduler

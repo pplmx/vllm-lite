@@ -6,7 +6,7 @@
 //!
 //! - Counter / gauge recorders (`cuda_graph_hit`, `packing_efficiency`,
 //!   `speculative_acceptance`, `inference_latency`,
-//!   `speculative_efficiency`, `throughput_speedup`)
+//!   `throughput_speedup`)
 //! - Draft-resolution metric counters
 //!   (`DraftResolutionKind::{External, SelfSpec, None}`)
 //! - `DraftResolutionKind::parse` round-trip + aliases + invalid input
@@ -83,19 +83,18 @@ fn test_collector_records_inference_latency() {
 
 // ---- Plan 17.4-H: Metrics Tests ----
 
+/// RIL ISS-108: `speculative_acceptance_rate` and `speculative_efficiency`
+/// were duplicate gauges — the producer fed BOTH from the identical
+/// accepted/drafted ratio (dispatch.rs), so /metrics emitted two
+/// differently-named gauges with the same value and the same HELP text.
+/// The duplicate is removed from the collector: the acceptance-rate gauge
+/// is the single wire name for accepted/drafted.
 #[test]
-fn test_speculative_efficiency_basic() {
+fn test_speculative_gauge_is_deduplicated() {
     let collector = EnhancedMetricsCollector::new();
-    collector.record_speculative_efficiency(0.6667);
-    let gauge = collector.get_gauge("speculative_efficiency");
-    assert!(gauge > 66000 && gauge < 67000);
-}
-
-#[test]
-fn test_speculative_efficiency_zero() {
-    let collector = EnhancedMetricsCollector::new();
-    let gauge = collector.get_gauge("speculative_efficiency");
-    assert_eq!(gauge, 0);
+    collector.record_speculative_acceptance(8, 10);
+    // The surviving gauge reports the accepted/drafted ratio (× 100_000).
+    assert_eq!(collector.get_gauge("speculative_acceptance_rate"), 80000);
 }
 
 #[test]
@@ -111,14 +110,6 @@ fn test_throughput_speedup_default() {
     let collector = EnhancedMetricsCollector::new();
     let gauge = collector.get_gauge("throughput_speedup_ratio");
     assert_eq!(gauge, 0);
-}
-
-#[test]
-fn test_collector_records_speculative_efficiency() {
-    let collector = EnhancedMetricsCollector::new();
-    collector.record_speculative_efficiency(0.75);
-    let gauge = collector.get_gauge("speculative_efficiency");
-    assert_eq!(gauge, 75000);
 }
 
 #[test]

@@ -128,21 +128,15 @@ impl crate::engine::Engine {
             }
         }
 
-        // Record speculative efficiency metric (Plan 17.4-F / MTRC-02).
-        // RIL ISS-084: efficiency is accepted/drafted (draft quality — a
-        // perfect draft model scores 1.0, a never-accepted one 0.0). The
-        // pre-fix draft/(draft+accepted) scored perfect drafts 0.5 — an
-        // inverted metric where worse drafts report *higher* efficiency.
-        // The batch-aggregated acceptance-rate gauge is recorded from the
-        // same counts (pre-fix it had no production callers and stayed 0).
+        // Record the batch-aggregated accepted/drafted ratio (Plan 17.4-F /
+        // MTRC-02). RIL ISS-084: acceptance is accepted/drafted (draft
+        // quality — a perfect draft model scores 1.0, a never-accepted one
+        // 0.0); the pre-fix draft/(draft+accepted) scored perfect drafts
+        // 0.5 — an inverted metric where worse drafts report *higher*
+        // acceptance. The duplicated `speculative_efficiency` gauge was
+        // removed (RIL ISS-108): it was fed this same ratio under a second
+        // name, so `speculative_acceptance_rate` is the single wire name.
         if total_draft > 0 {
-            // invariant: draft/accepted counts are bounded per-step; precision loss
-            // is acceptable for the ratio gauges.
-            #[allow(clippy::cast_precision_loss)]
-            let efficiency = total_accepted as f64 / total_draft as f64;
-            self.scheduler
-                .metrics
-                .record_speculative_efficiency(efficiency);
             self.scheduler
                 .metrics
                 .record_speculative_acceptance(total_accepted, total_draft);
