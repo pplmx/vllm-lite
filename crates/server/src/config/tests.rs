@@ -516,3 +516,42 @@ fn is_loopback_address_rejects_non_loopback() {
     assert!(!is_loopback_address("example.com"));
     assert!(!is_loopback_address("invalid"));
 }
+
+// RIL ISS-097: unknown top-level config keys (typo'd sections) must be
+// detectable so the server can WARN instead of silently degrading to
+// defaults. `unknown_top_level_keys` is the best-effort detector.
+
+#[test]
+fn test_unknown_top_level_keys_detects_typo_sections() {
+    // `engin:` (vs `engine:`) is a top-level typo; `multi_node` is not a
+    // top-level section (it lives under `server`). Both are unknown.
+    let keys = unknown_top_level_keys(
+        "server:\n  port: 8000\nengin:\n  num_kv_blocks: 100\nmulti_node:\n  enabled: true\n",
+    );
+    assert_eq!(keys, vec!["engin".to_string(), "multi_node".to_string()]);
+}
+
+#[test]
+fn test_unknown_top_level_keys_empty_for_recognised_sections() {
+    let keys = unknown_top_level_keys(
+        "server:\n  port: 8000\nengine:\n  num_kv_blocks: 100\nauth:\n  api_keys: [sk-1]\ncors:\n  allow_origins: [\"*\"]\n",
+    );
+    assert!(
+        keys.is_empty(),
+        "recognised sections must not warn: {keys:?}"
+    );
+}
+
+#[test]
+fn test_unknown_top_level_keys_best_effort_on_unparsable_content() {
+    // Content serde_json::Value cannot represent must skip the check
+    // silently (returns []), never fail the caller.
+    let keys = unknown_top_level_keys("engine:\n  max_batch_size: [not, json]\n");
+    assert!(keys.is_empty());
+}
+
+#[test]
+fn test_unknown_top_level_keys_empty_on_garbage() {
+    let keys = unknown_top_level_keys(":::: not yaml at all ::::");
+    assert!(keys.is_empty());
+}

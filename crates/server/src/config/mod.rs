@@ -119,8 +119,42 @@ impl Default for AppConfig {
     }
 }
 
+/// Top-level config section names `AppConfig` recognises. A typo'd section
+/// (e.g. `engin:` vs `engine:`) is silently ignored by the lenient serde
+/// parse — every section carries `#[serde(default)]` — so without this
+/// check an operator's typo runs the server on built-in defaults with
+/// zero signal (RIL ISS-097). `observability` is a recognised section only
+/// when the `opentelemetry` feature is compiled in; without it, a config
+/// declaring `observability` is ignored and now warned about.
+#[cfg(not(feature = "opentelemetry"))]
+const KNOWN_SECTIONS: &[&str] = &["server", "engine", "auth", "cors"];
+#[cfg(feature = "opentelemetry")]
+const KNOWN_SECTIONS: &[&str] = &["server", "engine", "auth", "cors", "observability"];
+
+/// Best-effort detection of unknown top-level config keys (RIL ISS-097).
+///
+/// Re-parses the raw YAML as `serde_json::Value` and returns any top-level
+/// key outside [`KNOWN_SECTIONS`]. The re-parse is **best-effort**: exotic
+/// YAML constructs that do not map to JSON simply skip the check (returns
+/// `[]`), and the lenient `AppConfig` parse in the caller stays
+/// authoritative either way. The caller logs a `WARN` per unknown key so a
+/// typo'd section surfaces instead of silently degrading to defaults.
+fn unknown_top_level_keys(contents: &str) -> Vec<String> {
+    let Ok(serde_json::Value::Object(top)) = serde_saphyr::from_str::<serde_json::Value>(contents)
+    else {
+        return Vec::new();
+    };
+    top.keys()
+        .filter(|k| !KNOWN_SECTIONS.contains(&k.as_str()))
+        .cloned()
+        .collect()
+}
+
 /// Read and parse a config file, returning `None` (with a `WARN` log — never
-/// a hard failure) when the file *exists* but cannot be read or parsed.
+/// a hard failure) when the file *exists* but cannot be read or parsed. When
+/// it parses, a `WARN` is still emitted for any unknown top-level key (RIL
+/// ISS-097) — the lenient parse is authoritative, so a typo'd section no
+/// longer degrades silently.
 ///
 /// Missing files are not the caller's fault here — callers filter on
 /// `Path::exists()` first — so only read/parse failures hit this function,
@@ -138,6 +172,15 @@ fn load_config_file(path: &Path) -> Option<AppConfig> {
             return None;
         }
     };
+    for key in unknown_top_level_keys(&contents) {
+        tracing::warn!(
+            path = %path.display(),
+            key = %key,
+            sections = ?KNOWN_SECTIONS,
+            "config load: unknown top-level key is ignored (likely a typo); \
+             recognised sections are listed in 'sections'"
+        );
+    }
     match serde_saphyr::from_str::<AppConfig>(&contents) {
         Ok(config) => Some(config),
         Err(e) => {
