@@ -14,6 +14,7 @@
 //! Run with: `cargo nextest run -p vllm-server --test error_contract`.
 
 use axum::http::StatusCode;
+use vllm_server::openai::json::OpenaiJson;
 use vllm_server::openai::types::ErrorResponse;
 
 /// Build a test [`vllm_server::ApiState`] with the given architecture.
@@ -93,7 +94,7 @@ fn error_response_json_field_order_matches_openai_spec() {
 
 #[tokio::test]
 async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
-    use axum::{Extension, Json, extract::State};
+    use axum::{Extension, extract::State};
     use vllm_server::openai::chat::chat_completions;
     use vllm_server::openai::types::{ChatMessage, ChatRequest};
     use vllm_server::security::correlation::CorrelationId;
@@ -127,7 +128,7 @@ async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
     let result = chat_completions(
         State(state),
         Extension(CorrelationId("test-correlation-id".into())),
-        Json(req),
+        OpenaiJson(req),
     )
     .await;
     let (status, body) = result.expect_err("expected error for empty model");
@@ -137,7 +138,7 @@ async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
 
 #[tokio::test]
 async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
-    use axum::{Extension, Json, extract::State};
+    use axum::{Extension, extract::State};
     use vllm_server::openai::chat::chat_completions;
     use vllm_server::openai::types::{ChatMessage, ChatRequest};
     use vllm_server::security::correlation::CorrelationId;
@@ -171,7 +172,7 @@ async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
     let result = chat_completions(
         State(state),
         Extension(CorrelationId("test-correlation-id".into())),
-        Json(req),
+        OpenaiJson(req),
     )
     .await;
     let (status, body) = result.expect_err("expected engine-channel error");
@@ -189,7 +190,7 @@ async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
 
 #[tokio::test]
 async fn embeddings_rejects_empty_model_with_400() {
-    use axum::{Json, extract::State};
+    use axum::extract::State;
     use vllm_server::openai::embeddings::embeddings;
     use vllm_server::openai::types::EmbeddingsRequest;
 
@@ -199,14 +200,14 @@ async fn embeddings_rejects_empty_model_with_400() {
         input: vec!["hi".into()],
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     let (status, _) = result.expect_err("expected 400");
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
 async fn embeddings_returns_503_with_engine_unavailable_code_when_channel_closed() {
-    use axum::{Json, extract::State};
+    use axum::extract::State;
     use vllm_server::openai::embeddings::embeddings;
     use vllm_server::openai::types::EmbeddingsRequest;
 
@@ -216,7 +217,7 @@ async fn embeddings_returns_503_with_engine_unavailable_code_when_channel_closed
         input: vec!["hi".into()],
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     let (status, body) = result.expect_err("expected engine-channel error");
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(body.error.code.as_deref(), Some("engine_unavailable"));
@@ -228,7 +229,7 @@ async fn embeddings_returns_503_with_engine_unavailable_code_when_channel_closed
 
 #[tokio::test]
 async fn completions_rejects_empty_prompt_with_400() {
-    use axum::{Extension, Json, extract::State};
+    use axum::{Extension, extract::State};
     use vllm_server::openai::completions::completions;
     use vllm_server::openai::types::CompletionRequest;
     use vllm_server::security::correlation::CorrelationId;
@@ -257,7 +258,7 @@ async fn completions_rejects_empty_prompt_with_400() {
     let result = completions(
         State(state),
         Extension(CorrelationId("test-correlation-id".into())),
-        Json(req),
+        OpenaiJson(req),
     )
     .await;
     let (status, _) = result.expect_err("expected 400");
@@ -266,7 +267,7 @@ async fn completions_rejects_empty_prompt_with_400() {
 
 #[tokio::test]
 async fn completions_returns_503_with_engine_unavailable_code_when_channel_closed() {
-    use axum::{Extension, Json, extract::State};
+    use axum::{Extension, extract::State};
     use vllm_server::openai::completions::completions;
     use vllm_server::openai::types::CompletionRequest;
     use vllm_server::security::correlation::CorrelationId;
@@ -295,7 +296,7 @@ async fn completions_returns_503_with_engine_unavailable_code_when_channel_close
     let result = completions(
         State(state),
         Extension(CorrelationId("test-correlation-id".into())),
-        Json(req),
+        OpenaiJson(req),
     )
     .await;
     let (status, body) = result.expect_err("expected engine-channel error");

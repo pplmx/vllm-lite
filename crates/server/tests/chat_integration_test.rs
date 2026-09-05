@@ -1211,15 +1211,22 @@ async fn test_chat_with_response_format_json_schema_rejected() {
         status.is_client_error(),
         "json_schema must be rejected with 4xx; got {status} (v0.3 work; not yet implemented in v0.2)",
     );
-    // Pin the specific status for documentation: axum's Json extractor
-    // returns 422 (Unprocessable Entity) for deserialization failures.
-    // This is the axum-standard contract: 422 means "syntactically
-    // valid JSON but semantically invalid input" (unknown enum variant
-    // fits this definition precisely).
+    // RIL ISS-104: the OpenAI wire contract maps deserialization
+    // failures (unknown enum variant, wrong shape, malformed JSON) to
+    // 400 invalid_request_error — not axum's default 422 plain-text
+    // body, which OpenAI clients treat as opaque.
     assert_eq!(
         status,
-        StatusCode::UNPROCESSABLE_ENTITY,
-        "axum's Json<T> extractor returns 422 for unknown enum variants at deserialization"
+        StatusCode::BAD_REQUEST,
+        "OpenaiJson must map an unknown enum variant to 400 invalid_request_error (was 422 plain text pre-fix)"
+    );
+    let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .expect("readable body");
+    let body = String::from_utf8_lossy(&bytes);
+    assert!(
+        body.contains(r#""error""#) && body.contains(r#""invalid_request_error""#),
+        "rejection body must be an OpenAI-format error envelope: {body}"
     );
 }
 

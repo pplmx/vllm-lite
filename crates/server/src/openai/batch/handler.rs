@@ -9,6 +9,7 @@ use super::types::{
     SimpleBatchRequest,
 };
 use crate::ApiState;
+use crate::openai::json::OpenaiJson;
 use crate::openai::sampling_validation::validate_temperature;
 use crate::openai::types::ErrorResponse;
 
@@ -44,7 +45,7 @@ const MAX_BATCH_PROMPTS: usize = 10_000;
 #[allow(clippy::unused_async)]
 pub async fn create_batch(
     State(state): State<ApiState>,
-    Json(req): Json<SimpleBatchRequest>,
+    OpenaiJson(req): OpenaiJson<SimpleBatchRequest>,
 ) -> Result<Json<BatchResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     if req.prompts.is_empty() {
         return Err((
@@ -379,7 +380,7 @@ mod tests {
             temperature: Some(0.7),
         };
 
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         assert!(result.is_err());
         let (status, _) = result.unwrap_err();
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
@@ -402,7 +403,7 @@ mod tests {
             max_tokens: Some(10),
             temperature: None,
         };
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let (status, body) = result.expect_err("an empty prompt string must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
         assert_eq!(body.0.error.error_type, "invalid_request_error");
@@ -429,7 +430,7 @@ mod tests {
             max_tokens: Some(10),
             temperature: None,
         };
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let (status, _) = result.expect_err("a batch containing an empty prompt must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
     }
@@ -446,7 +447,7 @@ mod tests {
             max_tokens: Some(10),
             temperature: None,
         };
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let response = result.expect("a batch of exactly MAX_BATCH_PROMPTS must be accepted");
         assert_eq!(response.status, "pending");
     }
@@ -464,7 +465,7 @@ mod tests {
             max_tokens: Some(10),
             temperature: None,
         };
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let (status, body) = result.expect_err("a batch over MAX_BATCH_PROMPTS must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
         assert!(
@@ -490,7 +491,7 @@ mod tests {
             temperature: Some(0.5),
         };
 
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let response = result.expect("create_batch must succeed once the worker exists");
         assert_eq!(response.status, "pending");
         assert!(response.id.starts_with("batch_"));
@@ -530,7 +531,7 @@ mod tests {
         // (worker falls back to the engine defaults).
         let state = create_test_state();
         let req = batch_request(None, None);
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         // `Json` is `#[must_use]` — an explicit `let _ =` signals we only
         // care that creation succeeded.
         let _ = result.expect("None temperature / max_tokens must pass (engine defaults)");
@@ -543,7 +544,7 @@ mod tests {
         for temperature in [Some(0.0_f32), Some(2.0_f32)] {
             let state = create_test_state();
             let req = batch_request(temperature, Some(1));
-            let result = create_batch(State(state), Json(req)).await;
+            let result = create_batch(State(state), OpenaiJson(req)).await;
             let _ = result.unwrap_or_else(|(_, j)| {
                 panic!(
                     "boundary temperature {temperature:?} + max_tokens=1 must pass: {}",
@@ -557,7 +558,7 @@ mod tests {
     async fn test_create_batch_rejects_nan_temperature() {
         let state = create_test_state();
         let req = batch_request(Some(f32::NAN), None);
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let (status, body) = result.expect_err("NaN temperature must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
         assert_eq!(body.0.error.error_type, "invalid_request_error");
@@ -569,7 +570,7 @@ mod tests {
         for t in [f32::INFINITY, f32::NEG_INFINITY] {
             let state = create_test_state();
             let req = batch_request(Some(t), None);
-            let result = create_batch(State(state), Json(req)).await;
+            let result = create_batch(State(state), OpenaiJson(req)).await;
             let (status, _) = result.expect_err("±inf temperature must be rejected");
             assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
         }
@@ -579,7 +580,7 @@ mod tests {
     async fn test_create_batch_rejects_negative_temperature() {
         let state = create_test_state();
         let req = batch_request(Some(-1.0), None);
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let (status, _) = result.expect_err("negative temperature must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
     }
@@ -588,7 +589,7 @@ mod tests {
     async fn test_create_batch_rejects_out_of_range_temperature() {
         let state = create_test_state();
         let req = batch_request(Some(3.0), None);
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let (status, body) = result.expect_err("temperature > 2 must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
         assert!(body.0.error.message.contains("temperature"));
@@ -599,7 +600,7 @@ mod tests {
         let state = create_test_state();
         let manager = std::sync::Arc::clone(&state.batch_manager);
         let req = batch_request(None, Some(0));
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let (status, body) = result.expect_err("max_tokens = 0 must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
         assert!(body.0.error.message.contains("max_tokens"));
@@ -615,7 +616,7 @@ mod tests {
         let state = create_test_state();
         let manager = std::sync::Arc::clone(&state.batch_manager);
         let req = batch_request(None, Some(-5));
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let (status, _) = result.expect_err("negative max_tokens must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
         assert!(
@@ -632,7 +633,7 @@ mod tests {
         // extended the retention window on every read.
         let state = create_test_state();
         let req = batch_request(None, Some(10));
-        let result = create_batch(State(state), Json(req)).await;
+        let result = create_batch(State(state), OpenaiJson(req)).await;
         let response = result.expect("valid batch must be created");
         assert_eq!(
             response.expires_at - response.created_at,

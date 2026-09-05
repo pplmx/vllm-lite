@@ -1,4 +1,5 @@
 //! `OpenAI` Embeddings endpoint: `POST /v1/embeddings`. Tokenise the input list and return one embedding vector per input.
+use super::json::OpenaiJson;
 use super::types::{EmbeddingsRequest, EmbeddingsResponse, ErrorResponse};
 use crate::ApiState;
 use axum::{Json, extract::State, response::IntoResponse};
@@ -34,7 +35,7 @@ const MAX_EMBEDDINGS_INPUTS: usize = 2048;
 ///   code `engine_unavailable`)
 pub async fn embeddings(
     State(state): State<ApiState>,
-    Json(req): Json<EmbeddingsRequest>,
+    OpenaiJson(req): OpenaiJson<EmbeddingsRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
     // Production-readiness §10: refuse with 501 when the loaded
     // model is a stub (or capabilities couldn't be detected).

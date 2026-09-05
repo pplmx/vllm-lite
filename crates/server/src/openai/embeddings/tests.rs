@@ -39,7 +39,7 @@ async fn test_embeddings_empty_model() {
         input: vec!["test input".to_string()],
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     assert!(result.is_err());
     let (status, _) = result.unwrap_err();
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -53,7 +53,7 @@ async fn test_embeddings_empty_input() {
         input: vec![],
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     assert!(result.is_err());
     let (status, _) = result.unwrap_err();
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -73,7 +73,7 @@ async fn test_embeddings_rejects_empty_string_element() {
         input: vec![String::new()],
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     assert!(result.is_err());
     let (status, _) = result.unwrap_err();
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -87,7 +87,7 @@ async fn test_embeddings_rejects_whitespace_only_element() {
         input: vec!["   ".to_string()],
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     assert!(result.is_err());
     let (status, _) = result.unwrap_err();
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -105,7 +105,7 @@ async fn test_embeddings_rejects_any_empty_element_in_list() {
         ],
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     assert!(result.is_err());
     let (status, _) = result.unwrap_err();
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -123,7 +123,7 @@ async fn test_embeddings_rejects_whitespace_element_in_list() {
         ],
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     assert!(result.is_err());
     let (status, _) = result.unwrap_err();
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -146,7 +146,7 @@ async fn test_embeddings_rejects_over_max_inputs() {
         input: too_many,
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     assert!(result.is_err());
     let (status, _) = result.unwrap_err();
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -166,7 +166,7 @@ async fn test_embeddings_accepts_up_to_max_inputs() {
     // Exactly MAX_EMBEDDINGS_INPUTS passes the per-request cap; the closed
     // test engine then surfaces as 503 (the fixture channel), proving the
     // gate did not reject the request.
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     let (status, body) = result.unwrap_err();
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(body.error.code.as_deref(), Some("engine_unavailable"));
@@ -190,7 +190,7 @@ async fn test_embeddings_rejects_input_exceeding_context_length() {
         input: vec!["this is a very long input string that certainly exceeds eight".to_string()],
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     assert!(result.is_err());
     let (status, body) = result.unwrap_err();
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -208,7 +208,7 @@ async fn test_embeddings_accepts_input_within_context_length() {
     };
 
     // Passes the context gate; the closed engine channel then 503s.
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     let (status, body) = result.unwrap_err();
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(body.error.code.as_deref(), Some("engine_unavailable"));
@@ -222,7 +222,7 @@ async fn test_embeddings_multiple_inputs() {
         input: vec!["input1".to_string(), "input2".to_string()],
     };
 
-    let result = embeddings(State(state), Json(req)).await;
+    let result = embeddings(State(state), OpenaiJson(req)).await;
     assert!(result.is_err());
     // The test fixture's `engine_tx` is a closed mpsc channel; the handler
     // surfaces that as a 503 SERVICE_UNAVAILABLE with `code = "engine_unavailable"`

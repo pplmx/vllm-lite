@@ -18,6 +18,7 @@ use std::convert::Infallible;
 use tokio::sync::mpsc;
 
 use super::chat_template::{self, ChatTemplate};
+use super::json::OpenaiJson;
 use super::sampling_validation::{validate_chat_request_fields, validate_sampling_params};
 use super::types::{
     ChatChoice, ChatChoiceLogprobs, ChatChunk, ChatChunkChoice, ChatLogprob, ChatMessage,
@@ -977,7 +978,7 @@ async fn run_n_parallel_chat(
 pub async fn chat_completions(
     State(state): State<ApiState>,
     Extension(correlation_id): Extension<CorrelationId>,
-    Json(req): Json<ChatRequest>,
+    OpenaiJson(req): OpenaiJson<ChatRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
     // API-01: reject OpenAI fields the engine does not yet honour
     // BEFORE doing any work. Architecture-performance §5.1

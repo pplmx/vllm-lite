@@ -39,7 +39,7 @@ async fn test_completions_empty_prompt() {
     let result = completions(
         State(state),
         Extension(CorrelationId("test-correlation-id".into())),
-        Json(req),
+        OpenaiJson(req),
     )
     .await;
     assert!(result.is_err());
@@ -79,7 +79,7 @@ async fn test_completions_rejects_invalid_temperature() {
         let result = completions(
             State(state.clone()),
             Extension(CorrelationId("test-correlation-id".into())),
-            Json(req),
+            OpenaiJson(req),
         )
         .await;
         assert!(
@@ -126,7 +126,7 @@ async fn test_completions_with_valid_max_tokens() {
     let result = completions(
         State(state),
         Extension(CorrelationId("test-correlation-id".into())),
-        Json(req),
+        OpenaiJson(req),
     )
     .await;
     assert!(result.is_err());

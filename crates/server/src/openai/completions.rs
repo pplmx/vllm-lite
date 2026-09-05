@@ -11,6 +11,7 @@ use futures::{future::join_all, stream};
 use std::convert::Infallible;
 use tokio::sync::mpsc;
 
+use super::json::OpenaiJson;
 use super::sampling_validation::{validate_completion_request_fields, validate_sampling_params};
 use super::types::{
     CompletionChoice, CompletionChoiceLogprobs, CompletionLogprob, CompletionRequest,
@@ -1406,7 +1407,7 @@ fn apply_completion_meta(
 pub async fn completions(
     State(state): State<ApiState>,
     Extension(correlation_id): Extension<CorrelationId>,
-    Json(req): Json<CompletionRequest>,
+    OpenaiJson(req): OpenaiJson<CompletionRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
     // Terminal state machine for SSE streaming: Streaming → EmitDoneSentinel → Done.
     // Must be declared before any statements — Rust hoists items to scope start.
