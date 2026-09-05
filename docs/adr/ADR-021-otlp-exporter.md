@@ -24,8 +24,17 @@ Add an opt-in `opentelemetry` feature on `vllm-core` (and propagate through
 
 1. **`OtlpExporter`** — a background tokio task polls
    `EnhancedMetricsCollector` every `metrics_export_interval_secs` (default 30s)
-   and ships via `opentelemetry-otlp` `grpc-tonic`. A 21-entry schema map
-   (`SCHEMA_MAP`) translates Prometheus metric names to OTel instrument names.
+   and ships via `opentelemetry-otlp` `grpc-tonic`. A 29-entry schema map
+   (`SCHEMA_MAP`) translates Prometheus metric names to OTel instrument
+   names. RIL ISS-103 fixed the map to mirror the **full** `/metrics`
+   surface: the headline engine metrics (tokens_total, avg/p50/p90/p99
+   latency, kv_cache_usage_percent, prefix_cache_hit_rate,
+   prefill/decode_throughput_tps, avg/current_batch_size, requests_in_flight,
+   avg_scheduler_wait_time_ms, dropped_tokens_total) are read from the
+   lock-free runtime snapshot every tick, and the five fabricated always-0
+   instruments with no writers (`gpu_memory_used/total_bytes`, `is_leader`,
+   `scheduler_queue_size`, `inflight_requests`) were removed; a parity test
+   asserts the schema equals the `PrometheusExporter` surface exactly.
 
 2. **`tracing-opentelemetry` bridge** — `init_tracing_with_otlp()` wraps the
    existing `tracing_subscriber` registry with a `tracing-opentelemetry::layer`,

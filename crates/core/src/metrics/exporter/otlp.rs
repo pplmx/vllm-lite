@@ -15,7 +15,7 @@ use opentelemetry_semantic_conventions::attribute as semattr;
 use serde::{Deserialize, Serialize};
 use tokio::time::interval;
 
-use crate::metrics::EnhancedMetricsCollector;
+use crate::metrics::{EnhancedMetricsCollector, MetricsSnapshot};
 
 /// Wire protocol for the OTLP exporter. Only `Grpc` is supported in v43;
 /// the enum is reserved so adding `Http` later is a non-breaking change.
@@ -128,7 +128,21 @@ pub enum OtlpError {
     Builder(String),
 }
 
-/// Schema mapping: `(prometheus_name, otel_name, InstrumentKind, unit)`.
+/// Where an instrument's value is sourced from on each export tick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MetricSource {
+    /// The collector's atomic fields (via `get_counter` / `get_gauge`) plus
+    /// the `draft_metrics_snapshot()` counters.
+    Atomic,
+    /// The lock-free runtime [`MetricsSnapshot`] (lifetime + live gauges:
+    /// tokens, latency percentiles, throughput, KV/prefix usage, in-flight,
+    /// scheduler wait). RIL ISS-103 — pre-fix the exporter read ONLY the
+    /// atomic path, so every headline engine metric that lives on
+    /// `/metrics` was absent from OTLP.
+    Snapshot,
+}
+
+/// Schema mapping: `(prometheus_name, otel_name, InstrumentKind, unit, source)`.
 /// `InstrumentKind` is a private tag because the `OTel` Counter/Gauge types
 /// are not nameable across `Option<>` in a const table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,121 +152,220 @@ enum InstrumentKind {
     UpDownCounter,
 }
 
-const SCHEMA_MAP: &[(&str, &str, InstrumentKind, &str)] = &[
+/// Every instrument this exporter records, keyed by the Prometheus wire
+/// name so a single name drives both `/metrics` and OTLP (parity is pinned
+/// by `metric_schema_mapping_covers_all_exported_prometheus_metrics`).
+///
+/// Only instruments with a REAL production source are listed (RIL ISS-103):
+/// the five fabricated always-0 instruments (`gpu_memory_used/total_bytes`
+/// — no GPU-memory source; `is_leader` — no leader-election in production;
+/// `scheduler_queue_size` / `inflight_requests` — stale names with no
+/// writers, superseded by `request_queue_depth` / `requests_in_flight`)
+/// were removed instead of exporting zeros forever.
+const SCHEMA_MAP: &[(&str, &str, InstrumentKind, &str, MetricSource)] = &[
     (
         "cuda_graph_hits_total",
         "cuda.graph.hits",
         InstrumentKind::Counter,
         "{hit}",
+        MetricSource::Atomic,
     ),
     (
         "cuda_graph_misses_total",
         "cuda.graph.misses",
         InstrumentKind::Counter,
         "{miss}",
+        MetricSource::Atomic,
     ),
     (
         "speculative_adjustments_total",
         "speculative.adjustments",
         InstrumentKind::Counter,
         "{adjustment}",
+        MetricSource::Atomic,
     ),
     (
         "requests_total",
         "requests",
         InstrumentKind::Counter,
         "{request}",
+        MetricSource::Atomic,
+    ),
+    (
+        "dropped_tokens_total",
+        "engine.dropped_tokens",
+        InstrumentKind::Counter,
+        "{token}",
+        MetricSource::Atomic,
     ),
     (
         "draft_resolutions_external_total",
         "draft.resolutions.external",
         InstrumentKind::Counter,
         "{resolution}",
+        MetricSource::Atomic,
     ),
     (
         "draft_resolutions_self_spec_total",
         "draft.resolutions.self_spec",
         InstrumentKind::Counter,
         "{resolution}",
+        MetricSource::Atomic,
     ),
     (
         "draft_resolutions_none_total",
         "draft.resolutions.none",
         InstrumentKind::Counter,
         "{resolution}",
+        MetricSource::Atomic,
     ),
     (
         "draft_load_failures_total",
         "draft.load.failures",
         InstrumentKind::Counter,
         "{failure}",
+        MetricSource::Atomic,
     ),
     (
         "draft_runtime_errors_total",
         "draft.runtime.errors",
         InstrumentKind::Counter,
         "{error}",
+        MetricSource::Atomic,
     ),
     (
         "packing_efficiency",
         "packing.efficiency",
         InstrumentKind::Gauge,
         "{ratio}",
+        MetricSource::Atomic,
     ),
     (
         "speculative_acceptance_rate",
         "speculative.acceptance_rate",
         InstrumentKind::Gauge,
         "{ratio}",
+        MetricSource::Atomic,
     ),
     (
         "throughput_speedup_ratio",
         "throughput.speedup_ratio",
         InstrumentKind::Gauge,
         "{ratio}",
+        MetricSource::Atomic,
     ),
     (
         "speculative_per_request_count",
         "speculative.per_request_count",
         InstrumentKind::Gauge,
         "{sequence}",
+        MetricSource::Atomic,
     ),
     (
         "request_queue_depth",
         "request.queue_depth",
         InstrumentKind::UpDownCounter,
         "{request}",
+        MetricSource::Atomic,
     ),
     (
         "active_sequences",
         "active.sequences",
         InstrumentKind::UpDownCounter,
         "{sequence}",
+        MetricSource::Atomic,
+    ),
+    // ── Headline engine metrics (from the lock-free runtime snapshot) ─────
+    (
+        "tokens_total",
+        "tokens.generated",
+        InstrumentKind::Counter,
+        "{token}",
+        MetricSource::Snapshot,
     ),
     (
-        "gpu_memory_used_bytes",
-        "gpu.memory.used",
-        InstrumentKind::UpDownCounter,
-        "By",
+        "avg_latency_ms",
+        "latency.avg",
+        InstrumentKind::Gauge,
+        "ms",
+        MetricSource::Snapshot,
     ),
     (
-        "gpu_memory_total_bytes",
-        "gpu.memory.total",
-        InstrumentKind::UpDownCounter,
-        "By",
+        "latency_p50_ms",
+        "latency.p50",
+        InstrumentKind::Gauge,
+        "ms",
+        MetricSource::Snapshot,
     ),
-    ("is_leader", "is_leader", InstrumentKind::Gauge, "{bool}"),
     (
-        "inflight_requests",
-        "inflight.requests",
+        "latency_p90_ms",
+        "latency.p90",
+        InstrumentKind::Gauge,
+        "ms",
+        MetricSource::Snapshot,
+    ),
+    (
+        "latency_p99_ms",
+        "latency.p99",
+        InstrumentKind::Gauge,
+        "ms",
+        MetricSource::Snapshot,
+    ),
+    (
+        "avg_batch_size",
+        "scheduler.avg_batch_size",
+        InstrumentKind::Gauge,
+        "{sequence}",
+        MetricSource::Snapshot,
+    ),
+    (
+        "current_batch_size",
+        "scheduler.current_batch_size",
+        InstrumentKind::Gauge,
+        "{sequence}",
+        MetricSource::Snapshot,
+    ),
+    (
+        "requests_in_flight",
+        "engine.inflight_requests",
         InstrumentKind::UpDownCounter,
         "{request}",
+        MetricSource::Snapshot,
     ),
     (
-        "scheduler_queue_size",
-        "scheduler.queue_size",
-        InstrumentKind::UpDownCounter,
-        "{request}",
+        "kv_cache_usage_percent",
+        "kv_cache.usage_percent",
+        InstrumentKind::Gauge,
+        "%",
+        MetricSource::Snapshot,
+    ),
+    (
+        "prefix_cache_hit_rate",
+        "prefix_cache.hit_rate",
+        InstrumentKind::Gauge,
+        "%",
+        MetricSource::Snapshot,
+    ),
+    (
+        "prefill_throughput_tps",
+        "throughput.prefill_tps",
+        InstrumentKind::Gauge,
+        "tps",
+        MetricSource::Snapshot,
+    ),
+    (
+        "decode_throughput_tps",
+        "throughput.decode_tps",
+        InstrumentKind::Gauge,
+        "tps",
+        MetricSource::Snapshot,
+    ),
+    (
+        "avg_scheduler_wait_time_ms",
+        "scheduler.avg_wait_time_ms",
+        InstrumentKind::Gauge,
+        "ms",
+        MetricSource::Snapshot,
     ),
 ];
 
@@ -313,6 +426,40 @@ fn ratio_scale_for(unit: &str) -> f64 {
         RATIO_FIXED_POINT_SCALE
     } else {
         1.0
+    }
+}
+
+/// Lifetime/u64-valued field of a [`MetricsSnapshot`], keyed by the
+/// Prometheus wire name (for snapshot-sourced `Counter` /
+/// `UpDownCounter` instruments — RIL ISS-103).
+fn snapshot_u64(snap: &MetricsSnapshot, name: &str) -> u64 {
+    match name {
+        "tokens_total" => snap.tokens_total,
+        "requests_in_flight" => snap.requests_in_flight,
+        _ => 0,
+    }
+}
+
+/// Float-valued field of a [`MetricsSnapshot`], keyed by the Prometheus
+/// wire name (for snapshot-sourced `Gauge` instruments — RIL ISS-103).
+/// Values are exported as-is (no fixed-point scale): `kv_cache_usage_percent`
+/// and `prefix_cache_hit_rate` are already `0..=100`, latencies ms, throughput
+/// tokens/sec, batch sizes sequences.
+#[allow(clippy::cast_precision_loss)]
+fn snapshot_f64(snap: &MetricsSnapshot, name: &str) -> f64 {
+    match name {
+        "avg_latency_ms" => snap.avg_latency_ms,
+        "latency_p50_ms" => snap.p50_latency_ms,
+        "latency_p90_ms" => snap.p90_latency_ms,
+        "latency_p99_ms" => snap.p99_latency_ms,
+        "avg_batch_size" => snap.avg_batch_size,
+        "current_batch_size" => snap.current_batch_size as f64,
+        "kv_cache_usage_percent" => snap.kv_cache_usage_percent,
+        "prefix_cache_hit_rate" => snap.prefix_cache_hit_rate,
+        "prefill_throughput_tps" => snap.prefill_throughput,
+        "decode_throughput_tps" => snap.decode_throughput,
+        "avg_scheduler_wait_time_ms" => snap.avg_scheduler_wait_time_ms,
+        _ => 0.0,
     }
 }
 
@@ -419,9 +566,9 @@ impl OtlpExporter {
         use opentelemetry::metrics::MeterProvider as _;
         let meter = self.inner.provider.meter("vllm-lite");
 
-        let instruments: Vec<(&str, Instrument)> = SCHEMA_MAP
+        let instruments: Vec<(&str, Instrument, MetricSource)> = SCHEMA_MAP
             .iter()
-            .map(|(prom_name, otel_name, kind, _unit)| {
+            .map(|(prom_name, otel_name, kind, _unit, source)| {
                 let inst = match kind {
                     InstrumentKind::Counter => {
                         Instrument::Counter(meter.u64_counter(*otel_name).build())
@@ -431,7 +578,7 @@ impl OtlpExporter {
                         Instrument::UpDownCounter(meter.i64_up_down_counter(*otel_name).build())
                     }
                 };
-                (*prom_name, inst)
+                (*prom_name, inst, *source)
             })
             .collect();
 
@@ -443,11 +590,22 @@ impl OtlpExporter {
         ticker.tick().await;
 
         // Per-schema gauge scaling: only the `{ratio}` series are stored
-        // fixed-point and must be divided by `RATIO_FIXED_POINT_SCALE`.
+        // fixed-point and must be divided by `RATIO_FIXED_POINT_SCALE` —
+        // snapshot-sourced gauges export raw f64 values and scale by 1.0.
         let gauge_scales: HashMap<&str, f64> = SCHEMA_MAP
             .iter()
-            .filter(|(_, _, kind, _)| *kind == InstrumentKind::Gauge)
-            .map(|(p, _, _, unit)| (*p, ratio_scale_for(unit)))
+            .filter(|(_, _, kind, _, source)| {
+                *kind == InstrumentKind::Gauge && *source == MetricSource::Atomic
+            })
+            .map(|(p, _, _, unit, _)| (*p, ratio_scale_for(unit)))
+            .collect();
+
+        // Atomic-sourced Prometheus names. The draft counters ride on the
+        // same `u64` path (their values also come from atomics).
+        let atomic_names: Vec<&str> = SCHEMA_MAP
+            .iter()
+            .filter(|(_, _, _, _, source)| *source == MetricSource::Atomic)
+            .map(|(p, _, _, _, _)| *p)
             .collect();
 
         // Last-exported absolute values per instrument, so Counter /
@@ -457,21 +615,21 @@ impl OtlpExporter {
 
         loop {
             ticker.tick().await;
-            // Index by Prometheus name for O(1) lookups. All metric sources
+            // Index by Prometheus name for O(1) lookups. All atomic sources
             // (`get_counter`, `get_gauge`, `draft_metrics_snapshot`) return
             // `u64`, so we keep the native integer type throughout and only
             // cast to `f64` at the OTel API boundary for `Gauge`. This
             // avoids the `u64 → f64 → u64` round-trip that lost precision
             // for counters exceeding 2^53.
-            let mut by_name: HashMap<String, u64> = HashMap::with_capacity(SCHEMA_MAP.len());
+            let mut by_name: HashMap<String, u64> = HashMap::with_capacity(atomic_names.len());
 
-            for prom_name in SCHEMA_MAP.iter().map(|(p, _, _, _)| *p) {
+            for prom_name in &atomic_names {
                 let value = self
                     .inner
                     .collector
                     .get_counter(prom_name)
                     .max(self.inner.collector.get_gauge(prom_name));
-                by_name.insert(prom_name.to_string(), value);
+                by_name.insert((*prom_name).to_string(), value);
             }
 
             // Overlay the draft metrics snapshot (5 counters not in the
@@ -498,37 +656,60 @@ impl OtlpExporter {
                 draft.runtime_errors_total,
             );
 
-            for (prom_name, inst) in &instruments {
-                let value = by_name.get(*prom_name).copied().unwrap_or(0);
-                let prev = prev_values.get(*prom_name).copied();
-                match inst {
+            // RIL ISS-103: the lock-free runtime snapshot carries the
+            // headline engine metrics every tick — read once, applied to
+            // every snapshot-sourced instrument.
+            let snapshot = self.inner.collector.runtime_snapshot();
+
+            for (prom_name, inst, source) in &instruments {
+                match (inst, source) {
                     // Counter takes u64 deltas: the backend (cumulative
                     // temporality) accumulates `add()`s, so send the delta
                     // since the last tick — the absolute total would be
                     // added AGAIN server-side, inflating the series.
-                    Instrument::Counter(c) => {
-                        let delta = counter_delta(prev, value);
-                        c.add(delta, &[]);
+                    (Instrument::Counter(c), MetricSource::Atomic) => {
+                        let value = by_name.get(*prom_name).copied().unwrap_or(0);
+                        let prev = prev_values.get(*prom_name).copied();
+                        c.add(counter_delta(prev, value), &[]);
+                        prev_values.insert((*prom_name).to_string(), value);
+                    }
+                    (Instrument::Counter(c), MetricSource::Snapshot) => {
+                        let value = snapshot_u64(&snapshot, prom_name);
+                        let prev = prev_values.get(*prom_name).copied();
+                        c.add(counter_delta(prev, value), &[]);
+                        prev_values.insert((*prom_name).to_string(), value);
                     }
                     // Gauge's OTel API takes f64 — an unavoidable cast;
                     // integers don't exceed 2^53 in practice so precision
                     // loss is negligible here. Gauges are snapshots (no
-                    // delta) — but the `{ratio}` series are fixed-point and
-                    // must be scaled by 100,000 to match the Prometheus
-                    // exporter's `value / 100_000.0`.
-                    Instrument::Gauge(g) => {
-                        let scale = gauge_scales.get(*prom_name).copied().unwrap_or(1.0);
+                    // delta): atomic `{ratio}` series are fixed-point and
+                    // scaled by 100,000; snapshot-sourced gauges record the
+                    // raw f64 value.
+                    (Instrument::Gauge(g), MetricSource::Atomic) => {
+                        let value = by_name.get(*prom_name).copied().unwrap_or(0);
+                        let scale = gauge_scales.get(prom_name).copied().unwrap_or(1.0);
                         #[allow(clippy::cast_precision_loss)]
                         g.record(value as f64 / scale, &[]);
-                        continue;
                     }
-                    // UpDownCounter takes i64 signed deltas (can decrease).
-                    Instrument::UpDownCounter(u) => {
-                        let delta = updown_delta(prev, value);
-                        u.add(delta, &[]);
+                    (Instrument::Gauge(g), MetricSource::Snapshot) => {
+                        g.record(snapshot_f64(&snapshot, prom_name), &[]);
+                    }
+                    // UpDownCounter takes i64 signed deltas (can decrease),
+                    // keeping the backend cumulative equal to the CURRENT
+                    // value (queue depth, active sequences, in-flight).
+                    (Instrument::UpDownCounter(u), MetricSource::Atomic) => {
+                        let value = by_name.get(*prom_name).copied().unwrap_or(0);
+                        let prev = prev_values.get(*prom_name).copied();
+                        u.add(updown_delta(prev, value), &[]);
+                        prev_values.insert((*prom_name).to_string(), value);
+                    }
+                    (Instrument::UpDownCounter(u), MetricSource::Snapshot) => {
+                        let value = snapshot_u64(&snapshot, prom_name);
+                        let prev = prev_values.get(*prom_name).copied();
+                        u.add(updown_delta(prev, value), &[]);
+                        prev_values.insert((*prom_name).to_string(), value);
                     }
                 }
-                prev_values.insert((*prom_name).to_string(), value);
             }
             // PeriodicReader auto-flushes on each tick; no explicit flush call.
         }
@@ -642,43 +823,57 @@ mod tests {
         assert!(OtlpConfig::default().validate().is_ok());
     }
 
+    /// RIL ISS-103: `SCHEMA_MAP` must match the `PrometheusExporter` surface
+    /// EXACTLY — pre-fix it omitted every headline engine metric (tokens,
+    /// latencies, throughput, KV/prefix usage, in-flight, scheduler wait —
+    /// all live on `/metrics`) and instead carried 5 fabricated always-0
+    /// instruments (`gpu_memory_used/total_bytes`, `is_leader`,
+    /// `scheduler_queue_size`, `inflight_requests`) that had no writers in
+    /// the whole codebase. The metric names are parsed from the exporter's
+    /// live output (non-`#` lines = `name value`), so the parity check
+    /// tracks reality rather than a hand-maintained list — any metric added
+    /// to `/metrics` or any fabricated instrument reintroduced fails here.
+    #[tokio::test]
+    async fn metric_schema_mapping_covers_all_exported_prometheus_metrics() {
+        let collector = crate::metrics::EnhancedMetricsCollector::new();
+        let exporter =
+            crate::metrics::PrometheusExporter::new(std::sync::Arc::new(collector), 9090);
+        let out = exporter.export_to_string().await;
+
+        let mut exported: Vec<&str> = out
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+            .map(|l| l.split_whitespace().next().unwrap_or_default())
+            .filter(|n| !n.is_empty())
+            .collect();
+        exported.sort_unstable();
+        exported.dedup();
+
+        let mut schema: Vec<&str> = SCHEMA_MAP.iter().map(|(p, _, _, _, _)| *p).collect();
+        schema.sort_unstable();
+        schema.dedup();
+
+        assert_eq!(
+            exported, schema,
+            "SCHEMA_MAP must match the PrometheusExporter surface exactly — no \
+             missing headline metric (they live on /metrics), no fabricated \
+             always-0 instrument, no stale name"
+        );
+    }
+
+    /// RIL ISS-103: the fabricated always-0 instruments must not come back.
     #[test]
-    fn metric_schema_mapping_covers_prometheus_metrics() {
-        // Pins the contract: every Prometheus metric exposed by
-        // PrometheusExporter has an `OTel` counterpart in SCHEMA_MAP.
-        // If PrometheusExporter adds a new metric, this test fails until
-        // the schema map is updated.
-        let prometheus_names = [
-            "cuda_graph_hits_total",
-            "cuda_graph_misses_total",
-            "speculative_adjustments_total",
-            "requests_total",
-            "draft_resolutions_external_total",
-            "draft_resolutions_self_spec_total",
-            "draft_resolutions_none_total",
-            "draft_load_failures_total",
-            "draft_runtime_errors_total",
-            "packing_efficiency",
-            "speculative_acceptance_rate",
-            "throughput_speedup_ratio",
-            "speculative_per_request_count",
-            "request_queue_depth",
-            "active_sequences",
+    fn schema_map_excludes_fabricated_instruments() {
+        for banned in [
             "gpu_memory_used_bytes",
             "gpu_memory_total_bytes",
             "is_leader",
-            "inflight_requests",
             "scheduler_queue_size",
-        ];
-        assert_eq!(
-            SCHEMA_MAP.len(),
-            prometheus_names.len(),
-            "SCHEMA_MAP must have exactly one entry per Prometheus metric"
-        );
-        for name in prometheus_names {
+            "inflight_requests",
+        ] {
             assert!(
-                SCHEMA_MAP.iter().any(|(p, _, _, _)| *p == name),
-                "Prometheus metric {name} has no `OTel` counterpart in SCHEMA_MAP"
+                !SCHEMA_MAP.iter().any(|(p, _, _, _, _)| *p == banned),
+                "fabricated always-0 instrument {banned} must not be in SCHEMA_MAP"
             );
         }
     }
