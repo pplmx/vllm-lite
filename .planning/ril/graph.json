@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 86,
+  "round": 87,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-04T23:44:36+00:00",
+  "updated_at": "2026-09-05T00:26:00+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 79,
+      "touched_round": 86,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 84,
+      "touched_round": 86,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -6276,6 +6276,91 @@
       "touched_round": 86,
       "commit": "c6616acc",
       "title": "Fix CI-red on main: doc-check private-intra-doc-link (load_config_file) + clippy zero-warning restore (doc_markdown x3, unreadable_literal x2, manual_string_new x2); TASK-112"
+    },
+    "ISS-092": {
+      "id": "ISS-092",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T00:21:22+00:00",
+      "updated_at": "2026-09-05T00:25:29+00:00",
+      "touched_round": 86,
+      "severity": 4,
+      "confidence": 1.0,
+      "title": "health/details fabricates GPU state: gpu_available hardcoded true + gpu_utilization returns prefill_throughput (a '% util' mislabel) — ops dashboards show a busy GPU at 0%, CPU builds report a GPU they don't have; vllm-lite samples no real GPU utilization"
+    },
+    "TASK-113": {
+      "id": "TASK-113",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T00:21:42+00:00",
+      "updated_at": "2026-09-05T00:25:28+00:00",
+      "touched_round": 86,
+      "category": "correctness",
+      "severity": 4,
+      "confidence": 1.0,
+      "effort": 1.0,
+      "title": "Remove fabricated GPU fields from /health/details: drop gpu_available (hardcoded true) + gpu_utilization (=prefill_throughput mislabel), expose prefill_throughput under its own name; regression test pins honest wire shape (ISS-092)"
+    },
+    "ISS-093": {
+      "id": "ISS-093",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T00:22:56+00:00",
+      "updated_at": "2026-09-05T00:22:56+00:00",
+      "touched_round": 86,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "/debug/trace fabricates tracing status: tracing_enabled hardcoded true, spans_active hardcoded 0, log_level reads process RUST_LOG env instead of the configured --log-level — none reflect real state"
+    },
+    "ISS-094": {
+      "id": "ISS-094",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T00:22:56+00:00",
+      "updated_at": "2026-09-05T00:22:56+00:00",
+      "touched_round": 86,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "/v1/completions echoes literal 'default' as the model when omitted (completions.rs x3) — chat rejects missing model with 400; completions accepts + fakes an id indistinguishable from a real one"
+    },
+    "ISS-095": {
+      "id": "ISS-095",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T00:22:56+00:00",
+      "updated_at": "2026-09-05T00:22:56+00:00",
+      "touched_round": 86,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "prefill_throughput / decode_throughput / avg_scheduler_wait_time_ms have zero production recorders: record_{prefill,decode}_tokens + record_scheduler_wait_time are #[cfg(test)]-only; /metrics pins these at 0.000 forever while the model generates (ISS-089 sibling class)"
+    },
+    "ISS-096": {
+      "id": "ISS-096",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T00:22:56+00:00",
+      "updated_at": "2026-09-05T00:22:56+00:00",
+      "touched_round": 86,
+      "severity": 4,
+      "confidence": 1.0,
+      "title": "OpenAI feature fields silently accepted + ignored: response_format.json_object and tools/tool_choice pass validation and return a free-text 200 with no tool_calls / no JSON — contradicts the repo's 'honest 400 > silent degradation' rule (API-01)"
+    },
+    "CHG-107": {
+      "id": "CHG-107",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T00:24:57+00:00",
+      "updated_at": "2026-09-05T00:24:57+00:00",
+      "touched_round": 86,
+      "commit": "d5caa91f",
+      "title": "Remove fabricated GPU fields from /health/details (ISS-092/TASK-113): drop gpu_available + gpu_utilization, expose prefill_throughput honestly; regression test + CHANGELOG + API baseline"
     }
   },
   "edges": [
@@ -8930,6 +9015,54 @@
       "to": "TASK-112",
       "type": "implements",
       "created_at": "2026-09-04T23:44:36+00:00"
+    },
+    {
+      "from": "ISS-092",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-05T00:22:19+00:00"
+    },
+    {
+      "from": "TASK-113",
+      "to": "ISS-092",
+      "type": "addresses",
+      "created_at": "2026-09-05T00:22:19+00:00"
+    },
+    {
+      "from": "ISS-093",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-05T00:23:18+00:00"
+    },
+    {
+      "from": "ISS-094",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-05T00:23:18+00:00"
+    },
+    {
+      "from": "ISS-095",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-09-05T00:23:18+00:00"
+    },
+    {
+      "from": "ISS-096",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-05T00:23:18+00:00"
+    },
+    {
+      "from": "CHG-107",
+      "to": "TASK-113",
+      "type": "implements",
+      "created_at": "2026-09-05T00:24:57+00:00"
+    },
+    {
+      "from": "CHG-107",
+      "to": "ISS-092",
+      "type": "resolves",
+      "created_at": "2026-09-05T00:25:28+00:00"
     }
   ]
 }
