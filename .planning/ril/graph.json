@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 90,
+  "round": 91,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T01:27:19+00:00",
+  "updated_at": "2026-09-05T01:43:41+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 86,
+      "touched_round": 90,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -6448,6 +6448,43 @@
       "touched_round": 89,
       "commit": "b58d4c32",
       "title": "Fix /debug/trace fabricated tracing state (ISS-093/TASK-116): remove spans_active field, effective log_level via logging::effective_log_level (RUST_LOG override else configured level captured at init)"
+    },
+    "ISS-097": {
+      "id": "ISS-097",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T01:35:34+00:00",
+      "updated_at": "2026-09-05T01:43:41+00:00",
+      "touched_round": 90,
+      "severity": 3,
+      "confidence": 1.0,
+      "title": "Config typo'd/unknown top-level keys are silently ignored: serde applies #[serde(default)] to every section, so a config with 'engin:' instead of 'engine:' runs on built-in defaults with zero signal (TASK-107 warned on unreadable files; this catches the readable-but-unknown case). Add best-effort WARN via JSON re-parse of top-level keys"
+    },
+    "TASK-117": {
+      "id": "TASK-117",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T01:35:34+00:00",
+      "updated_at": "2026-09-05T01:43:41+00:00",
+      "touched_round": 90,
+      "category": "dx",
+      "severity": 3,
+      "confidence": 1.0,
+      "effort": 1.0,
+      "title": "Warn on unknown top-level config keys (ISS-097): best-effort JSON re-parse in load_config_file -> unknown_top_level_keys -> tracing::warn listing recognised sections; lenient serde parse stays authoritative; unit tests for typo detection"
+    },
+    "CHG-111": {
+      "id": "CHG-111",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T01:42:59+00:00",
+      "updated_at": "2026-09-05T01:42:59+00:00",
+      "touched_round": 90,
+      "commit": "2d026ad0",
+      "title": "WARN on unknown top-level config keys (ISS-097/TASK-117): unknown_top_level_keys best-effort JSON re-parse in load_config_file; lenient parse authoritative"
     }
   },
   "edges": [
@@ -9204,6 +9241,30 @@
       "to": "ISS-093",
       "type": "resolves",
       "created_at": "2026-09-05T01:27:18+00:00"
+    },
+    {
+      "from": "TASK-117",
+      "to": "ISS-097",
+      "type": "addresses",
+      "created_at": "2026-09-05T01:35:34+00:00"
+    },
+    {
+      "from": "ISS-097",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-05T01:35:34+00:00"
+    },
+    {
+      "from": "CHG-111",
+      "to": "TASK-117",
+      "type": "implements",
+      "created_at": "2026-09-05T01:43:41+00:00"
+    },
+    {
+      "from": "CHG-111",
+      "to": "ISS-097",
+      "type": "resolves",
+      "created_at": "2026-09-05T01:43:41+00:00"
     }
   ]
 }
