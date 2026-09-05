@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 96,
+  "round": 97,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-05T21:09:51+00:00",
+  "updated_at": "2026-09-05T21:57:15+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -6670,11 +6670,11 @@
     "ISS-107": {
       "id": "ISS-107",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-05T14:41:16+00:00",
-      "updated_at": "2026-09-05T14:41:16+00:00",
-      "touched_round": 94,
+      "updated_at": "2026-09-05T21:55:15+00:00",
+      "touched_round": 96,
       "severity": 2,
       "confidence": 1.0,
       "title": "Destructive ring-channel sampling: snapshot() drains the latency/batch/wait bounded ring channels and resets them (lock_free.rs), so /metrics, /health/details and /debug/kv-cache consumers corrupt each other's windows — the gauge value is 'average since the last arbitrary consumer', not a fixed window, and the same gauge disagrees across endpoints"
@@ -6682,11 +6682,11 @@
     "ISS-108": {
       "id": "ISS-108",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-05T14:41:16+00:00",
-      "updated_at": "2026-09-05T14:41:16+00:00",
-      "touched_round": 94,
+      "updated_at": "2026-09-05T21:55:15+00:00",
+      "touched_round": 96,
       "severity": 1,
       "confidence": 1.0,
       "title": "speculative_acceptance_rate and speculative_efficiency are duplicate gauges with identical values: both written from the same counts with the same formula (accepted/draft, same fixed-point scale) in dispatch.rs — two names on dashboards for one quantity, oncall ambiguity"
@@ -6856,6 +6856,52 @@
       "touched_round": 95,
       "commit": "a35002f2",
       "title": "StreamingDecoder + SSE wiring: chat/completions streams use an incremental UTF-8-safe decoder so split-byte chars are never emitted as U+FFFD (ISS-105)"
+    },
+    "TASK-127": {
+      "id": "TASK-127",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T21:54:53+00:00",
+      "updated_at": "2026-09-05T21:55:15+00:00",
+      "touched_round": 96,
+      "category": "correctness",
+      "severity": 6,
+      "title": "metrics snapshot() is destructive: drains the bounded latency/batch/wait ring channels, so a second consumer (GetMetrics round-trip, concurrent /metrics scrape) steals the first consumer data; make snapshot non-destructive"
+    },
+    "TASK-128": {
+      "id": "TASK-128",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-05T21:54:54+00:00",
+      "updated_at": "2026-09-05T21:55:15+00:00",
+      "touched_round": 96,
+      "category": "correctness",
+      "severity": 4,
+      "title": "speculative_acceptance_rate and speculative_efficiency are duplicate gauges: both fed the identical accepted/drafted ratio and exported with the same HELP text; remove the duplicate"
+    },
+    "CHG-121": {
+      "id": "CHG-121",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T21:54:54+00:00",
+      "updated_at": "2026-09-05T21:54:54+00:00",
+      "touched_round": 96,
+      "commit": "6de648fb",
+      "title": "metrics snapshot() is non-destructive: bounded parking_lot Mutex<VecDeque> rolling windows replace the draining MPSC ring channels; snapshot() clones, so concurrent consumers observe identical samples (ISS-107)"
+    },
+    "CHG-122": {
+      "id": "CHG-122",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-05T21:54:54+00:00",
+      "updated_at": "2026-09-05T21:54:54+00:00",
+      "touched_round": 96,
+      "commit": "9d5d42b6",
+      "title": "removed duplicate speculative_efficiency gauge end-to-end (collector/dedup producer/prometheus/OTLP): speculative_acceptance_rate is the single accepted/drafted wire name (ISS-108)"
     }
   },
   "edges": [
@@ -9852,6 +9898,42 @@
       "to": "ISS-105",
       "type": "resolves",
       "created_at": "2026-09-05T21:09:21+00:00"
+    },
+    {
+      "from": "TASK-127",
+      "to": "ISS-107",
+      "type": "addresses",
+      "created_at": "2026-09-05T21:55:15+00:00"
+    },
+    {
+      "from": "TASK-128",
+      "to": "ISS-108",
+      "type": "addresses",
+      "created_at": "2026-09-05T21:55:15+00:00"
+    },
+    {
+      "from": "CHG-121",
+      "to": "TASK-127",
+      "type": "implements",
+      "created_at": "2026-09-05T21:55:15+00:00"
+    },
+    {
+      "from": "CHG-122",
+      "to": "TASK-128",
+      "type": "implements",
+      "created_at": "2026-09-05T21:55:15+00:00"
+    },
+    {
+      "from": "CHG-121",
+      "to": "ISS-107",
+      "type": "resolves",
+      "created_at": "2026-09-05T21:55:15+00:00"
+    },
+    {
+      "from": "CHG-122",
+      "to": "ISS-108",
+      "type": "resolves",
+      "created_at": "2026-09-05T21:55:15+00:00"
     }
   ]
 }
