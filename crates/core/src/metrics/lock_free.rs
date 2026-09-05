@@ -1,11 +1,16 @@
-//! Lock-free counters and gauges backed by `crossbeam` channels, used by the hot path of the metrics pipeline.
+//! Lock-free counters and gauges used by the hot path of the metrics pipeline.
 //!
-//! Producers send events through an unbounded MPSC channel; a dedicated
-//! consumer thread folds them into atomic counters that the exporter
-//! reads without ever taking a mutex. Falls back to the locked variant
-//! on single-threaded test builds.
-use crossbeam::channel::{Receiver, Sender, bounded};
+//! Producers update atomic counters and push latency / batch-size /
+//! scheduler-wait samples into bounded rolling windows (a `parking_lot`
+//! `Mutex<VecDeque>` per window — an uncontended short-lived lock, never
+//! a blocking send); the exporter reads a [`MetricsSnapshot`] via
+//! `snapshot()`, which **clones** the windows without draining them, so
+//! any number of consumers (the `/metrics` scrape, the engine's
+//! `GetMetrics` round-trip, a future OTLP exporter) all observe the same
+//! samples (RIL ISS-107).
+use parking_lot::Mutex;
 use serde::Serialize;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -74,31 +79,25 @@ pub struct LockFreeMetrics {
     /// Process-start instant; basis for tokens/sec computation.
     start_time: std::time::Instant,
 
-    /// Sender side of the bounded latency ring channel.
-    latency_sender: Sender<f64>,
-    /// Receiver side of the bounded latency ring channel.
-    latency_receiver: Receiver<f64>,
-    /// Sender side of the bounded batch-size ring channel.
-    batch_size_sender: Sender<usize>,
-    /// Receiver side of the bounded batch-size ring channel.
-    batch_size_receiver: Receiver<usize>,
-    /// Sender side of the bounded scheduler-wait ring channel.
-    scheduler_wait_sender: Sender<f64>,
-    /// Receiver side of the bounded scheduler-wait ring channel.
-    scheduler_wait_receiver: Receiver<f64>,
+    /// Capacity of each bounded rolling window (latency / batch / wait).
+    window_capacity: usize,
+    /// Rolling latency samples (ms) since the process window began to fill.
+    /// `snapshot()` clones; producers push under the window lock.
+    latency_window: Mutex<VecDeque<f64>>,
+    /// Rolling batch-size samples.
+    batch_size_window: Mutex<VecDeque<usize>>,
+    /// Rolling scheduler-wait samples (ms).
+    scheduler_wait_window: Mutex<VecDeque<f64>>,
 }
 
 impl LockFreeMetrics {
-    /// Construct a `LockFreeMetrics` whose bounded ring channels hold up to
-    /// `capacity` samples each for latency, batch size, and scheduler-wait
-    /// time. Once full, additional samples are dropped (via `try_send`),
-    /// keeping the hot path lock-free.
+    /// Construct a `LockFreeMetrics` whose bounded rolling windows hold up
+    /// to `capacity` samples each for latency, batch size, and
+    /// scheduler-wait time. When a window is full the oldest sample is
+    /// evicted so the newest are retained (a "most recent N" window);
+    /// producers never block and `snapshot()` never drains.
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
-        let (latency_tx, latency_rx) = bounded(capacity);
-        let (batch_tx, batch_rx) = bounded(capacity);
-        let (wait_tx, wait_rx) = bounded(capacity);
-
         Self {
             tokens_total: Arc::new(AtomicU64::new(0)),
             requests_total: Arc::new(AtomicU64::new(0)),
@@ -111,13 +110,22 @@ impl LockFreeMetrics {
             prefill_tokens: Arc::new(AtomicU64::new(0)),
             decode_tokens: Arc::new(AtomicU64::new(0)),
             start_time: std::time::Instant::now(),
-            latency_sender: latency_tx,
-            latency_receiver: latency_rx,
-            batch_size_sender: batch_tx,
-            batch_size_receiver: batch_rx,
-            scheduler_wait_sender: wait_tx,
-            scheduler_wait_receiver: wait_rx,
+            window_capacity: capacity,
+            latency_window: Mutex::new(VecDeque::with_capacity(capacity)),
+            batch_size_window: Mutex::new(VecDeque::with_capacity(capacity)),
+            scheduler_wait_window: Mutex::new(VecDeque::with_capacity(capacity)),
         }
+    }
+
+    /// Push `value` onto `window`, evicting the oldest sample when the
+    /// rolling window is at capacity. Bounded-memory, never blocks for a
+    /// meaningful duration (an uncontended `parking_lot` lock).
+    fn push_sample<T>(window: &Mutex<VecDeque<T>>, capacity: usize, value: T) {
+        let mut samples = window.lock();
+        if samples.len() >= capacity {
+            samples.pop_front();
+        }
+        samples.push_back(value);
     }
 
     /// Add `count` to the lifetime token counter. Hot-path: uses a single
@@ -131,16 +139,16 @@ impl LockFreeMetrics {
         self.requests_total.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// Record a per-step latency sample in milliseconds. Sample is pushed to
-    /// the bounded latency channel; if the channel is full it is silently
-    /// dropped.
+    /// Record a per-step latency sample in milliseconds. Pushed into the
+    /// bounded rolling window; the oldest sample is evicted when the
+    /// window is at capacity. Never blocks for a meaningful duration.
     pub fn record_latency(&self, ms: f64) {
-        let _ = self.latency_sender.try_send(ms);
+        Self::push_sample(&self.latency_window, self.window_capacity, ms);
     }
 
-    /// Record a per-step batch-size sample. Dropped if the channel is full.
+    /// Record a per-step batch-size sample (bounded rolling window).
     pub fn record_batch_size(&self, size: usize) {
-        let _ = self.batch_size_sender.try_send(size);
+        Self::push_sample(&self.batch_size_window, self.window_capacity, size);
     }
 
     /// Snapshot the absolute KV-cache utilization. Both values are stored as
@@ -188,29 +196,22 @@ impl LockFreeMetrics {
         self.prefix_cache_requests.load(Ordering::Relaxed)
     }
 
-    /// Drain all ring channels and atomics into a [`MetricsSnapshot`].
-    /// After this call, the latency / batch-size / wait-time samples are
-    /// reset (only the unconsumed ring entries are flushed — lifetime
-    /// atomic counters are not touched).
+    /// Read atomics and the bounded rolling windows into a
+    /// [`MetricsSnapshot`]. **Non-destructive** (RIL ISS-107): the
+    /// latency / batch-size / wait-time windows are cloned, not drained,
+    /// so any number of concurrent consumers observe the same samples —
+    /// pre-fix `try_recv` drained the rings, so a second reader (a
+    /// concurrent `/metrics` scrape, the engine `GetMetrics` round-trip,
+    /// or a future OTLP exporter) silently stole the first reader's data.
+    /// Lifetime atomic counters are never touched.
     #[must_use]
     // invariant: counters are bounded by uptime; u64/usize -> f64 precision
     // loss is acceptable for snapshot metrics (p50/p90/p99/throughput).
     #[allow(clippy::cast_precision_loss)]
     pub fn snapshot(&self) -> MetricsSnapshot {
-        let mut latencies = Vec::new();
-        while let Ok(ms) = self.latency_receiver.try_recv() {
-            latencies.push(ms);
-        }
-
-        let mut batch_sizes = Vec::new();
-        while let Ok(size) = self.batch_size_receiver.try_recv() {
-            batch_sizes.push(size);
-        }
-
-        let mut wait_times = Vec::new();
-        while let Ok(ms) = self.scheduler_wait_receiver.try_recv() {
-            wait_times.push(ms);
-        }
+        let latencies: Vec<f64> = self.latency_window.lock().iter().copied().collect();
+        let batch_sizes: Vec<usize> = self.batch_size_window.lock().iter().copied().collect();
+        let wait_times: Vec<f64> = self.scheduler_wait_window.lock().iter().copied().collect();
 
         let (avg_latency, p50, p90, p99) = if latencies.is_empty() {
             (0.0, 0.0, 0.0, 0.0)
@@ -218,7 +219,9 @@ impl LockFreeMetrics {
             let sum: f64 = latencies.iter().sum();
             let avg = sum / latencies.len() as f64;
 
-            let mut sorted = latencies.clone();
+            // Sort in place — `latencies` is already an owned clone of the
+            // window, so no second copy is needed for the percentiles.
+            let mut sorted = latencies;
             sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
             let get_p = |xs: &[f64], p: f64| -> f64 {
@@ -364,8 +367,8 @@ impl LockFreeMetrics {
     }
 
     /// Record a scheduler-wait-time sample in milliseconds (queue→admission
-    /// delay). Dropped if the ring channel is full, keeping the hot path
-    /// lock-free.
+    /// delay). Pushed into the bounded rolling window (oldest evicted at
+    /// capacity); never blocks for a meaningful duration.
     ///
     /// RIL TASK-119: production callers are the two scheduler batch builders
     /// (`build_batch` and `build_batch_with_graph`/`select_sequences_for_phase`),
@@ -375,7 +378,7 @@ impl LockFreeMetrics {
     /// `avg_scheduler_wait_time_ms` was pinned at 0 in production (the
     /// ISS-095 documented-follow-up is now closed).
     pub(crate) fn record_scheduler_wait_time(&self, ms: f64) {
-        let _ = self.scheduler_wait_sender.try_send(ms);
+        Self::push_sample(&self.scheduler_wait_window, self.window_capacity, ms);
     }
 }
 

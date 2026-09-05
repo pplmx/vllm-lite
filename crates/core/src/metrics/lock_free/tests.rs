@@ -113,3 +113,43 @@ fn test_lock_free_metrics_buffer_overflow() {
     let snapshot = collector.snapshot();
     assert!(snapshot.avg_latency_ms > 0.0);
 }
+
+/// RIL ISS-107: `snapshot()` must be **non-destructive**. Pre-fix it
+/// drained the bounded latency/batch/wait ring channels with `try_recv`,
+/// so a *second* consumer of the same `LockFreeMetrics` (the engine's
+/// `GetMetrics` round-trip serving `/health/details`, a concurrent
+/// `/metrics` scrape, or a future OTLP exporter) silently stole the
+/// samples the first consumer's aggregate was computed from — recording
+/// one latency then snapshotting again returned `0.0` on the second read.
+#[test]
+fn test_snapshot_is_non_destructive() {
+    let collector = LockFreeMetrics::with_capacity(1024);
+    collector.record_latency(4.0);
+    collector.record_latency(10.0);
+    collector.record_latency(16.0);
+    collector.record_batch_size(2);
+    collector.record_scheduler_wait_time(5.0);
+
+    let first = collector.snapshot();
+    assert!((first.avg_latency_ms - 10.0).abs() < 0.01);
+    assert_eq!(first.current_batch_size, 2);
+    assert!((first.avg_scheduler_wait_time_ms - 5.0).abs() < 0.01);
+
+    // A second snapshot (any other consumer) must see the SAME samples —
+    // pre-fix this read the already-drained channels and returned zeros.
+    let second = collector.snapshot();
+    assert!(
+        (second.avg_latency_ms - 10.0).abs() < 0.01,
+        "second snapshot must preserve latency samples, got {}",
+        second.avg_latency_ms
+    );
+    assert!(
+        (second.avg_scheduler_wait_time_ms - 5.0).abs() < 0.01,
+        "second snapshot must preserve wait samples, got {}",
+        second.avg_scheduler_wait_time_ms
+    );
+    assert_eq!(
+        second.current_batch_size, 2,
+        "second snapshot must preserve batch samples"
+    );
+}

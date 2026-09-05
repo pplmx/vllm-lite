@@ -16,7 +16,7 @@ crossbeam = { workspace = true }
 tracing = { workspace = true }
 metrics = { workspace = true }
 dashmap = { workspace = true }
-parking_lot = { workspace = true, optional = true }
+parking_lot = { workspace = true }
 opentelemetry = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
 opentelemetry-otlp = { workspace = true, optional = true }
@@ -27,7 +27,7 @@ uuid = { workspace = true }
 
 [features]
 cuda-graph = ["dep:vllm-model"]
-multi-node = ["dep:vllm-dist", "dep:vllm-model", "vllm-model/multi-node", "dep:parking_lot"]
+multi-node = ["dep:vllm-dist", "dep:vllm-model", "vllm-model/multi-node"]
 opentelemetry = [
     "dep:opentelemetry",
     "dep:opentelemetry_sdk",
