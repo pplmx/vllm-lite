@@ -222,6 +222,18 @@ async fn models_endpoint_exposes_max_model_len() {
         Some(4096),
         "configured max_model_len must surface on /v1/models"
     );
+    // RIL ISS-098: `created` must be the serving time (live epoch), not
+    // the stale hardcoded 1_700_000_000 (2023-11-14) every deployment
+    // previously reported for every model. 1_750_000_000 ~= 2025-06-25,
+    // comfortably below any live serving time.
+    let created = models[0]["created"]
+        .as_i64()
+        .expect("created is a unix epoch");
+    assert!(
+        created > 1_750_000_000,
+        "created must be a live serving-time epoch, not the stale constant \
+         (got {created})"
+    );
 }
 
 #[tokio::test]

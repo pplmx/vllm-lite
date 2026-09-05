@@ -54,7 +54,11 @@ pub async fn models_handler(State(state): State<ApiState>) -> Response {
         data: vec![ModelObject {
             id: model_name,
             object: "model".to_string(),
-            created: 1_700_000_000,
+            // RIL ISS-098: report when this server instance serves the
+            // model entry (vLLM's convention), not a stale hardcoded
+            // epoch (1_700_000_000 = 2023-11-14) that implied a fixed
+            // creation date for every model on every deployment.
+            created: crate::util::time::unix_now_secs(),
             owned_by: "vllm-lite".to_string(),
             max_model_len: state.max_model_len,
         }],
