@@ -1,12 +1,17 @@
-//! `OpenAI` Models endpoint: `GET /v1/models`. Returns the loaded model id(s) so clients can confirm what's deployed.
+//! `OpenAI` Models endpoint: `GET /v1/models` (list) and
+//! `GET /v1/models/{id}` (retrieve one). Returns the loaded model id(s) so
+//! clients can confirm what's deployed.
 #![allow(clippy::module_name_repetitions)]
 use crate::ApiState;
 use axum::{
     Json,
-    extract::State,
+    extract::{Path, State},
+    http::StatusCode,
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
+
+use super::types::ErrorResponse;
 
 #[derive(Serialize)]
 struct ModelObject {
@@ -64,5 +69,46 @@ pub async fn models_handler(State(state): State<ApiState>) -> Response {
         }],
     };
 
+    Json(response).into_response()
+}
+
+/// OpenAI-compatible `GET /v1/models/{id}` handler (RIL ISS-106).
+///
+/// Resolves a single model by id — the id the list endpoint just
+/// advertised. `OpenAI` clients / SDKs commonly follow up a model list
+/// with `GET /v1/models/<id>` to confirm availability and pull per-model
+/// metadata; before this route existed such requests hit axum's default
+/// empty `404` (no `OpenAI` error body). Returns the same single-element
+/// payload shape as the list endpoint when the id matches the served
+/// model, and a `404 model_not_found` `OpenAI` error otherwise.
+#[allow(clippy::unused_async)]
+pub async fn model_by_id_handler(
+    Path(model_id): Path<String>,
+    State(state): State<ApiState>,
+) -> Response {
+    let model_name = state
+        .tokenizer
+        .model_name()
+        .unwrap_or_else(|| "unknown".to_string());
+
+    if model_id != model_name {
+        let body = ErrorResponse::with_code(
+            &format!("The model '{model_id}' does not exist or you do not have access to it"),
+            "invalid_request_error",
+            "model_not_found",
+        );
+        return (StatusCode::NOT_FOUND, Json(body)).into_response();
+    }
+
+    let response = ModelsResponse {
+        object: "list".to_string(),
+        data: vec![ModelObject {
+            id: model_name,
+            object: "model".to_string(),
+            created: crate::util::time::unix_now_secs(),
+            owned_by: "vllm-lite".to_string(),
+            max_model_len: state.max_model_len,
+        }],
+    };
     Json(response).into_response()
 }

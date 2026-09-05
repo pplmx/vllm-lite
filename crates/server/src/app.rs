@@ -50,7 +50,7 @@ use crate::openai::batch::handler::{
 use crate::openai::chat::chat_completions;
 use crate::openai::completions::completions as openai_completions;
 use crate::openai::embeddings::embeddings;
-use crate::openai::models::models_handler;
+use crate::openai::models::{model_by_id_handler, models_handler};
 use crate::security::audit::AuditLogger;
 use crate::security::audit_middleware::audit_middleware;
 use crate::security::correlation::correlation_id_middleware;
@@ -107,6 +107,7 @@ pub fn build_app(
     let mut app = Router::new()
         // OpenAI API
         .route("/v1/models", get(models_handler))
+        .route("/v1/models/{id}", get(model_by_id_handler))
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/completions", post(openai_completions))
         .route("/v1/embeddings", post(embeddings))
