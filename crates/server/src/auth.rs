@@ -656,9 +656,14 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
             .filter(|&m| m > 0)
             .unwrap_or(100) as f64;
         let num_prompts = prompts.len() as f64;
-        return max_tokens
-            .mul_add(num_prompts, prompt_words)
-            .clamp(1.0, 100_000.0);
+        // NO upper clamp here (unlike the synchronous endpoints): a batch is
+        // DEFERRED compute — every prompt runs to completion as its own
+        // generation in the background worker, so the honest charge is
+        // `max_tokens × N + prompt_words`, which legitimately exceeds the
+        // 100k single-request ceiling (10_000 prompts × 8192 max_tokens
+        // ≈ 82M token-equivalents). Clamping to 100k let a client queue ~820x
+        // its rate-limit budget of work in one call. Floor at 1.0 only.
+        return max_tokens.mul_add(num_prompts, prompt_words).max(1.0);
     } else {
         return 1.0;
     };
@@ -1082,6 +1087,36 @@ mod tests {
         let body = r#"{"prompts": [], "endpoint": "completion"}"#;
         let cost = estimate_request_cost(body);
         assert_eq!(cost, 1.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_batch_is_not_clamped_at_100k() {
+        // Regression: the batch branch clamped its cost to 100_000 like the
+        // synchronous endpoints, but a batch is DEFERRED compute — every
+        // prompt runs to completion as its own generation in the background
+        // worker. A 2_000-prompt batch with max_tokens=100 schedules
+        // 200_000 token-equivalents of work but was charged the same 100_000
+        // cap as a single synchronous request, so a client could queue ~820x
+        // its rate-limit budget of compute (up to 10_000 prompts × the 8192
+        // per-prompt ceiling) in one call. The batch charge must scale with
+        // `max_tokens × N + prompt_words` with no upper clamp.
+        let mut prompts = serde_json::json!([]);
+        let arr = prompts.as_array_mut().expect("fresh json array is mutable");
+        for _ in 0..2000 {
+            arr.push(serde_json::json!("a"));
+        }
+        let body = serde_json::json!({
+            "prompts": arr,
+            "endpoint": "completion",
+            "max_tokens": 100,
+        })
+        .to_string();
+        let cost = estimate_request_cost(&body);
+        // 2000 prompts × 100 max_tokens + 2000 words = 202_000 — uncapped.
+        assert_eq!(
+            cost, 202_000.0,
+            "batch cost must scale past 100_000 with deferred compute"
+        );
     }
 
     #[test]
