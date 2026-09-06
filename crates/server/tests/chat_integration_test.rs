@@ -433,6 +433,101 @@ async fn test_chat_streaming_include_usage_emits_usage_chunk() {
     );
 }
 
+/// RIL ISS-111 follow-up: `stream_options.include_usage` is honored on the
+/// `n > 1` chat streaming path too — the usage chunk (`choices: []` + real
+/// usage, `completion_tokens` aggregated across ALL choices) must appear
+/// between the consolidated final chunk and `[DONE]`. Pre-fix a client
+/// sending `include_usage: true` with `n > 1` got the field silently
+/// dropped with no usage chunk at all.
+#[tokio::test]
+async fn test_chat_streaming_include_usage_works_for_n_gt_one() {
+    let (engine_tx, _handle) = spawn_mock_engine(vec![7, 8]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "stream": true,
+        "n": 2,
+        "max_tokens": 3,
+        "stream_options": {"include_usage": true},
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+    let events: Vec<&str> = body_str.split("\n\n").filter(|s| !s.is_empty()).collect();
+
+    // The very last event is [DONE]; the usage chunk must be the
+    // penultimate event (n>1: consolidated final chunk → usage → [DONE]).
+    assert!(
+        events.last().is_some_and(|e| e.contains("[DONE]")),
+        "last SSE event should be [DONE], got: {:?}",
+        events.last()
+    );
+    let usage_event = events
+        .iter()
+        .rev()
+        .nth(1)
+        .unwrap_or_else(|| panic!("no penultimate event before [DONE]; events: {events:?}"));
+    let usage_json: serde_json::Value = serde_json::from_str(
+        usage_event
+            .strip_prefix("data:")
+            .unwrap_or(usage_event)
+            .trim(),
+    )
+    .unwrap_or_else(|e| panic!("usage event is not JSON ({e}): {usage_event:?}"));
+
+    assert_eq!(
+        usage_json["choices"],
+        serde_json::json!([]),
+        "the n>1 include_usage chunk must carry `choices: []`, got: {usage_json}"
+    );
+    let completion = usage_json["usage"]["completion_tokens"]
+        .as_i64()
+        .unwrap_or_else(|| panic!("missing completion_tokens in {usage_json}"));
+    let prompt = usage_json["usage"]["prompt_tokens"]
+        .as_i64()
+        .unwrap_or_else(|| panic!("missing prompt_tokens in {usage_json}"));
+    assert_eq!(
+        completion, 4,
+        "n>1 completion_tokens must aggregate across all choices (2 candidates x 2 tokens)"
+    );
+    assert!(prompt > 0, "prompt_tokens must reflect the encoded prompt");
+    assert_eq!(
+        usage_json["usage"]["total_tokens"].as_i64(),
+        Some(prompt + completion),
+        "total_tokens must be prompt_tokens + completion_tokens"
+    );
+}
+
 /// API-01 regression: pre-fix the non-streaming chat handler
 /// hardcoded `finish_reason: "stop"` even when the engine actually
 /// stopped because the sequence hit `max_tokens`. Post-fix the

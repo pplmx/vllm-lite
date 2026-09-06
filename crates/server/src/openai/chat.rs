@@ -1088,12 +1088,20 @@ struct ChatNParallelStreamingState {
     /// `Token` event has been forwarded into the SSE stream.
     first_emitted: Vec<bool>,
     cancel_guards: Vec<std::sync::Arc<CancelOnDrop>>,
+    /// RIL ISS-111 follow-up: aggregation of generated tokens across ALL N
+    /// candidates, feeding the `include_usage` chunk's `completion_tokens`
+    /// (`OpenAI` counts every choice's output).
+    completion_tokens: usize,
     terminal: ChatNParallelTerminal,
 }
 
 #[derive(Debug)]
 enum ChatNParallelTerminal {
     Streaming,
+    /// RIL ISS-111 follow-up: emit the `choices: []` + `usage` chunk after
+    /// the consolidated final chunk and before `[DONE]` (only reached when
+    /// the request set `stream_options.include_usage`).
+    EmitUsage,
     EmitDoneSentinel,
     Done,
 }
@@ -1520,6 +1528,13 @@ async fn stream_n_parallel_chat(
     // contributes its `index` + tokens across the stream; final
     // event carries `finish_reason` per index).
     let tokenizer = state.tokenizer.clone();
+    // RIL ISS-111 follow-up: honor `stream_options.include_usage` on the
+    // n > 1 path too — the usage chunk is emitted after the consolidated
+    // final chunk and before `[DONE]`, with `completion_tokens` counting
+    // ALL N candidates' generated tokens. `req` / `prompt_tokens` are
+    // still owned here (cloned into each candidate spawn above).
+    let include_usage = req.stream_options.is_some_and(|s| s.include_usage);
+    let prompt_tokens_len = prompt_tokens.len();
     let stream = stream::unfold(
         ChatNParallelStreamingState {
             rx: sse_rx,
@@ -1530,6 +1545,7 @@ async fn stream_n_parallel_chat(
             finish_reasons: vec![None; n],
             first_emitted: vec![false; n],
             cancel_guards,
+            completion_tokens: 0,
             terminal: ChatNParallelTerminal::Streaming,
         },
         move |mut state| {
@@ -1538,6 +1554,26 @@ async fn stream_n_parallel_chat(
             async move {
                 match state.terminal {
                     ChatNParallelTerminal::Done => None,
+                    ChatNParallelTerminal::EmitUsage => {
+                        // RIL ISS-111 follow-up: OpenAI streaming-usage
+                        // contract on the n > 1 path — one final chunk with
+                        // `choices: []` and the real usage (completion_tokens
+                        // aggregated across all N candidates), after the
+                        // consolidated final chunk and before `[DONE]`.
+                        let usage_chunk = ChatChunk::new_usage_chunk(
+                            "chatcmpl-stream".to_string(),
+                            model.clone(),
+                            Usage::new(prompt_tokens_len, state.completion_tokens),
+                        );
+                        let usage_payload = serde_json::to_string(&usage_chunk)
+                            // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                            .expect("Failed to serialize chat chunk");
+                        state.terminal = ChatNParallelTerminal::EmitDoneSentinel;
+                        Some((
+                            Ok::<Event, Infallible>(Event::default().data(usage_payload)),
+                            state,
+                        ))
+                    }
                     ChatNParallelTerminal::EmitDoneSentinel => {
                         state.terminal = ChatNParallelTerminal::Done;
                         Some((
@@ -1547,6 +1583,10 @@ async fn stream_n_parallel_chat(
                     }
                     ChatNParallelTerminal::Streaming => match state.rx.recv().await {
                         Some(ChatNParallelSseEvent::Token { index, token }) => {
+                            // RIL ISS-111 follow-up: this generated token
+                            // counts toward the include_usage chunk across
+                            // ALL candidates.
+                            state.completion_tokens += 1;
                             // Per-token arrival: emit one event with a
                             // single choice carrying this candidate's
                             // decoded content + index + delta. The
@@ -1674,7 +1714,13 @@ async fn stream_n_parallel_chat(
                                     "model": model,
                                     "choices": choices,
                                 });
-                                state.terminal = ChatNParallelTerminal::EmitDoneSentinel;
+                                // RIL ISS-111 follow-up: route the usage
+                                // chunk before [DONE] when requested.
+                                state.terminal = if include_usage {
+                                    ChatNParallelTerminal::EmitUsage
+                                } else {
+                                    ChatNParallelTerminal::EmitDoneSentinel
+                                };
                                 Some((Ok(Event::default().data(chunk.to_string())), state))
                             } else {
                                 // Intermediate finish event: this

@@ -632,7 +632,8 @@ impl ChatResponse {
 /// `OpenAI` streaming-usage contract). Pre-fix a client sending
 /// `stream_options.include_usage = true` got the field silently dropped —
 /// no usage, and the final chunk kept a non-empty `choices` (RIL ISS-111
-/// follow-up). Honored on the `n == 1` chat streaming path.
+/// follow-up). Honored on both the `n == 1` and `n > 1` chat streaming
+/// paths (for `n > 1`, `completion_tokens` aggregates across all choices).
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct StreamOptions {
     /// When `true`, include a `usage` object on a final `choices: []` chunk.
