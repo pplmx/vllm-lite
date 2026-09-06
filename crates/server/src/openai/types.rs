@@ -628,8 +628,8 @@ impl ChatResponse {
 /// Today only `include_usage` is modelled: when `true`, the stream emits one
 /// extra final chunk (after the `finish_reason` chunk) whose `choices` is an
 /// empty array and whose `usage` carries the request's real prompt /
-/// completion token counts, before the `[DONE]` sentinel (the OpenAI
-/// streaming-usage contract). Pre-fix a client sending
+/// completion token counts, before the `[DONE]` sentinel (the
+/// `OpenAI` streaming-usage contract). Pre-fix a client sending
 /// `stream_options.include_usage = true` got the field silently dropped —
 /// no usage, and the final chunk kept a non-empty `choices` (RIL ISS-111
 /// follow-up). Honored on the `n == 1` chat streaming path.
@@ -703,9 +703,9 @@ impl ChatChunk {
     }
 
     /// Streaming token-usage chunk: `choices: []` + a real [`Usage`]
-    /// (the OpenAI `stream_options.include_usage` contract, RIL ISS-111
-    /// follow-up). Emitted AFTER the `finish_reason` chunk and BEFORE
-    /// `[DONE]`.
+    /// (the `OpenAI` `stream_options.include_usage` contract, RIL
+    /// ISS-111 follow-up). Emitted AFTER the `finish_reason` chunk and
+    /// BEFORE `[DONE]`.
     #[must_use]
     pub fn new_usage_chunk(id: String, model: String, usage: Usage) -> Self {
         Self {
