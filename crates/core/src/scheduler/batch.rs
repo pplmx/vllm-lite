@@ -140,8 +140,18 @@ impl crate::engine::Engine {
         self.scheduler
             .update(&batch.seq_ids, &output.next_tokens, &input_counts);
 
-        let results =
-            self.send_and_collect_results(&batch.seq_ids, &output.next_tokens, &stale_mask);
+        let mut disconnected = Vec::new();
+        let results = self.send_and_collect_results(
+            &batch.seq_ids,
+            &output.next_tokens,
+            &stale_mask,
+            &mut disconnected,
+        );
+
+        // RIL ISS-110: cancel sequences whose response channel closed
+        // mid-step (client disconnect) so they don't burn the rest of their
+        // `max_tokens` budget into a dead channel.
+        self.cancel_on_closed_channels(&disconnected);
 
         // Keep `logits_per_seq` alive through this point for structural
         // symmetry with the CUDA-Graph path (P36); it is not consumed.
@@ -158,15 +168,20 @@ impl crate::engine::Engine {
     /// slower than generation — the token is lost to the client stream.
     /// Pre-fix the `let _ = try_send(...)` ignored the error, so the gap was
     /// a permanent silent hole. Now it is logged AND counted so operators can
-    /// detect the loss on `/metrics`. `Closed` (receiver dropped — client
-    /// gone / cancelled) stays a silent no-op: dropping is the intended
-    /// behaviour there, and a warning would just be noise. `Ok` and `Closed`
-    /// both leave the token out of the stream with no action.
+    /// detect the loss on `/metrics`.
+    ///
+    /// RIL ISS-110: a `Closed` channel (receiver dropped — client gone) is
+    /// the engine's ONLY disconnect signal on the non-streaming paths (they
+    /// build no `CancelOnDrop` guard), so the sequence is recorded in
+    /// `disconnected` and the caller cancels it — pre-fix it was a silent
+    /// no-op and an aborted request generated into a closed channel for its
+    /// whole `max_tokens` budget. `Ok` leaves the token in the stream.
     fn try_send_token(
         &self,
         seq_id: SeqId,
         sampled: &SampledToken,
         tx: &tokio::sync::mpsc::Sender<SampledToken>,
+        disconnected: &mut Vec<SeqId>,
     ) {
         match tx.try_send(sampled.clone()) {
             Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
@@ -177,7 +192,15 @@ impl crate::engine::Engine {
                 );
                 self.scheduler.metrics.record_dropped_token();
             }
-            Ok(()) | Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {}
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                tracing::debug!(
+                    seq_id = %seq_id,
+                    token = %sampled.token,
+                    "response channel closed; cancelling sequence (client disconnected)"
+                );
+                disconnected.push(seq_id);
+            }
+            Ok(()) => {}
         }
     }
 
@@ -189,11 +212,23 @@ impl crate::engine::Engine {
     /// NOT generated output (RIL ISS-053): it is neither sent to the channel
     /// nor included in the returned results, so the client stream, step
     /// results, and output-token metrics all see only real generated tokens.
+    /// Send sampled tokens to each sequence's response channel and collect
+    /// them into the return vec. Idempotent: if a channel is missing (e.g.
+    /// the sequence was already finalized) the token is still returned.
+    ///
+    /// `stale[i] == true` marks a mid-chunk prefill whose predicted token is
+    /// NOT generated output (RIL ISS-053): it is neither sent to the channel
+    /// nor included in the returned results, so the client stream, step
+    /// results, and output-token metrics all see only real generated tokens.
+    ///
+    /// RIL ISS-110: sequences whose channel returned `Closed` are appended
+    /// to `disconnected` so the caller can cancel them (client disconnect).
     pub(crate) fn send_and_collect_results(
         &self,
         seq_ids: &[SeqId],
         next_tokens: &[SampledToken],
         stale: &[bool],
+        disconnected: &mut Vec<SeqId>,
     ) -> Vec<(SeqId, SampledToken)> {
         let mut results = Vec::with_capacity(seq_ids.len());
         for ((seq_id, sampled), &is_stale) in seq_ids.iter().zip(next_tokens.iter()).zip(stale) {
@@ -207,7 +242,7 @@ impl crate::engine::Engine {
             }
             tracing::debug!(seq_id = %seq_id, token = %sampled.token, "Sending token to channel");
             if let Some(tx) = self.response_txs.get(seq_id) {
-                self.try_send_token(*seq_id, sampled, tx);
+                self.try_send_token(*seq_id, sampled, tx, disconnected);
             }
             results.push((*seq_id, sampled.clone()));
         }

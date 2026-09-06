@@ -134,6 +134,51 @@ fn test_engine_response_channel_cleanup() {
     assert!(!engine.has_pending());
 }
 
+/// RIL ISS-110: when the client drops the response channel mid-generation
+/// (`TrySendError::Closed` — the ONLY disconnect signal on non-streaming
+/// paths, which build no `CancelOnDrop` guard), the engine must cancel the
+/// sequence instead of silently generating into a closed channel for the
+/// rest of its `max_tokens` budget. Pre-fix `try_send_token` treated
+/// `Closed` as a silent no-op, so every aborted request burned
+/// CPU/tokens/KV up to `max_tokens` (a resource-exhaustion vector under
+/// client aborts). Post-fix `Closed` cancels the sequence (releases KV,
+/// balances in-flight, removes the response-channel entry).
+#[test]
+fn test_engine_cancels_sequence_on_closed_response_channel() {
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let (tx, rx) = mpsc::channel(64);
+    let seq_id = engine.add_request(Request::new(1, vec![10, 20], 5), tx);
+
+    // Step 1: prefill emits the first token into the still-open channel.
+    let _ = engine.step().unwrap();
+    assert!(
+        engine.response_txs.contains_key(&seq_id),
+        "sequence must still be tracked before the disconnect"
+    );
+
+    // Client disconnects: dropping the receiver makes the next `try_send`
+    // return `Closed`.
+    drop(rx);
+
+    // Step 2: the token hits the closed channel → the engine must cancel
+    // the sequence (drop the response-channel entry, stop generating).
+    let _ = engine.step().unwrap();
+    assert!(
+        !engine.response_txs.contains_key(&seq_id),
+        "engine must cancel a sequence whose response channel closed (client gone)"
+    );
+
+    // The cancelled sequence must not keep burning the remaining max_tokens.
+    for _ in 0..3 {
+        let _ = engine.step().unwrap();
+    }
+    assert!(
+        !engine.has_pending(),
+        "cancelled sequence must not keep generating to max_tokens"
+    );
+}
+
 /// RIL ISS-074 / TASK-089: a full token response channel must not silently
 /// lose the token. Pre-fix `send_and_collect_results` did `let _ =
 /// tx.try_send(...)` and ignored `TrySendError::Full`, so a handler that

@@ -216,8 +216,13 @@ fn test_batch_processing() {
     // Add multiple requests with total tokens = prompt + max_tokens
     let num_requests = 10;
 
+    // Hold every receiver in a Vec so no channel reports `Closed` (RIL
+    // ISS-110 — a dropped receiver now cancels the sequence, and these
+    // requests must run to completion to produce their token budget).
+    let mut receivers = Vec::new();
     for i in 0..num_requests {
-        let (tx, _rx) = mpsc::channel(64);
+        let (tx, rx) = mpsc::channel(64);
+        receivers.push(rx);
         let seq_id = engine.add_request(Request::new(i, vec![10, 20], 15), tx); // total = 2 + 15 = 17
         assert!(seq_id > 0);
     }
@@ -225,6 +230,12 @@ fn test_batch_processing() {
     // Process all in batch
     let mut total_tokens = 0;
     let max_iterations = 100;
+
+    assert_eq!(
+        receivers.len(),
+        num_requests as usize,
+        "one held receiver per request"
+    );
 
     for _ in 0..max_iterations {
         if let Ok(results) = engine.step() {

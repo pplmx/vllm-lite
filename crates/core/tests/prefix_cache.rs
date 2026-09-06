@@ -6,6 +6,14 @@ use vllm_core::scheduler::RadixTree;
 use vllm_core::types::{Request, SchedulerConfig, SeqId, TokenId};
 use vllm_testing::StubModel;
 
+// RIL ISS-110: a response channel whose receiver has been dropped reports
+// `Closed` on the next `try_send`, and the engine now treats that as a client
+// disconnect and CANCELS the sequence. These tests only care that KV/prefix
+// cache entries get written, not that tokens are collected, so each request's
+// receiver must stay ALIVE for the sequence's lifetime at the test scope
+// (`let (tx, _rx) = ...` / a Vec of receivers) — it is never drained, just
+// not dropped.
+
 #[test]
 fn test_prefix_cache_hit() {
     let config = SchedulerConfig {
@@ -165,19 +173,22 @@ fn test_prefix_cache_multiple_shared() {
     let mut engine = Engine::with_config(StubModel::default(), None, config, 4, 100);
 
     // First: [1, 2, 3]
-    engine.add_request(Request::new(1, vec![1, 2, 3], 3), mpsc::channel(64).0);
+    let (tx1, _rx1) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![1, 2, 3], 3), tx1);
     while engine.has_pending() {
         engine.step().unwrap();
     }
 
     // Second: [1, 2] (prefix)
-    engine.add_request(Request::new(2, vec![1, 2], 3), mpsc::channel(64).0);
+    let (tx2, _rx2) = mpsc::channel(64);
+    engine.add_request(Request::new(2, vec![1, 2], 3), tx2);
     while engine.has_pending() {
         engine.step().unwrap();
     }
 
     // Third: [1, 2, 3, 4] (longer)
-    engine.add_request(Request::new(3, vec![1, 2, 3, 4], 3), mpsc::channel(64).0);
+    let (tx3, _rx3) = mpsc::channel(64);
+    engine.add_request(Request::new(3, vec![1, 2, 3, 4], 3), tx3);
 
     // Should all share the common prefix [1, 2]
     let cache = engine.scheduler.prefix_cache();
@@ -289,13 +300,18 @@ fn test_prefix_cache_high_volume() {
     };
     let mut engine = Engine::with_config(StubModel::default(), None, config, 4, 200);
 
-    // Add 50 different requests with different tokens
+    // Add 50 different requests with different tokens. Hold every receiver
+    // in a Vec so no channel reports `Closed` (RIL ISS-110) — the sequences
+    // must run to completion to commit their KV to the prefix cache.
+    let mut receivers = Vec::new();
     for i in 0..50 {
         let tokens: Vec<TokenId> = (0..10)
             .map(|j| TokenId::try_from(i * 100 + j).expect("bounded test token"))
             .collect();
         let id = SeqId::try_from(i).expect("bounded test seq id");
-        engine.add_request(Request::new(id, tokens, 3), mpsc::channel(64).0);
+        let (tx, rx) = mpsc::channel(64);
+        receivers.push(rx);
+        engine.add_request(Request::new(id, tokens, 3), tx);
     }
 
     // Process all to completion
@@ -306,7 +322,10 @@ fn test_prefix_cache_high_volume() {
         assert!(steps <= 10000, "Too many steps - possible infinite loop");
     }
 
-    // All 50 requests should have completed
+    // All 50 requests should have completed; the receivers were held only to
+    // keep the channels open (RIL ISS-110) — assert the count to mark the
+    // collection as intentionally read.
+    assert_eq!(receivers.len(), 50, "one held receiver per request");
     let cache = engine.scheduler.prefix_cache();
     assert!(
         !cache.is_empty(),
@@ -333,22 +352,25 @@ fn test_prefix_cache_many_sequences_same_prefix() {
 
     let common_prefix = vec![100, 200, 300];
 
-    // First request: populate cache with common prefix
-    engine.add_request(
-        Request::new(0, common_prefix.clone(), 3),
-        mpsc::channel(64).0,
-    );
+    // First request: populate cache with common prefix. Hold the receiver so
+    // the channel never reports `Closed` (RIL ISS-110).
+    let (tx0, _rx0) = mpsc::channel(64);
+    engine.add_request(Request::new(0, common_prefix.clone(), 3), tx0);
     while engine.has_pending() {
         engine.step().unwrap();
     }
 
-    // Add 10 requests with same prefix but different completions
+    // Add 10 requests with same prefix but different completions; keep every
+    // receiver alive for the processing loop below.
+    let mut receivers = Vec::new();
     for i in 1..=10 {
         let mut tokens = common_prefix.clone();
         tokens.push(TokenId::try_from(i).expect("bounded test token"));
         tokens.push(TokenId::try_from(i + 100).expect("bounded test token"));
         let id = SeqId::try_from(i).expect("bounded test seq id");
-        engine.add_request(Request::new(id, tokens, 3), mpsc::channel(64).0);
+        let (tx, rx) = mpsc::channel(64);
+        receivers.push(rx);
+        engine.add_request(Request::new(id, tokens, 3), tx);
     }
 
     // Process all to completion
@@ -359,6 +381,7 @@ fn test_prefix_cache_many_sequences_same_prefix() {
         assert!(steps <= 10000, "Too many steps - possible infinite loop");
     }
 
+    assert_eq!(receivers.len(), 10, "one held receiver per request");
     // Cache should have entries from the common prefix
     let cache = engine.scheduler.prefix_cache();
     assert!(!cache.is_empty(), "cache should have entries");

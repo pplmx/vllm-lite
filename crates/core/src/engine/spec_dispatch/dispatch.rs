@@ -106,12 +106,19 @@ impl crate::engine::Engine {
         // Emit verified tokens to their client channels (gating stale
         // mid-chunk prefill predictions, RIL ISS-057) — `results` still
         // carries every entry so the fold below can advance frontiers.
-        let results = self.emit_verified_tokens(&verified, &stale_by_seq);
+        let mut disconnected = Vec::new();
+        let results = self.emit_verified_tokens(&verified, &stale_by_seq, &mut disconnected);
         // Multi-token scheduler input tracking (Plan 17.1-E): fold the
         // emitted tokens into the scheduler per sequence, advancing
         // `num_computed_tokens` by the tokens whose KV was computed
         // (RIL ISS-025 / ISS-059).
         self.fold_speculative_update(&batch, &results, &accepted_counts, &stale_by_seq);
+
+        // RIL ISS-110: cancel sequences whose response channel closed
+        // (client disconnect) — after the fold, so the fold's per-sequence
+        // frontier updates already ran; they must not keep burning the rest
+        // of their `max_tokens` budget into a dead channel.
+        self.cancel_on_closed_channels(&disconnected);
 
         // P38 v0.3 wire-type engine wire-through: stop-sequence
         // finalization. Must run after `scheduler.update` (so
@@ -202,6 +209,7 @@ impl crate::engine::Engine {
         &self,
         verified: &[(SeqId, SampledToken)],
         stale_by_seq: &std::collections::HashMap<SeqId, bool>,
+        disconnected: &mut Vec<SeqId>,
     ) -> Vec<(SeqId, SampledToken)> {
         let mut results = Vec::with_capacity(verified.len());
         for (seq_id, sampled) in verified {
@@ -218,8 +226,13 @@ impl crate::engine::Engine {
                 // speculative path emits (accepted drafts burst several
                 // tokens per step), and the token is lost to the client
                 // stream. Log AND count it (same as `scheduler::batch::try_send_token`)
-                // so the gap is observable on `/metrics`; `Closed` (receiver
-                // dropped — client gone/cancelled) stays a silent no-op.
+                // so the gap is observable on `/metrics`.
+                //
+                // RIL ISS-110: a `Closed` channel (receiver dropped — client
+                // gone) records the sequence in `disconnected` so the caller
+                // cancels it — pre-fix it was a silent no-op and an aborted
+                // request generated into a closed channel for its whole
+                // `max_tokens` budget.
                 match tx.try_send(sampled.clone()) {
                     Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                         tracing::warn!(
@@ -230,7 +243,16 @@ impl crate::engine::Engine {
                         );
                         self.scheduler.metrics.record_dropped_token();
                     }
-                    Ok(()) | Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {}
+                    Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                        tracing::debug!(
+                            seq_id = %seq_id,
+                            token = %sampled.token,
+                            "speculative response channel closed; cancelling sequence \
+                             (client disconnected)"
+                        );
+                        disconnected.push(*seq_id);
+                    }
+                    Ok(()) => {}
                 }
             }
             results.push((*seq_id, sampled.clone()));

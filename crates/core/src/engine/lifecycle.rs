@@ -176,6 +176,20 @@ impl Engine {
         canceled
     }
 
+    /// RIL ISS-110: cancel every sequence whose response channel returned
+    /// `TrySendError::Closed` during the token-emission loop (the client
+    /// dropped the receiver — a disconnect). `Closed` is the engine's ONLY
+    /// disconnect signal on non-streaming paths (the HTTP layer builds no
+    /// `CancelOnDrop` guard there), so pre-fix an aborted request silently
+    /// generated into a closed channel for its entire `max_tokens` budget —
+    /// burning CPU/tokens/KV per abandonment. Called by every step path
+    /// (regular, speculative, CUDA-graph) right after their send loop.
+    pub(crate) fn cancel_on_closed_channels(&mut self, disconnected: &[SeqId]) {
+        for &seq_id in disconnected {
+            let _ = self.cancel_request(seq_id);
+        }
+    }
+
     /// Submit a new generation request to the engine.
     ///
     /// The returned `SeqId` can be used with [`Engine::cancel_request`] or for

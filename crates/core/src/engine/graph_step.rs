@@ -207,14 +207,24 @@ impl Engine {
                     })
             })
             .collect::<Vec<_>>();
-        let results =
-            self.send_and_collect_results(&output.seq_ids, &output.next_tokens, &stale_mask);
+        let mut disconnected = Vec::new();
+        let results = self.send_and_collect_results(
+            &output.seq_ids,
+            &output.next_tokens,
+            &stale_mask,
+            &mut disconnected,
+        );
 
         // `update` must stay aligned with the FULL batch (seq_ids /
         // next_tokens / input_counts all index the same batch entries); the
         // stale-masked `results` is only for client emission and metrics.
         self.scheduler
             .update(&output.seq_ids, &output.next_tokens, &input_counts);
+
+        // RIL ISS-110: cancel sequences whose response channel closed
+        // (client disconnect) — after `update` has advanced their frontier,
+        // so they don't burn the rest of their `max_tokens` budget.
+        self.cancel_on_closed_channels(&disconnected);
 
         // P38 v0.3 wire-type engine wire-through: stop-sequence
         // finalization. Must run after `scheduler.update` (so

@@ -425,6 +425,49 @@ fn test_speculative_metrics_all_drafts_accepted() {
     );
 }
 
+/// RIL ISS-110: the speculative emission path must cancel a sequence whose
+/// response channel closed (client disconnect) instead of silently generating
+/// into the closed channel to `max_tokens` — same contract as the regular
+/// step's `try_send_token` (dispatch.rs `emit_verified_tokens` formerly
+/// treated `TrySendError::Closed` as a silent no-op).
+#[test]
+fn test_speculative_cancels_sequence_on_closed_response_channel() {
+    let target = FakeModel::new(42);
+    let draft = FakeModel::new(42); // draft argmax == target argmax => all accepted
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 3;
+    engine.enable_speculative();
+
+    // max_tokens=20 so the all-accepted draft burst (3-4 tokens/step) does NOT
+    // naturally hit the token budget during the test — the sequence must still
+    // be alive (and burning max_tokens) when the channel closes, otherwise the
+    // assert below would pass because it FINISHED, not because it cancelled.
+    let (tx, rx) = tokio_mpsc::channel(64);
+    let seq_id = engine.add_request(Request::new(1, vec![10, 20], 20), tx);
+
+    // Step 1: prefill (tokens still reach the open channel).
+    let _ = engine.step().unwrap();
+    assert!(engine.response_txs.contains_key(&seq_id));
+
+    // Client disconnects; the next speculative send sees `Closed`.
+    drop(rx);
+
+    // Step 2: an accepted draft hits the closed channel → cancel the sequence.
+    let _ = engine.step().unwrap();
+    assert!(
+        !engine.response_txs.contains_key(&seq_id),
+        "speculative path must cancel a sequence whose response channel closed"
+    );
+
+    for _ in 0..3 {
+        let _ = engine.step().unwrap();
+    }
+    assert!(
+        !engine.has_pending(),
+        "cancelled speculative sequence must not keep generating to max_tokens"
+    );
+}
+
 /// RIL ISS-084: with every draft rejected, both speculative gauges must be 0 —
 /// an inverted efficiency formula (draft/(draft+0) = 1.0) would falsely report
 /// "perfect efficiency" for a draft model that is never accepted.
