@@ -176,7 +176,7 @@ impl crate::engine::Engine {
     /// `disconnected` and the caller cancels it — pre-fix it was a silent
     /// no-op and an aborted request generated into a closed channel for its
     /// whole `max_tokens` budget. `Ok` leaves the token in the stream.
-    fn try_send_token(
+    pub(crate) fn try_send_token(
         &self,
         seq_id: SeqId,
         sampled: &SampledToken,

@@ -221,39 +221,15 @@ impl crate::engine::Engine {
                     "Drawing stale mid-chunk prediction (not real output); not emitting"
                 );
             } else if let Some(tx) = self.response_txs.get(seq_id) {
-                // RIL TASK-120: mirror the regular path's ISS-074 contract —
-                // a `Full` channel means the consumer drains slower than the
-                // speculative path emits (accepted drafts burst several
-                // tokens per step), and the token is lost to the client
-                // stream. Log AND count it (same as `scheduler::batch::try_send_token`)
-                // so the gap is observable on `/metrics`.
-                //
-                // RIL ISS-110: a `Closed` channel (receiver dropped — client
-                // gone) records the sequence in `disconnected` so the caller
-                // cancels it — pre-fix it was a silent no-op and an aborted
-                // request generated into a closed channel for its whole
-                // `max_tokens` budget.
-                match tx.try_send(sampled.clone()) {
-                    Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                        tracing::warn!(
-                            seq_id = %seq_id,
-                            token = %sampled.token,
-                            "speculative response channel full; dropped token from client \
-                             stream (consumer too slow)"
-                        );
-                        self.scheduler.metrics.record_dropped_token();
-                    }
-                    Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                        tracing::debug!(
-                            seq_id = %seq_id,
-                            token = %sampled.token,
-                            "speculative response channel closed; cancelling sequence \
-                             (client disconnected)"
-                        );
-                        disconnected.push(*seq_id);
-                    }
-                    Ok(()) => {}
-                }
+                // Shares the regular path's `try_send_token` contract
+                // (scheduler/batch.rs): `Full` (consumer drains slower than
+                // the speculative path bursts — RIL TASK-120) logs a WARN +
+                // counts `dropped_tokens_total`; `Closed` (receiver dropped =
+                // client disconnect — RIL ISS-110) records the sequence in
+                // `disconnected` so the caller cancels it. Pre-fix both were
+                // silent no-ops and an aborted request generated into a
+                // closed channel for its whole `max_tokens` budget.
+                self.try_send_token(*seq_id, sampled, tx, disconnected);
             }
             results.push((*seq_id, sampled.clone()));
         }
