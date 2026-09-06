@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 102,
+  "round": 103,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-06T04:27:05+00:00",
+  "updated_at": "2026-09-06T04:51:01+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2562,7 +2562,7 @@
       "version": 1,
       "created_at": "2026-08-10T11:42:18+00:00",
       "updated_at": "2026-08-10T11:42:18+00:00",
-      "touched_round": 101,
+      "touched_round": 102,
       "title": "vllm-server openai streaming SSE",
       "role": "chat/completions SSE 流式响应"
     },
@@ -7144,6 +7144,52 @@
       "touched_round": 101,
       "commit": "d799db9d",
       "description": "Speculative path reuses the shared Engine::try_send_token (Closed=disconnect-cancel / Full=log+count); fixes the cognitive-complexity regression the ISS-110 Closed arm caused (ISS-110 follow-up)."
+    },
+    "ISS-113": {
+      "id": "ISS-113",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-06T04:43:48+00:00",
+      "updated_at": "2026-09-06T04:51:01+00:00",
+      "touched_round": 102,
+      "title": "SSE chat/completions streams emit no keepalive: an idle gap between tokens (long prefill, slow first token, reasoning-model pause) can be dropped by proxies/load-balancers with an inactivity timeout",
+      "component": "crates/server openai streaming SSE"
+    },
+    "TASK-135": {
+      "id": "TASK-135",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-06T04:43:48+00:00",
+      "updated_at": "2026-09-06T04:51:01+00:00",
+      "touched_round": 102,
+      "category": "usability",
+      "severity": 5,
+      "description": "Wrap every SSE response (chat n=1 + n>1, completions n=1 + n>1) with axum Sse::keep_alive(KeepAlive::default()) -- an empty comment every 15s of idle, firing only when the inner stream is pending, never delaying [DONE]. The four Sse::new sites + existing streaming tests guard framing/termination."
+    },
+    "CHG-130": {
+      "id": "CHG-130",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-06T04:50:25+00:00",
+      "updated_at": "2026-09-06T04:50:25+00:00",
+      "touched_round": 102,
+      "commit": "b91d6a6f",
+      "description": "All four SSE response sites (chat n=1+n>1, completions n=1+n>1) wrapped with Sse::keep_alive(KeepAlive::default()) -- empty SSE comment every 15s of idle."
+    },
+    "EV-122": {
+      "id": "EV-122",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-06T04:50:25+00:00",
+      "updated_at": "2026-09-06T04:50:25+00:00",
+      "touched_round": 102,
+      "source": "crates/server/tests/chat_integration_test.rs + cancel_propagation.rs streaming tests (full-body consumption)",
+      "confidence": 1.0,
+      "description": "All streaming/framing tests green after wrapping (518 lib + integration), full just ci green; KeepAliveStream forwards Ready(None) immediately so [DONE] is never delayed."
     }
   },
   "edges": [
@@ -10314,6 +10360,30 @@
       "to": "ISS-110",
       "type": "resolves",
       "created_at": "2026-09-06T04:27:05+00:00"
+    },
+    {
+      "from": "TASK-135",
+      "to": "ISS-113",
+      "type": "addresses",
+      "created_at": "2026-09-06T04:44:18+00:00"
+    },
+    {
+      "from": "ISS-113",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-09-06T04:44:18+00:00"
+    },
+    {
+      "from": "CHG-130",
+      "to": "ISS-113",
+      "type": "resolves",
+      "created_at": "2026-09-06T04:51:01+00:00"
+    },
+    {
+      "from": "CHG-130",
+      "to": "TASK-135",
+      "type": "implements",
+      "created_at": "2026-09-06T04:51:01+00:00"
     }
   ]
 }
