@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 103,
+  "round": 104,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-06T04:51:01+00:00",
+  "updated_at": "2026-09-06T05:18:32+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2562,7 +2562,7 @@
       "version": 1,
       "created_at": "2026-08-10T11:42:18+00:00",
       "updated_at": "2026-08-10T11:42:18+00:00",
-      "touched_round": 102,
+      "touched_round": 103,
       "title": "vllm-server openai streaming SSE",
       "role": "chat/completions SSE 流式响应"
     },
@@ -7190,6 +7190,52 @@
       "source": "crates/server/tests/chat_integration_test.rs + cancel_propagation.rs streaming tests (full-body consumption)",
       "confidence": 1.0,
       "description": "All streaming/framing tests green after wrapping (518 lib + integration), full just ci green; KeepAliveStream forwards Ready(None) immediately so [DONE] is never delayed."
+    },
+    "ISS-114": {
+      "id": "ISS-114",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-06T05:10:21+00:00",
+      "updated_at": "2026-09-06T05:18:32+00:00",
+      "touched_round": 103,
+      "title": "stream_options.include_usage silently dropped on the n>1 chat streaming path (ISS-111 fixed n==1 only; client sending include_usage with n>1 got no usage chunk)",
+      "component": "crates/server openai streaming SSE"
+    },
+    "TASK-136": {
+      "id": "TASK-136",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-06T05:10:22+00:00",
+      "updated_at": "2026-09-06T05:18:32+00:00",
+      "touched_round": 103,
+      "category": "usability",
+      "severity": 4,
+      "description": "Route the n>1 ChatNParallelTerminal through an EmitUsage state: aggregate completion_tokens across all N candidates and emit the choices:[] + usage chunk after the consolidated final chunk and before [DONE]."
+    },
+    "CHG-131": {
+      "id": "CHG-131",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-06T05:17:03+00:00",
+      "updated_at": "2026-09-06T05:17:03+00:00",
+      "touched_round": 103,
+      "commit": "c3172035",
+      "description": "n>1 chat streaming now honors stream_options.include_usage: shared completion counter + EmitUsage terminal; usage chunk with choices:[] aggregated across all candidates before [DONE]."
+    },
+    "EV-123": {
+      "id": "EV-123",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-06T05:17:03+00:00",
+      "updated_at": "2026-09-06T05:17:03+00:00",
+      "touched_round": 103,
+      "source": "crates/server/tests/chat_integration_test.rs test_chat_streaming_include_usage_works_for_n_gt_one",
+      "confidence": 1.0,
+      "description": "n=2 + include_usage: penultimate SSE event is the choices:[] usage chunk with completion_tokens=4 (2 candidates x 2 tokens); full just ci green."
     }
   },
   "edges": [
@@ -10384,6 +10430,30 @@
       "to": "TASK-135",
       "type": "implements",
       "created_at": "2026-09-06T04:51:01+00:00"
+    },
+    {
+      "from": "TASK-136",
+      "to": "ISS-114",
+      "type": "addresses",
+      "created_at": "2026-09-06T05:11:37+00:00"
+    },
+    {
+      "from": "ISS-114",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-09-06T05:11:37+00:00"
+    },
+    {
+      "from": "CHG-131",
+      "to": "ISS-114",
+      "type": "resolves",
+      "created_at": "2026-09-06T05:18:32+00:00"
+    },
+    {
+      "from": "CHG-131",
+      "to": "TASK-136",
+      "type": "implements",
+      "created_at": "2026-09-06T05:18:32+00:00"
     }
   ]
 }
