@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 101,
+  "round": 102,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-06T03:57:03+00:00",
+  "updated_at": "2026-09-06T04:27:05+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 95,
+      "touched_round": 101,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -7087,6 +7087,63 @@
       "source": "crates/server/tests/chat_integration_test.rs test_chat_streaming_include_usage_emits_usage_chunk",
       "confidence": 1.0,
       "description": "Integration test passes: penultimate SSE event before [DONE] carries choices:[] and exact prompt/completion/total counts; 517 vllm-server lib tests + integration all green."
+    },
+    "ISS-112": {
+      "id": "ISS-112",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-06T04:06:13+00:00",
+      "updated_at": "2026-09-06T04:18:15+00:00",
+      "touched_round": 101,
+      "title": "Batch-endpoint rate-limit cost clamped at 100k lets a caller queue ~820x its budget of deferred compute (10k prompts x 8192 max_tokens) in one request",
+      "component": "crates/server auth rate-limit"
+    },
+    "TASK-134": {
+      "id": "TASK-134",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-06T04:06:13+00:00",
+      "updated_at": "2026-09-06T04:18:15+00:00",
+      "touched_round": 101,
+      "category": "security",
+      "severity": 7,
+      "description": "estimate_request_cost's batch branch clamped the charge to [1.0, 100_000] like the synchronous endpoints, but a batch is deferred compute: each prompt runs to completion as its own generation in the background worker (MAX_BATCH_PROMPTS=10_000, per-prompt max_tokens ceiling 8192 -> ~82M token-equivalents), so the flat 100k cap undercharges ~820x and defeats cost-based rate limits via POST /v1/batches. Charge max_tokens*N + prompt_words with no upper clamp (floor 1.0 only)."
+    },
+    "CHG-128": {
+      "id": "CHG-128",
+      "type": "change",
+      "status": "active",
+      "version": 2,
+      "created_at": "2026-09-06T04:17:32+00:00",
+      "updated_at": "2026-09-06T04:26:03+00:00",
+      "touched_round": 101,
+      "commit": "88c307aa",
+      "description": "estimate_request_cost batch branch no longer clamps at 100k: charges max_tokens*N + prompt_words (floor 1.0) so POST /v1/batches pays its true deferred compute and can't queue ~820x its rate-limit budget."
+    },
+    "EV-121": {
+      "id": "EV-121",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-06T04:17:33+00:00",
+      "updated_at": "2026-09-06T04:17:33+00:00",
+      "touched_round": 101,
+      "source": "crates/server/src/auth.rs test_estimate_cost_batch_is_not_clamped_at_100k",
+      "confidence": 1.0,
+      "description": "2000-prompt batch with max_tokens=100 now costs 202_000 (was clamped at 100_000 pre-fix, RED confirmed); all 62 auth tests + 518 server lib tests pass; clippy clean."
+    },
+    "CHG-129": {
+      "id": "CHG-129",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-06T04:26:03+00:00",
+      "updated_at": "2026-09-06T04:26:03+00:00",
+      "touched_round": 101,
+      "commit": "d799db9d",
+      "description": "Speculative path reuses the shared Engine::try_send_token (Closed=disconnect-cancel / Full=log+count); fixes the cognitive-complexity regression the ISS-110 Closed arm caused (ISS-110 follow-up)."
     }
   },
   "edges": [
@@ -10227,6 +10284,36 @@
       "to": "TASK-133",
       "type": "implements",
       "created_at": "2026-09-06T03:56:09+00:00"
+    },
+    {
+      "from": "TASK-134",
+      "to": "ISS-112",
+      "type": "addresses",
+      "created_at": "2026-09-06T04:07:10+00:00"
+    },
+    {
+      "from": "ISS-112",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-06T04:07:10+00:00"
+    },
+    {
+      "from": "CHG-128",
+      "to": "ISS-112",
+      "type": "resolves",
+      "created_at": "2026-09-06T04:18:15+00:00"
+    },
+    {
+      "from": "CHG-128",
+      "to": "TASK-134",
+      "type": "implements",
+      "created_at": "2026-09-06T04:18:15+00:00"
+    },
+    {
+      "from": "CHG-129",
+      "to": "ISS-110",
+      "type": "resolves",
+      "created_at": "2026-09-06T04:27:05+00:00"
     }
   ]
 }
