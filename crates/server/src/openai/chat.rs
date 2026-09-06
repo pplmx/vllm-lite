@@ -313,6 +313,7 @@ mod populate_tests {
 
     fn base_chat_request() -> ChatRequest {
         ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -1761,10 +1762,14 @@ async fn stream_chat_completion(
     correlation_id: &str,
     req: ChatRequest,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    // Terminal state machine for SSE streaming: Streaming → EmitDoneSentinel → Done.
+    // Terminal state machine for SSE streaming:
+    // Streaming → (EmitUsage) → EmitDoneSentinel → Done.
+    // `EmitUsage` is only taken when the request set
+    // `stream_options.include_usage` (OpenAI streaming-usage contract).
     // Must be declared before any statements — Rust hoists items to scope start.
     enum Terminal {
         Streaming,
+        EmitUsage,
         EmitDoneSentinel,
         Done,
     }
@@ -1795,6 +1800,13 @@ async fn stream_chat_completion(
     );
 
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
+    // RIL ISS-111 follow-up: the OpenAI streaming-usage contract. When the
+    // request sets `stream_options.include_usage`, the stream emits one extra
+    // final chunk (after the `finish_reason` chunk) whose `choices` is `[]` and
+    // whose `usage` carries the real prompt/completion token counts — before
+    // `[DONE]`. Captured as a plain `bool` so the unfold closure can read it
+    // after `req` is moved into `AddRequest`.
+    let include_usage = req.stream_options.is_some_and(|s| s.include_usage);
 
     // Production-readiness §4: context-length gate (streaming variant).
     check_context_length(prompt_tokens_len, max_tokens, state.max_model_len)?;
@@ -2050,8 +2062,18 @@ async fn stream_chat_completion(
             Terminal::Streaming,
             // RIL ISS-105: incremental UTF-8-safe decoder for this stream.
             vllm_model::tokenizer::StreamingDecoder::new(),
+            // RIL ISS-111 follow-up: completion-token counter feeding the
+            // `include_usage` chunk, incremented once per sampled token.
+            0usize,
         ),
-        move |(mut rx, cancel_guard, mut reason_rx_opt, mut terminal, mut decoder)| {
+        move |(
+            mut rx,
+            cancel_guard,
+            mut reason_rx_opt,
+            mut terminal,
+            mut decoder,
+            mut completion_tokens,
+        )| {
             let tokenizer = tokenizer.clone();
             let model = model.clone();
             let request_id = request_id.clone();
@@ -2063,6 +2085,32 @@ async fn stream_chat_completion(
                         // call; close the HTTP body now.
                         None
                     }
+                    Terminal::EmitUsage => {
+                        // RIL ISS-111 follow-up: OpenAI streaming-usage
+                        // contract — one final chunk with `choices: []` and
+                        // the real usage, emitted AFTER the finish_reason
+                        // chunk and BEFORE `[DONE]`.
+                        let usage_chunk = ChatChunk::new_usage_chunk(
+                            "chatcmpl-stream".to_string(),
+                            model.clone(),
+                            Usage::new(prompt_tokens_len, completion_tokens),
+                        );
+                        let usage_payload = serde_json::to_string(&usage_chunk)
+                            // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                            .expect("Failed to serialize chat chunk");
+                        terminal = Terminal::EmitDoneSentinel;
+                        Some((
+                            Ok::<Event, Infallible>(Event::default().data(usage_payload)),
+                            (
+                                rx,
+                                cancel_guard,
+                                reason_rx_opt,
+                                terminal,
+                                decoder,
+                                completion_tokens,
+                            ),
+                        ))
+                    }
                     Terminal::EmitDoneSentinel => {
                         // Final chunk already emitted with the real
                         // finish_reason; now emit the [DONE] sentinel
@@ -2071,11 +2119,22 @@ async fn stream_chat_completion(
                         terminal = Terminal::Done;
                         Some((
                             Ok::<Event, Infallible>(Event::default().data("[DONE]")),
-                            (rx, cancel_guard, reason_rx_opt, terminal, decoder),
+                            (
+                                rx,
+                                cancel_guard,
+                                reason_rx_opt,
+                                terminal,
+                                decoder,
+                                completion_tokens,
+                            ),
                         ))
                     }
                     Terminal::Streaming => {
                         if let Some(sampled) = rx.recv().await {
+                            // Count every received sampled token (the
+                            // engine sent exactly the generated tokens;
+                            // text-skipped ones still were generated).
+                            completion_tokens += 1;
                             let text = decoder.push(&tokenizer, sampled.token);
                             if should_skip_token_text(&tokenizer, &text) {
                                 // RIL ISS-035: emit a well-formed chunk with
@@ -2103,7 +2162,14 @@ async fn stream_chat_completion(
                                     .expect("Failed to serialize chat chunk");
                                 return Some((
                                     Ok::<Event, Infallible>(Event::default().data(sse_payload)),
-                                    (rx, cancel_guard, reason_rx_opt, terminal, decoder),
+                                    (
+                                        rx,
+                                        cancel_guard,
+                                        reason_rx_opt,
+                                        terminal,
+                                        decoder,
+                                        completion_tokens,
+                                    ),
                                 ));
                             }
                             // P36 v0.3 wire-type follow-up engine
@@ -2138,7 +2204,14 @@ async fn stream_chat_completion(
                                 .expect("Failed to serialize chat chunk");
                             Some((
                                 Ok(Event::default().data(sse_payload)),
-                                (rx, cancel_guard, reason_rx_opt, terminal, decoder),
+                                (
+                                    rx,
+                                    cancel_guard,
+                                    reason_rx_opt,
+                                    terminal,
+                                    decoder,
+                                    completion_tokens,
+                                ),
                             ))
                         } else {
                             // Channel closed by the engine. Block on
@@ -2188,7 +2261,14 @@ async fn stream_chat_completion(
                                     .expect("Failed to serialize chat chunk");
                                 return Some((
                                     Ok(Event::default().data(tail_payload)),
-                                    (rx, cancel_guard, reason_rx_opt, terminal, decoder),
+                                    (
+                                        rx,
+                                        cancel_guard,
+                                        reason_rx_opt,
+                                        terminal,
+                                        decoder,
+                                        completion_tokens,
+                                    ),
                                 ));
                             }
                             cancel_guard.disarm();
@@ -2222,12 +2302,23 @@ async fn stream_chat_completion(
                                 "Streaming request completed"
                             );
                             // Emit the final chunk now; the NEXT call
-                            // emits [DONE], and the one after that
-                            // returns None.
-                            terminal = Terminal::EmitDoneSentinel;
+                            // emits the include_usage chunk (if
+                            // requested), then [DONE], then None.
+                            terminal = if include_usage {
+                                Terminal::EmitUsage
+                            } else {
+                                Terminal::EmitDoneSentinel
+                            };
                             Some((
                                 Ok(Event::default().data(sse_payload)),
-                                (rx, cancel_guard, reason_rx_opt, terminal, decoder),
+                                (
+                                    rx,
+                                    cancel_guard,
+                                    reason_rx_opt,
+                                    terminal,
+                                    decoder,
+                                    completion_tokens,
+                                ),
                             ))
                         }
                     }

@@ -101,6 +101,7 @@ async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
 
     let state = create_test_state();
     let req = ChatRequest {
+        stream_options: None,
         model: String::new(),
         messages: vec![ChatMessage {
             role: "user".into(),
@@ -145,6 +146,7 @@ async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
 
     let state = create_test_state(); // engine_tx has no receiver
     let req = ChatRequest {
+        stream_options: None,
         model: "qwen3".into(),
         messages: vec![ChatMessage {
             role: "user".into(),

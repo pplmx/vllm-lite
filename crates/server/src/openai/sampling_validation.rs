@@ -1000,6 +1000,7 @@ mod tests {
 
     fn chat_request_with_n(n: Option<i64>) -> ChatRequest {
         ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -1023,6 +1024,7 @@ mod tests {
 
     fn chat_request_with_stop(stop: Option<Vec<String>>) -> ChatRequest {
         ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -1046,6 +1048,7 @@ mod tests {
 
     fn chat_request_with_top_p(top_p: Option<f32>) -> ChatRequest {
         ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -1135,6 +1138,7 @@ mod tests {
         // that has both `response_format = Text` and other valid
         // fields must pass the full chat-request validator.
         let req = ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -1164,6 +1168,7 @@ mod tests {
         // validator flow is wired correctly for both accepted
         // variants.
         let req = ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -1958,6 +1963,7 @@ mod tests {
         // validator must accept independent penalties on the same
         // request.
         let req = ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -2754,6 +2760,7 @@ mod tests {
     #[test]
     fn chat_request_with_tools_none_passes_field_validation() {
         let req = ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -2779,6 +2786,7 @@ mod tests {
     #[test]
     fn chat_request_with_tools_only_passes_field_validation() {
         let req = ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -2804,6 +2812,7 @@ mod tests {
     #[test]
     fn chat_request_with_tool_choice_required_and_tools_passes_field_validation() {
         let req = ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -2829,6 +2838,7 @@ mod tests {
     #[test]
     fn chat_request_with_tool_choice_required_and_no_tools_is_rejected() {
         let req = ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -2857,6 +2867,7 @@ mod tests {
     #[test]
     fn chat_request_with_tool_choice_specific_and_matching_tool_passes_field_validation() {
         let req = ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -2887,6 +2898,7 @@ mod tests {
     #[test]
     fn chat_request_with_tool_choice_specific_and_unknown_tool_is_rejected() {
         let req = ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,
@@ -2920,6 +2932,7 @@ mod tests {
     #[test]
     fn chat_request_with_tool_choice_specific_and_no_tools_is_rejected() {
         let req = ChatRequest {
+            stream_options: None,
             model: "test-model".to_string(),
             messages: vec![],
             temperature: None,

@@ -139,6 +139,7 @@ fn test_clean_completion_text_trims_whitespace() {
 
 fn create_test_request(model: &str, messages: Vec<ChatMessage>) -> ChatRequest {
     ChatRequest {
+        stream_options: None,
         model: model.to_string(),
         messages,
         temperature: None,

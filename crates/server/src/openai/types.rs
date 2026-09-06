@@ -323,6 +323,10 @@ pub struct ChatRequest {
     /// declaration-only PR doesn't regress to "rejected by serde".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<i64>,
+    /// `OpenAI` streaming extras (RIL ISS-111 follow-up). Only
+    /// `include_usage` is modelled today; see [`StreamOptions`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream_options: Option<StreamOptions>,
     /// `OpenAI` frequency penalty (v0.3 wire-type follow-up). Per the
     /// `OpenAI` API spec the valid range is `[-2.0, 2.0]`: positive
     /// values penalise tokens that have already appeared in the
@@ -619,6 +623,23 @@ impl ChatResponse {
     }
 }
 
+/// `OpenAI` streaming extras (`stream_options` on `ChatRequest`).
+///
+/// Today only `include_usage` is modelled: when `true`, the stream emits one
+/// extra final chunk (after the `finish_reason` chunk) whose `choices` is an
+/// empty array and whose `usage` carries the request's real prompt /
+/// completion token counts, before the `[DONE]` sentinel (the OpenAI
+/// streaming-usage contract). Pre-fix a client sending
+/// `stream_options.include_usage = true` got the field silently dropped —
+/// no usage, and the final chunk kept a non-empty `choices` (RIL ISS-111
+/// follow-up). Honored on the `n == 1` chat streaming path.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct StreamOptions {
+    /// When `true`, include a `usage` object on a final `choices: []` chunk.
+    #[serde(default)]
+    pub include_usage: bool,
+}
+
 /// A single choice inside an SSE [`ChatChunk`] carrying partial message deltas.
 ///
 /// Typically the `role` on the first chunk and `content` on subsequent chunks,
@@ -656,8 +677,13 @@ pub struct ChatChunk {
     pub created: i64,
     /// Echo of the requested model id.
     pub model: String,
-    /// Streaming choices (typically one per request).
+    /// Streaming choices (typically one per request). Empty array on the
+    /// final `include_usage` chunk (RIL ISS-111 follow-up).
     pub choices: Vec<ChatChunkChoice>,
+    /// Token usage on the final `include_usage` chunk — `None` otherwise
+    /// (RIL ISS-111 follow-up).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
 }
 
 impl ChatChunk {
@@ -672,6 +698,23 @@ impl ChatChunk {
             created: unix_now_secs(),
             model,
             choices: vec![choice],
+            usage: None,
+        }
+    }
+
+    /// Streaming token-usage chunk: `choices: []` + a real [`Usage`]
+    /// (the OpenAI `stream_options.include_usage` contract, RIL ISS-111
+    /// follow-up). Emitted AFTER the `finish_reason` chunk and BEFORE
+    /// `[DONE]`.
+    #[must_use]
+    pub fn new_usage_chunk(id: String, model: String, usage: Usage) -> Self {
+        Self {
+            id,
+            object: "chat.completion.chunk".to_string(),
+            created: unix_now_secs(),
+            model,
+            choices: Vec::new(),
+            usage: Some(usage),
         }
     }
 }
