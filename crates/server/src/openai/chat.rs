@@ -10,7 +10,7 @@ use axum::{
     extract::State,
     response::{
         IntoResponse,
-        sse::{Event, Sse},
+        sse::{Event, KeepAlive, Sse},
     },
 };
 use futures::{future::join_all, stream};
@@ -1730,7 +1730,15 @@ async fn stream_n_parallel_chat(
         },
     );
 
-    Ok(Sse::new(Box::pin(stream)).into_response())
+    // RIL TASK: SSE keepalive — emit an empty comment every 15s of idle so
+    // proxies / load balancers with an inactivity timeout don't drop a
+    // long-running stream between tokens (a multi-second prefill or a
+    // reasoning-model pause produces no data events). axum's KeepAliveStream
+    // fires only on idle and forwards stream end immediately, so [DONE] is
+    // never delayed.
+    Ok(Sse::new(Box::pin(stream))
+        .keep_alive(KeepAlive::default())
+        .into_response())
 }
 
 /// Streaming (SSE) variant of `/v1/chat/completions`.
@@ -2334,7 +2342,15 @@ async fn stream_chat_completion(
     // dropped — firing CancelRequest. The natural-completion
     // path explicitly disarms the guard before returning the
     // final chunk so we don't double-cancel.
-    Ok(Sse::new(Box::pin(stream)).into_response())
+    // RIL TASK: SSE keepalive — emit an empty comment every 15s of idle so
+    // proxies / load balancers with an inactivity timeout don't drop a
+    // long-running stream between tokens (a multi-second prefill or a
+    // reasoning-model pause produces no data events). axum's KeepAliveStream
+    // fires only on idle and forwards stream end immediately, so [DONE] is
+    // never delayed.
+    Ok(Sse::new(Box::pin(stream))
+        .keep_alive(KeepAlive::default())
+        .into_response())
 }
 
 /// Drop guard that sends `EngineMessage::CancelRequest` for its
