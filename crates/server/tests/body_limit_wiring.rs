@@ -138,3 +138,41 @@ async fn body_limit_helper_returns_router() {
     // it before the production code fails to compile.
     let _: Router = with_default_body_limit(Router::new().route("/x", get(stub_handler)));
 }
+
+#[tokio::test]
+async fn rejected_body_uses_openai_error_envelope() {
+    // RIL ISS-118: the 413 must be the OpenAI error envelope
+    // `{error:{message,type,code}}` — not tower-http's plain-text
+    // `"length limit exceeded"` — so OpenAI SDK clients (which parse
+    // `error.message`) see a structured error. Fails pre-fix: body is
+    // `text/plain; charset=utf-8` "length limit exceeded".
+    let app = build_app();
+    let body = vec![b'x'; 2 * DEFAULT_BODY_LIMIT_BYTES];
+    let req = HttpRequest::builder()
+        .method("POST")
+        .uri("/stub")
+        .header("content-type", "application/octet-stream")
+        .body(Body::from(body))
+        .unwrap();
+
+    let resp: Response = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(
+        resp.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("application/json"),
+        "413 must be application/json (OpenAI envelope), not text/plain"
+    );
+
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("413 body is JSON");
+    assert_eq!(
+        payload["error"]["message"],
+        "request body exceeds the server limit"
+    );
+    assert_eq!(payload["error"]["type"], "invalid_request_error");
+    assert_eq!(payload["error"]["code"], "request_too_large");
+}

@@ -11,6 +11,16 @@ async fn test_models_handler_returns_list() {
     let response = models_handler(axum::extract::State(state)).await;
 
     assert_eq!(response.status(), StatusCode::OK);
+    // RIL ISS-118: /v1/models must be uncacheable (OpenAI sends
+    // cache-control: no-cache) so proxies don't serve a stale model list.
+    assert_eq!(
+        response
+            .headers()
+            .get("cache-control")
+            .and_then(|v| v.to_str().ok()),
+        Some("no-cache"),
+        "GET /v1/models must carry cache-control: no-cache"
+    );
 
     let body = response.into_body();
     let bytes = axum::body::to_bytes(body, 1024 * 1024).await.unwrap();
@@ -43,6 +53,14 @@ async fn test_model_by_id_returns_served_model() {
     .await;
 
     assert_eq!(response.status(), StatusCode::OK);
+    // RIL ISS-118: by-id lookup is also uncacheable (mirrors the list).
+    assert_eq!(
+        response
+            .headers()
+            .get("cache-control")
+            .and_then(|v| v.to_str().ok()),
+        Some("no-cache")
+    );
     let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
         .unwrap();

@@ -6,12 +6,24 @@ use crate::ApiState;
 use axum::{
     Json,
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderValue, StatusCode, header::CACHE_CONTROL},
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
 
 use super::types::ErrorResponse;
+
+/// Render a model payload as a response with `OpenAI`'s `cache-control:
+/// no-cache` header (RIL ISS-118) — proxies must not serve a stale
+/// model list after a model is removed/added. Sets `Content-Type` to
+/// `application/json` implicitly via `Json`.
+fn models_response(payload: ModelsResponse) -> Response {
+    let mut response = Json(payload).into_response();
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    response
+}
 
 #[derive(Serialize)]
 struct ModelObject {
@@ -19,7 +31,7 @@ struct ModelObject {
     object: String,
     created: i64,
     owned_by: String,
-    /// Maximum context length in tokens, exposed so OpenAI-style
+    /// Maximum context length in tokens, exposed so `OpenAI`-style
     /// clients can size their prompts before sending. `None` when
     /// the loaded model did not declare `max_position_embeddings`
     /// (stub models, some GGUF variants). Production-readiness §4:
@@ -36,7 +48,7 @@ struct ModelsResponse {
     data: Vec<ModelObject>,
 }
 
-/// OpenAI-compatible `GET /v1/models` handler.
+/// `OpenAI`-compatible `GET /v1/models` handler.
 ///
 /// Returns a single-element list describing the currently loaded
 /// model. If the tokenizer does not expose a model name, the
@@ -69,10 +81,10 @@ pub async fn models_handler(State(state): State<ApiState>) -> Response {
         }],
     };
 
-    Json(response).into_response()
+    models_response(response)
 }
 
-/// OpenAI-compatible `GET /v1/models/{id}` handler (RIL ISS-106).
+/// `OpenAI`-compatible `GET /v1/models/{id}` handler (RIL ISS-106).
 ///
 /// Resolves a single model by id — the id the list endpoint just
 /// advertised. `OpenAI` clients / SDKs commonly follow up a model list
@@ -110,5 +122,5 @@ pub async fn model_by_id_handler(
             max_model_len: state.max_model_len,
         }],
     };
-    Json(response).into_response()
+    models_response(response)
 }

@@ -22,6 +22,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::openai::types::ErrorResponse;
+
 /// Header name for rate-limit metadata sent on every response.
 const HEADER_RATE_LIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
 const HEADER_RATE_LIMIT_LIMIT: HeaderName = HeaderName::from_static("x-ratelimit-limit");
@@ -486,12 +488,19 @@ pub async fn auth_middleware(
     let Ok(body_bytes) = axum::body::to_bytes(body, usize::MAX).await else {
         // Body stream errored (the size-limit layer above tripped):
         // translate into the same 413 the limit layer would produce
-        // rather than continuing with a silently-truncated body.
+        // rather than continuing with a silently-truncated body. RIL
+        // ISS-118: emit the OpenAI error envelope (previously a bare
+        // `{"error":"..."}` string — `error.message`-parsing clients broke).
         return Response::builder()
             .status(StatusCode::PAYLOAD_TOO_LARGE)
             .header(axum::http::header::CONTENT_TYPE, "application/json")
             .body(Body::from(
-                "{\"error\":\"request body exceeds the server limit\"}",
+                serde_json::to_string(&ErrorResponse::with_code(
+                    "request body exceeds the server limit",
+                    "invalid_request_error",
+                    "request_too_large",
+                ))
+                .expect("ErrorResponse always serializes"),
             ))
             // invariant: a `Response` with a static string body cannot fail to build.
             .unwrap();
@@ -538,24 +547,45 @@ pub async fn auth_middleware(
             // Rate-limited: include Retry-After + rate-limit headers.
             // The limit reflects the per-key bucket capacity (may differ
             // from the global default when overrides are configured).
+            // RIL ISS-118: an EMPTY body broke OpenAI SDK error typing
+            // (SDKs parse error.message/type/code); emit the envelope.
             Response::builder()
                 .status(StatusCode::TOO_MANY_REQUESTS)
+                .header(axum::http::header::CONTENT_TYPE, "application/json")
                 .header(HEADER_RETRY_AFTER, HeaderValue::from(retry_after_secs))
                 .header(HEADER_RATE_LIMIT_REMAINING, HeaderValue::from(0))
                 .header(
                     HEADER_RATE_LIMIT_LIMIT,
                     HeaderValue::from(limit.round().max(0.0) as u64),
                 )
-                // invariant: a `Response` with an empty body cannot fail to build.
-                .body("".into())
+                .body(Body::from(
+                    serde_json::to_string(&ErrorResponse::with_code(
+                        "rate limit exceeded",
+                        "rate_limit_exceeded",
+                        "rate_limit_exceeded",
+                    ))
+                    .expect("ErrorResponse always serializes"),
+                ))
+                // invariant: a `Response` with a static string body cannot fail to build.
                 .unwrap()
         }
         Err(_) => {
-            // Unauthorized / missing header.
+            // Unauthorized / missing header. RIL ISS-118: the body was
+            // EMPTY, so OpenAI SDKs raised a generic error with no
+            // message/type; emit the envelope with the documented
+            // invalid_api_key code.
             Response::builder()
                 .status(StatusCode::UNAUTHORIZED)
-                // invariant: a `Response` with an empty body cannot fail to build.
-                .body("".into())
+                .header(axum::http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&ErrorResponse::with_code(
+                        "invalid or missing API key",
+                        "invalid_request_error",
+                        "invalid_api_key",
+                    ))
+                    .expect("ErrorResponse always serializes"),
+                ))
+                // invariant: a `Response` with a static string body cannot fail to build.
                 .unwrap()
         }
     }

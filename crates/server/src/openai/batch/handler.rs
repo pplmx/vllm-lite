@@ -5,8 +5,8 @@ use axum::{Json, extract::State};
 
 use super::manager::BatchManager;
 use super::types::{
-    BatchEndpoint, BatchJob, BatchResponse, BatchResults, BatchStatus, RequestCounts,
-    SimpleBatchRequest,
+    BatchEndpoint, BatchJob, BatchListResponse, BatchResponse, BatchResults, BatchStatus,
+    RequestCounts, SimpleBatchRequest,
 };
 use crate::ApiState;
 use crate::openai::json::OpenaiJson;
@@ -271,7 +271,7 @@ pub async fn get_batch_results(
 /// # Panics
 ///
 /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchResponse>> {
+pub async fn list_batches(State(state): State<ApiState>) -> Json<BatchListResponse> {
     let jobs = state.batch_manager.get_all_jobs().await;
 
     let responses: Vec<BatchResponse> = jobs
@@ -299,7 +299,13 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchRespon
         })
         .collect();
 
-    Json(responses)
+    // RIL ISS-118: OpenAI's `GET /v1/batches` returns
+    // `{"object":"list","data":[...]}` — a bare array broke SDKs that
+    // read `parsed["data"]`.
+    Json(BatchListResponse {
+        object: "list".to_string(),
+        data: responses,
+    })
 }
 
 /// Build a [`BatchResponse`] from the manager's live copy of a job.
@@ -654,8 +660,9 @@ mod tests {
     #[tokio::test]
     async fn test_list_batches_empty() {
         let state = create_test_state();
-        let result = list_batches(State(state)).await;
-        assert!(result.0.is_empty());
+        let Json(BatchListResponse { object, data }) = list_batches(State(state)).await;
+        assert_eq!(object, "list");
+        assert!(data.is_empty());
     }
 
     #[tokio::test]
@@ -699,5 +706,29 @@ mod tests {
         assert!(result.is_err());
         let (status, _) = result.unwrap_err();
         assert_eq!(status, axum::http::StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn test_list_batches_returns_openai_list_envelope() {
+        // RIL ISS-118: `GET /v1/batches` must return
+        // `{"object":"list","data":[...]}` — a bare array breaks OpenAI
+        // SDKs that read `parsed["data"]`.
+        let state = create_test_state();
+        state
+            .batch_manager
+            .create_job(
+                BatchEndpoint::Completion,
+                vec!["a".to_string(), "b".to_string()],
+                None,
+                Some(10),
+                None,
+            )
+            .await;
+
+        let Json(BatchListResponse { object, data }) = list_batches(State(state)).await;
+        assert_eq!(object, "list");
+        assert_eq!(data.len(), 1, "one created batch must be listed");
+        assert_eq!(data[0].object, "batch");
+        assert_eq!(data[0].endpoint, BatchEndpoint::Completion);
     }
 }

@@ -195,6 +195,24 @@ async fn test_unauthorized_request_has_no_rate_limit_headers() {
     // No rate-limit headers on auth failures.
     assert!(response.headers().get("x-ratelimit-remaining").is_none());
     assert!(response.headers().get("x-ratelimit-limit").is_none());
+
+    // RIL ISS-118: an auth rejection must carry the OpenAI error envelope
+    // (previously an EMPTY body — OpenAI SDKs parsed error.message and got
+    // nothing, raising a generic/none error).
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("application/json")
+    );
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("401 body is JSON");
+    assert_eq!(payload["error"]["type"], "invalid_request_error");
+    assert_eq!(payload["error"]["code"], "invalid_api_key");
+    assert!(!payload["error"]["message"].as_str().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -327,4 +345,55 @@ async fn test_small_body_costs_one_token() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn test_rate_limited_response_uses_openai_envelope() {
+    // RIL ISS-118: a 429 (bucket exhausted) must carry the OpenAI error
+    // envelope — previously the body was EMPTY, so OpenAI SDKs raised a
+    // generic error with no message/type/code to branch on.
+    let auth = Arc::new(AuthMiddleware::new(vec!["test_key".to_string()], 1, 60));
+    let app = app(auth);
+
+    // First request succeeds and consumes the only token.
+    let ok = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header(AUTHORIZATION, "Bearer test_key")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ok.status(), StatusCode::OK);
+
+    // Second request is rate-limited.
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header(AUTHORIZATION, "Bearer test_key")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("application/json")
+    );
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("429 body is JSON");
+    assert_eq!(payload["error"]["type"], "rate_limit_exceeded");
+    assert_eq!(payload["error"]["code"], "rate_limit_exceeded");
+    assert!(!payload["error"]["message"].as_str().unwrap().is_empty());
 }

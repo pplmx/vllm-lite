@@ -77,6 +77,19 @@ pub struct SimpleBatchRequest {
     pub temperature: Option<f32>,
 }
 
+/// `OpenAI`-compatible `GET /v1/batches` list envelope (RIL ISS-118).
+///
+/// `OpenAI` returns a bare `{"object":"list","data":[...]}` wrapper; the
+/// previous `Vec<BatchResponse>` array broke SDKs that read
+/// `parsed["data"]`. Mirrors `ModelsResponse` in the models handler.
+#[derive(Debug, Clone, Serialize)]
+pub struct BatchListResponse {
+    /// Always `"list"`.
+    pub object: String,
+    /// The batch objects in API order (newest first).
+    pub data: Vec<BatchResponse>,
+}
+
 /// Response payload for Batch. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResponse {
