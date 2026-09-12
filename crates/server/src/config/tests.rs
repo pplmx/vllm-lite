@@ -571,3 +571,36 @@ fn test_unknown_top_level_keys_empty_on_garbage() {
     let keys = unknown_top_level_keys(":::: not yaml at all ::::");
     assert!(keys.is_empty());
 }
+
+#[test]
+fn example_yaml_stays_valid() {
+    // RIL ISS-116: `config/example.yaml` is the operator-facing reference
+    // for the on-disk schema. If a field in it ever stops being recognized
+    // (a `#[serde(default)]` section silently dropped) or fails validation,
+    // that is a docs-drift bug — fail CI instead of shipping a stale
+    // example. Resolved via `CARGO_MANIFEST_DIR` so the test passes
+    // regardless of the process CWD.
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../config/example.yaml")
+        .canonicalize()
+        .expect("example.yaml must exist next to the repo config/ dir");
+    let config = AppConfig::load(Some(path));
+    assert!(
+        config.validate().is_ok(),
+        "config/example.yaml must satisfy AppConfig::validate()"
+    );
+    // Spot-check that the hardest-to-guess sections actually parsed
+    // (a typo'd `cors` section would silently default to closed).
+    assert_eq!(config.engine.max_model_len, Some(8192));
+    assert_eq!(config.engine.engine_mailbox_capacity, 256);
+    assert_eq!(config.server.shutdown_drain_grace_secs, 5);
+    assert_eq!(
+        config
+            .auth
+            .rate_limit_overrides
+            .get("premium-key")
+            .unwrap()
+            .max_requests,
+        500
+    );
+}

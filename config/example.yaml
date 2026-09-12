@@ -1,0 +1,102 @@
+# vLLM-lite example server configuration (RIL ISS-116 / TASK-138).
+#
+# Every field here matches the on-disk `AppConfig` schema — the test
+# `crates/server/src/config/tests.rs::example_yaml_stays_valid` loads this
+# file and asserts `validate()` passes, so a field that stops being
+# recognized (or starts failing validation) fails CI instead of drifting.
+#
+# Load with `--config config/example.yaml`, or `VLLM_CONFIG_PATH` (which
+# takes precedence). Precedence contract (RIL ISS-081):
+#   explicit CLI flags / VLLM_* env vars  >  this file  >  built-in defaults.
+# Sections may be omitted; unspecified fields fall back to defaults.
+
+server:
+  # Bind address. Empty/"localhost"/"127.x" are loopback; anything else is
+  # "public" and triggers the SEC-01 warning unless API keys are configured
+  # (or --insecure-allow-public-no-auth is passed).
+  host: "0.0.0.0"
+  port: 8000
+  # One of: trace, debug, info, warn, error.
+  log_level: "info"
+  # Uncomment to also write structured JSON log files here (text stays on
+  # stderr):
+  # log_dir: "/var/log/vllm-lite"
+  # Seconds between readiness=false and actually closing the HTTP listener
+  # on shutdown (K8s needs a couple of failed probes; 0 skips the wait).
+  shutdown_drain_grace_secs: 5
+
+  # Multi-node KV block transfer (needs the `multi-node` Cargo feature).
+  # Disabled by default (single-node).
+  # multi_node:
+  #   enabled: true
+  #   node_id: my-node-01          # optional; auto-generated UUID if absent
+  #   bind_addr: "0.0.0.0:50051"   # gRPC bind address
+
+engine:
+  # Override the checkpoint's `max_position_embeddings` for context-length
+  # validation. When neither is set, `max_tokens` is capped at a hard
+  # ceiling (no unbounded generation).
+  max_model_len: 8192
+  # Speculative-decoding budget per step (0..=64).
+  max_draft_tokens: 8
+  # KV-cache blocks (1..=65536). Sizing is VRAM-dependent; 1024 is the
+  # conservative default.
+  num_kv_blocks: 1024
+  # Hard ceiling on simultaneous sequences (1..=8192).
+  max_batch_size: 256
+  # Waiting-batch backpressure knob. NOTE: consumed by nothing in this
+  # build — a non-default value logs a startup WARN (config-honesty).
+  max_waiting_batches: 10
+  # Tensor-parallel degree (1..=64). NOTE: also inert in this build
+  # (single model worker) — non-default values log a startup WARN.
+  tensor_parallel_size: 1
+  # FP8 KV-cache quantization.
+  kv_quantization: false
+  # Adaptive speculative decoding.
+  enable_adaptive_speculative: true
+  # v18.0 VRAM budget (bytes) shared by all draft models. Uncomment to cap
+  # drafts (None = unbounded):
+  # vram_budget_bytes: 5368709120  # 5 GiB
+  # Pre-declared external draft-model specs (lazy-loaded; see --help).
+  # draft_specs:
+  #   - id: "qwen3-draft"
+  #     path: "/models/qwen3-draft"
+  #     num_layers: 4             # default 4
+  #     architecture: "qwen3"     # optional loader hint
+  # Bounded engine mailbox: when the request queue reaches this, new
+  # requests fail fast with 503 engine_overloaded instead of OOM.
+  engine_mailbox_capacity: 256
+
+auth:
+  # Inline API keys. SEC-01: binding a non-loopback host without any key
+  # warns at startup unless --insecure-allow-public-no-auth is set.
+  api_keys: []
+  # Or read a comma-separated list from an env var...
+  # api_keys_env: "VLLM_API_KEYS"
+  # ...or a file (one key per line, '#' comments).
+  # api_keys_file: "/etc/vllm-lite/api-keys.txt"
+  # Per-key token bucket: N requests per window.
+  rate_limit_requests: 100
+  rate_limit_window_secs: 60
+  # Per-key overrides (keys not listed use the global bucket above).
+  rate_limit_overrides:
+    # "premium-key" gets 500 requests per 30s instead of 100/60s.
+    "premium-key":
+      max_requests: 500
+      rate_limit_window_secs: 30
+
+# CORS is CLOSED by default (no Access-Control-Allow-* headers until an
+# origin is explicitly listed) — browsers get direct access only on opt-in.
+cors:
+  allow_origins: []            # e.g. ["https://app.example.com"]
+  allow_methods: []            # empty = permissive default (server-side)
+  allow_headers: []            # empty = permissive default
+  allow_credentials: false     # must stay false if allow_origins has "*"
+
+# OTLP export — only recognized when the `opentelemetry` Cargo feature is
+# compiled in (without it this section is an unknown key and logs a WARN).
+# Equivalent to `--otlp-endpoint http://collector:4317`.
+# observability:
+#   otlp:
+#     enabled: true
+#     endpoint: "http://collector:4317"
