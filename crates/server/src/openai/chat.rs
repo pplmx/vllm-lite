@@ -1535,6 +1535,10 @@ async fn stream_n_parallel_chat(
     // still owned here (cloned into each candidate spawn above).
     let include_usage = req.stream_options.is_some_and(|s| s.include_usage);
     let prompt_tokens_len = prompt_tokens.len();
+    // RIL ISS-122: capture one stream-epoch `created` (seconds) so every
+    // chunk on this n > 1 stream reports the same timestamp (the raw
+    // `json!` consolidated chunk previously omitted `created` entirely).
+    let created = crate::util::time::unix_now_secs();
     let stream = stream::unfold(
         ChatNParallelStreamingState {
             rx: sse_rx,
@@ -1727,6 +1731,10 @@ async fn stream_n_parallel_chat(
                                 let chunk = serde_json::json!({
                                     "id": "chatcmpl-stream",
                                     "object": "chat.completion.chunk",
+                                    // RIL ISS-122: `created` was missing on the
+                                    // raw-json n > 1 consolidated chunk (schema
+                                    // requires it); carry the stream-epoch value.
+                                    "created": created,
                                     "model": model,
                                     "choices": choices,
                                 });

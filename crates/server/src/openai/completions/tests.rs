@@ -351,12 +351,15 @@ fn test_populate_completion_sampling_params_applies_per_candidate_seed() {
 /// Regression (RIL ISS-035): the single-shot completions streaming path
 /// must emit a well-formed JSON chunk with empty text for skipped tokens
 /// instead of a bare `data: ` SSE event. Pin the wire shape the
-/// skipped-token branch now produces.
+/// skipped-token branch now produces — every chunk carries `model` +
+/// `created` (RIL ISS-122) alongside the `{id, object, choices}` core.
 #[test]
 fn test_skipped_token_chunk_is_valid_json_with_empty_text() {
     let chunk = serde_json::json!({
         "id": "cmpl-stream",
         "object": "text_completion",
+        "model": "test-model",
+        "created": 0,
         "choices": [{
             "text": "",
             "index": 0,

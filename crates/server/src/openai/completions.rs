@@ -639,6 +639,12 @@ enum NParallelSseEvent {
 struct NParallelStreamingState {
     rx: mpsc::Receiver<NParallelSseEvent>,
     tokenizer: std::sync::Arc<vllm_model::tokenizer::Tokenizer>,
+    /// Model id echoed on every chunk (RIL ISS-122) — the non-streaming
+    /// response and `OpenAI` streaming chunks both carry it.
+    model: String,
+    /// One `created` epoch captured at stream start, stamped on every
+    /// chunk so they agree (RIL ISS-122).
+    created: i64,
     /// Per-candidate incremental UTF-8-safe stream decoders (RIL ISS-105).
     decoders: Vec<vllm_model::tokenizer::StreamingDecoder>,
     /// `finish_reasons[i]` = `Some(reason)` once candidate `i` has
@@ -1065,10 +1071,16 @@ async fn stream_n_parallel_completions(
     // (every candidate contributes its `index` + tokens across the
     // stream; final event carries `finish_reason` per index).
     let tokenizer = state.tokenizer.clone();
+    // RIL ISS-122: stamp one model + created per stream, shared by every
+    // chunk (the non-streaming response already echoes the model).
+    let model = response_model(&req, &state);
+    let created = crate::util::time::unix_now_secs();
     let stream = stream::unfold(
         NParallelStreamingState {
             rx: sse_rx,
             tokenizer,
+            model,
+            created,
             decoders: (0..n)
                 .map(|_| vllm_model::tokenizer::StreamingDecoder::new())
                 .collect(),
@@ -1109,6 +1121,10 @@ async fn stream_n_parallel_completions(
                         let chunk = serde_json::json!({
                             "id": "cmpl-stream",
                             "object": "text_completion",
+                            // RIL ISS-122: carry model + created on every
+                            // chunk (was missing → schema-invalid).
+                            "model": &state.model,
+                            "created": state.created,
                             "choices": [choice],
                         });
                         Some((Ok(Event::default().data(chunk.to_string())), state))
@@ -1179,6 +1195,10 @@ async fn stream_n_parallel_completions(
                             let chunk = serde_json::json!({
                                 "id": "cmpl-stream",
                                 "object": "text_completion",
+                                // RIL ISS-122: consolidated final chunk must
+                                // carry the same model + created.
+                                "model": &state.model,
+                                "created": state.created,
                                 "choices": choices,
                             });
                             state.terminal = NParallelTerminal::EmitDoneSentinel;
@@ -1198,6 +1218,9 @@ async fn stream_n_parallel_completions(
                             let chunk = serde_json::json!({
                                 "id": "cmpl-stream",
                                 "object": "text_completion",
+                                // RIL ISS-122: intermediate finish chunk too.
+                                "model": &state.model,
+                                "created": state.created,
                                 "choices": [parallel_finish_choice(index, reason_string, &tail)],
                             });
                             Some((Ok(Event::default().data(chunk.to_string())), state))
@@ -1672,6 +1695,10 @@ pub async fn completions(
         let prompt_text = prompt.clone();
         let echo_flag = req.echo;
         let suffix_text = req.suffix.clone();
+        // RIL ISS-122: stamp one model + created per stream, shared by
+        // every chunk (the non-streaming response already echoes the model).
+        let model = response_model(&req, &state);
+        let created = crate::util::time::unix_now_secs();
         let stream = stream::unfold(
             (
                 response_rx,
@@ -1691,6 +1718,7 @@ pub async fn completions(
                 mut decoder,
             )| {
                 let tokenizer = tokenizer.clone();
+                let model = model.clone();
                 let prompt_text = prompt_text.clone();
                 let echo_flag = echo_flag;
                 let suffix_text = suffix_text.clone();
@@ -1723,6 +1751,9 @@ pub async fn completions(
                                     let chunk = serde_json::json!({
                                         "id": "cmpl-stream",
                                         "object": "text_completion",
+                                        // RIL ISS-122: carry model + created on every chunk (was missing).
+                                        "model": &model,
+                                        "created": created,
                                         "choices": [{
                                             "text": "",
                                             "index": 0,
@@ -1760,6 +1791,9 @@ pub async fn completions(
                                 let chunk = serde_json::json!({
                                     "id": "cmpl-stream",
                                     "object": "text_completion",
+                                    // RIL ISS-122: carry model + created on every chunk (was missing).
+                                    "model": &model,
+                                    "created": created,
                                     "choices": [{
                                         "text": text,
                                         "index": 0,
@@ -1786,6 +1820,9 @@ pub async fn completions(
                                     let tail_chunk = serde_json::json!({
                                         "id": "cmpl-stream",
                                         "object": "text_completion",
+                                        // RIL ISS-122: carry model + created on every chunk (was missing).
+                                        "model": &model,
+                                        "created": created,
                                         "choices": [{
                                             "text": tail,
                                             "index": 0,
@@ -1829,6 +1866,9 @@ pub async fn completions(
                                 let chunk = serde_json::json!({
                                     "id": "cmpl-stream",
                                     "object": "text_completion",
+                                    // RIL ISS-122: carry model + created on every chunk (was missing).
+                                    "model": &model,
+                                    "created": created,
                                     "choices": [{
                                         "text": text,
                                         "index": 0,
