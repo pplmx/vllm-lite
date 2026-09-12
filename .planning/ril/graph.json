@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 110,
+  "round": 111,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-12T23:21:22+00:00",
+  "updated_at": "2026-09-12T23:36:11+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7539,6 +7539,39 @@
       "touched_round": 109,
       "severity": 2,
       "title": "ChatChunk::new and ChatChunk::new_usage_chunk stamp created per chunk via unix_now_secs() (types.rs) while their own doc says stream-start contract (types.rs:677) - finish vs usage chunks on the same stream can differ across a second boundary; n>1 intermediate finish events and the usage chunk use per-chunk now-times while the consolidated chunk uses the captured stream-epoch created (after ISS-122)"
+    },
+    "ISS-124": {
+      "id": "ISS-124",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-12T23:35:41+00:00",
+      "updated_at": "2026-09-12T23:35:57+00:00",
+      "touched_round": 110,
+      "severity": 3,
+      "title": "POST /v1/batches returns 200 OK instead of the 202 Accepted OpenAI documents - the job runs asynchronously via the worker, so strict clients checking the status code treat the response as an error; vLLM returns 202"
+    },
+    "ISS-125": {
+      "id": "ISS-125",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-12T23:35:41+00:00",
+      "updated_at": "2026-09-12T23:35:57+00:00",
+      "touched_round": 110,
+      "severity": 2,
+      "title": "Unmatched routes return axum default plain-text 404 Not Found which breaks OpenAI SDK JSON error parsing - a typod route surfaces as an opaque parse error instead of the error envelope"
+    },
+    "CHG-141": {
+      "id": "CHG-141",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-12T23:35:57+00:00",
+      "updated_at": "2026-09-12T23:35:57+00:00",
+      "touched_round": 110,
+      "title": "create_batch returns 202 Accepted (OpenAI Batch spec); router-level fallback returns OpenAI error envelope on unmatched paths; 4 tests",
+      "commit": "de49761f"
     }
   },
   "edges": [
@@ -10961,6 +10994,18 @@
       "to": "COMP-014",
       "type": "located_in",
       "created_at": "2026-09-12T23:21:21+00:00"
+    },
+    {
+      "from": "CHG-141",
+      "to": "ISS-124",
+      "type": "resolves",
+      "created_at": "2026-09-12T23:35:57+00:00"
+    },
+    {
+      "from": "CHG-141",
+      "to": "ISS-125",
+      "type": "resolves",
+      "created_at": "2026-09-12T23:35:57+00:00"
     }
   ]
 }
