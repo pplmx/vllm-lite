@@ -163,7 +163,16 @@ struct ServerArgs {
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "model_args")]
 pub struct ModelArgs {
-    #[arg(long, required = true, env = "VLLM_MODEL", short = 'm')]
+    // RIL ISS-115: `--model` rendered with a blank help section — required
+    // for every run yet unexplained in `--help`. Also documents the
+    // `VLLM_MODEL` env alias (clap already shows it in the env meta line).
+    #[arg(
+        long,
+        required = true,
+        env = "VLLM_MODEL",
+        short = 'm',
+        help = "Path to the model checkpoint directory (weights + tokenizer.json)"
+    )]
     pub model: PathBuf,
 
     /// Allow loading stub architectures that do not perform real inference.
@@ -224,10 +233,21 @@ struct EngineArgs {
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "auth_args")]
 struct AuthArgs {
-    #[arg(long, env = "VLLM_API_KEY")]
+    // RIL ISS-115: these two rendered blank in `--help`; the sources are the
+    // whole point of the flags (repeated keys / key files) and the SEC-01
+    // warning only fires alongside them.
+    #[arg(
+        long,
+        env = "VLLM_API_KEY",
+        help = "API key accepted for auth; repeatable, or load a file with --api-key-file"
+    )]
     pub api_key: Vec<String>,
 
-    #[arg(long, env = "VLLM_API_KEYS_FILE")]
+    #[arg(
+        long,
+        env = "VLLM_API_KEYS_FILE",
+        help = "Path to a file of API keys, one per line ('#' comments ignored)"
+    )]
     pub api_key_file: Option<PathBuf>,
 }
 
@@ -246,10 +266,14 @@ struct AuthArgs {
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "security_args")]
 pub struct SecurityArgs {
+    // RIL ISS-115: the bare flag rendered with no help; operators reading
+    // `--help` could not tell what it silences (SEC-01) or why it exists.
     #[arg(
         long,
         default_value = "false",
-        env = "VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH"
+        env = "VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH",
+        help = "Silence the SEC-01 warning when binding a non-loopback address \
+                with no API keys configured (trusted networks only)"
     )]
     pub insecure_allow_public_no_auth: bool,
 }
@@ -265,14 +289,27 @@ struct LoggingArgs {
     )]
     pub log_level: Option<LogLevel>,
 
-    #[arg(long, env = "VLLM_LOG_DIR")]
+    // RIL ISS-115: blank help on `--log-dir` too — JSON log files are an
+    // opt-in feature, so the flag alone does not hint that it exists.
+    #[arg(
+        long,
+        env = "VLLM_LOG_DIR",
+        help = "Directory for structured JSON log files (written alongside stderr logs)"
+    )]
     pub log_dir: Option<PathBuf>,
 }
 
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "config_args")]
 struct ConfigArgs {
-    #[arg(long, short = 'c')]
+    // RIL ISS-115: `--config` is the entire YAML-config surface yet rendered
+    // blank — an operator cannot discover it from `--help`.
+    #[arg(
+        long,
+        short = 'c',
+        help = "Path to a YAML config file; explicit flags and VLLM_* env vars \
+                override its values"
+    )]
     pub config: Option<PathBuf>,
 }
 

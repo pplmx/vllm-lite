@@ -22,7 +22,7 @@
 //!   log-dir)
 
 use super::*;
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 
 #[test]
 fn test_cli_defaults() {
@@ -843,4 +843,29 @@ fn test_to_app_config_otlp_endpoint_no_override_when_not_set() {
 
     // Without --otlp-endpoint, OTLP stays disabled (default).
     assert!(!config.observability.otlp.enabled);
+}
+
+#[test]
+fn every_help_visible_cli_arg_has_help_text() {
+    // RIL ISS-115: `--help` is an operator-facing contract — a flag that
+    // renders with a blank help section (pre-fix: `--model`, `--api-key`,
+    // `--api-key-file`, `--insecure-allow-public-no-auth`, `--log-dir`,
+    // `--config`) is effectively undocumented. Walk the flattened clap
+    // Command and require non-empty help on every arg except clap's own
+    // `--help` / `--version`. Building the Command reads no env, so no
+    // ENV_TEST_LOCK is needed.
+    let cmd = CliArgs::command();
+    let undocumented: Vec<String> = cmd
+        .get_arguments()
+        .filter(|arg| !matches!(arg.get_id().as_str(), "help" | "version"))
+        .filter(|arg| {
+            arg.get_help()
+                .is_none_or(|help| help.to_string().trim().is_empty())
+        })
+        .map(|arg| arg.get_id().to_string())
+        .collect();
+    assert!(
+        undocumented.is_empty(),
+        "CLI args render with no help text in --help: {undocumented:?}"
+    );
 }

@@ -434,7 +434,7 @@ auth:
 /// and failing its assertion.
 ///
 /// RIL ISS-109: uses the crate-wide `test_fixtures::ENV_TEST_LOCK` so the
-/// cli::args tests that parse `env = "VLLM_*"` args (and expect the env
+/// `cli::args` tests that parse `env = "VLLM_*"` args (and expect the env
 /// unset) serialize against these setters under `cargo test` too.
 
 #[test]
