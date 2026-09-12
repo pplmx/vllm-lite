@@ -382,6 +382,12 @@ auth:
 > **配置优先级（RIL ISS-081）**：显式 CLI 标志 / 环境变量 > `--config`/`VLLM_CONFIG_PATH`
 > YAML 文件 > 内置默认值（`AppConfig::default()`）。YAML 中未指定的字段保持内置默认；
 > 当某个值同时出现在 YAML 与 CLI/env 中时，CLI/env 胜出。
+>
+> **完整示例（RIL ISS-116）**：覆盖 `AppConfig` 全部段（含 CORS、多节点、
+> `engine_mailbox_capacity`、`draft_specs`、每 key 限流覆盖、OTLP）的带注释
+> 参考配置见仓库根目录 [`config/example.yaml`](config/example.yaml)，可直接以
+> `--config config/example.yaml` 启动；该文件由 CI 验证（`AppConfig::validate()`），
+> 确保与服务器 schema 同步不漂移。
 
 ### Scheduler 默认值（代码级，非 YAML 可配置）
 
