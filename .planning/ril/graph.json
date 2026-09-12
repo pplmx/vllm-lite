@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 105,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-12T18:49:47+00:00",
+  "updated_at": "2026-09-12T18:58:27+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7271,6 +7271,41 @@
       "touched_round": 105,
       "commit": "4f9e86cc",
       "title": "docs(server): document all CLI flags in --help (help text on --model/--api-key/--api-key-file/--insecure-allow-public-no-auth/--log-dir/--config + regressions test + backtick doc_markdown fix)"
+    },
+    "ISS-116": {
+      "id": "ISS-116",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-12T18:52:42+00:00",
+      "updated_at": "2026-09-12T18:58:27+00:00",
+      "touched_round": 105,
+      "severity": 2,
+      "title": "No example server config ships with the repo: the --config flag reads YAML but the only documented example is a minimal snippet in README that omits non-obvious sections (cors, server.multi_node, engine.engine_mailbox_capacity, engine.max_model_len, engine.draft_specs, auth.rate_limit_overrides) — operators who want CORS or multi-node must read source comments (cors.rs / multi_node.rs doc examples). A full annotated config/example.yaml + a test that loads it and runs validate() would prevent schema drift."
+    },
+    "TASK-138": {
+      "id": "TASK-138",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-09-12T18:53:18+00:00",
+      "updated_at": "2026-09-12T18:58:27+00:00",
+      "touched_round": 105,
+      "category": "docs",
+      "severity": 2,
+      "title": "Ship config/example.yaml covering every AppConfig section with annotated comments, wire k8s README/tutorial pointers, and add a config/tests.rs test that loads the example and asserts validate() passes (drift guard)",
+      "confidence": 1.0
+    },
+    "CHG-133": {
+      "id": "CHG-133",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-12T18:58:27+00:00",
+      "updated_at": "2026-09-12T18:58:27+00:00",
+      "touched_round": 105,
+      "commit": "3b7ffd16",
+      "title": "docs(server): ship annotated config/example.yaml covering every AppConfig section + drift-guard test loading it via CARGO_MANIFEST_DIR"
     }
   },
   "edges": [
@@ -10513,6 +10548,30 @@
       "to": "ISS-115",
       "type": "resolves",
       "created_at": "2026-09-12T18:49:47+00:00"
+    },
+    {
+      "from": "TASK-138",
+      "to": "ISS-116",
+      "type": "addresses",
+      "created_at": "2026-09-12T18:53:35+00:00"
+    },
+    {
+      "from": "ISS-116",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-12T18:53:35+00:00"
+    },
+    {
+      "from": "CHG-133",
+      "to": "TASK-138",
+      "type": "implements",
+      "created_at": "2026-09-12T18:58:27+00:00"
+    },
+    {
+      "from": "CHG-133",
+      "to": "ISS-116",
+      "type": "resolves",
+      "created_at": "2026-09-12T18:58:27+00:00"
     }
   ]
 }
