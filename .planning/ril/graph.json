@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 105,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-12T18:58:27+00:00",
+  "updated_at": "2026-09-12T19:11:16+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7306,6 +7306,41 @@
       "touched_round": 105,
       "commit": "3b7ffd16",
       "title": "docs(server): ship annotated config/example.yaml covering every AppConfig section + drift-guard test loading it via CARGO_MANIFEST_DIR"
+    },
+    "ISS-117": {
+      "id": "ISS-117",
+      "type": "issue",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-09-12T19:02:13+00:00",
+      "updated_at": "2026-09-12T19:11:16+00:00",
+      "touched_round": 105,
+      "severity": 2,
+      "title": "vllm CLI subcommand arguments contradict their documented usage: the module doc comment (bin/vllm.rs:7-16) shows positional invocation like 'vllm config validate config.yaml' / 'vllm model list /models' but every arg is #[arg(long)] (--file/--dir/--path), so the documented command fails with 'error: unexpected argument ... found' (reproduced; flag form works). Usage doc is the sole documentation for this tool"
+    },
+    "TASK-139": {
+      "id": "TASK-139",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-09-12T19:05:25+00:00",
+      "updated_at": "2026-09-12T19:11:16+00:00",
+      "touched_round": 105,
+      "category": "dx",
+      "severity": 2,
+      "title": "Make vllm CLI config validate / model list / model info arguments positional so the documented usage works verbatim; add clap parse tests for the positional form",
+      "confidence": 1.0
+    },
+    "CHG-134": {
+      "id": "CHG-134",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-12T19:11:16+00:00",
+      "updated_at": "2026-09-12T19:11:16+00:00",
+      "touched_round": 105,
+      "commit": "f013b41f",
+      "title": "fix(server): vllm CLI positional args match documented usage + clap parse tests"
     }
   },
   "edges": [
@@ -10572,6 +10607,30 @@
       "to": "ISS-116",
       "type": "resolves",
       "created_at": "2026-09-12T18:58:27+00:00"
+    },
+    {
+      "from": "TASK-139",
+      "to": "ISS-117",
+      "type": "addresses",
+      "created_at": "2026-09-12T19:05:25+00:00"
+    },
+    {
+      "from": "ISS-117",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-12T19:05:25+00:00"
+    },
+    {
+      "from": "CHG-134",
+      "to": "TASK-139",
+      "type": "implements",
+      "created_at": "2026-09-12T19:11:16+00:00"
+    },
+    {
+      "from": "CHG-134",
+      "to": "ISS-117",
+      "type": "resolves",
+      "created_at": "2026-09-12T19:11:16+00:00"
     }
   ]
 }
