@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 109,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-12T22:05:46+00:00",
+  "updated_at": "2026-09-12T22:53:14+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7437,10 +7437,10 @@
     "ISS-121": {
       "id": "ISS-121",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-12T21:46:40+00:00",
-      "updated_at": "2026-09-12T21:46:40+00:00",
+      "updated_at": "2026-09-12T22:53:13+00:00",
       "touched_round": 109,
       "severity": 3,
       "title": "n>1 streaming drops the last-finishing candidate's partial UTF-8 tail: each candidate's Finished handler flushes its StreamingDecoder tail (chat.rs:1656, completions.rs:1128) into a local , but when that candidate makes all_done=true the consolidated branch re-flushes every candidate (chat.rs:1704, completions.rs:1164) — flush() clears pending (tokenizer.rs:223-227) so the just-flushed last candidate returns \"\" and  is unused in the all_done branch. The last candidate's split multi-byte char is lost, defeating the ISS-105 guarantee exactly at stream end on the n>1 paths."
@@ -7472,17 +7472,15 @@
     "TASK-143": {
       "id": "TASK-143",
       "type": "task",
-      "status": "active",
-      "version": 2,
+      "status": "resolved",
+      "version": 4,
       "created_at": "2026-09-12T21:49:39+00:00",
-      "updated_at": "2026-09-12T21:50:59+00:00",
+      "updated_at": "2026-09-12T22:53:14+00:00",
       "touched_round": 109,
       "category": "correctness",
       "severity": 3,
       "title": "Fix n>1 double-flush tail loss: the all_done branches (chat.rs + completions.rs) must use the just-flushed  for the last-finishing candidate, not re-flush (which clears pending); add a regression test",
-      "confidence": 1.0,
-      "lock_owner": "vllm-lite-53",
-      "lock_until": "2026-09-12T22:35:59+00:00"
+      "confidence": 1.0
     },
     "TASK-144": {
       "id": "TASK-144",
@@ -7509,6 +7507,17 @@
       "touched_round": 109,
       "commit": "49c1d186",
       "title": "fix(core): prefix_cache_nodes gauge live on the step path (record_step_metrics)"
+    },
+    "CHG-139": {
+      "id": "CHG-139",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-12T22:53:13+00:00",
+      "updated_at": "2026-09-12T22:53:13+00:00",
+      "touched_round": 109,
+      "commit": "5b033a85",
+      "title": "fix(server): n>1 stream keeps last candidate's split-byte tail (all_done branches) + Tokenizer::from_hf_tokenizer + byte-BPE regression test"
     }
   },
   "edges": [
@@ -10901,6 +10910,18 @@
       "to": "ISS-120",
       "type": "resolves",
       "created_at": "2026-09-12T22:05:46+00:00"
+    },
+    {
+      "from": "CHG-139",
+      "to": "TASK-143",
+      "type": "implements",
+      "created_at": "2026-09-12T22:53:13+00:00"
+    },
+    {
+      "from": "CHG-139",
+      "to": "ISS-121",
+      "type": "resolves",
+      "created_at": "2026-09-12T22:53:13+00:00"
     }
   ]
 }
