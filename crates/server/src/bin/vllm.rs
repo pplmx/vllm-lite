@@ -38,7 +38,8 @@ enum Cli {
 #[derive(Subcommand, Debug)]
 enum ConfigCommand {
     Validate {
-        #[arg(long)]
+        /// Path to the YAML config file to validate against the server's
+        /// own `AppConfig` rules.
         file: PathBuf,
     },
 }
@@ -46,11 +47,11 @@ enum ConfigCommand {
 #[derive(Subcommand, Debug)]
 enum ModelCommand {
     List {
-        #[arg(long)]
+        /// Directory to scan for model subdirectories.
         dir: PathBuf,
     },
     Info {
-        #[arg(long)]
+        /// Path to a model directory containing config.json.
         path: PathBuf,
     },
 }
@@ -375,5 +376,45 @@ server:
         assert_eq!(format_size(1024), "1.0 KB");
         assert_eq!(format_size(1024 * 1024), "1.0 MB");
         assert_eq!(format_size(1024 * 1024 * 1024), "1.0 GB");
+    }
+
+    // RIL ISS-117: the documented usage (`vllm config validate config.yaml`)
+    // was rejected because the args were `#[arg(long)]` flags. Guard the
+    // positional form (and the `--<flag>` spelling docs never claimed) so the
+    // tool's own usage comment stays true.
+    #[test]
+    fn config_validate_uses_positional_file() {
+        let cli = Cli::try_parse_from(["vllm", "config", "validate", "config.yaml"])
+            .expect("documented positional form must parse");
+        match cli {
+            Cli::Config {
+                command: ConfigCommand::Validate { file },
+            } => assert_eq!(file, PathBuf::from("config.yaml")),
+            _ => panic!("expected config validate"),
+        }
+    }
+
+    #[test]
+    fn model_list_uses_positional_dir() {
+        let cli = Cli::try_parse_from(["vllm", "model", "list", "/models"])
+            .expect("documented positional form must parse");
+        match cli {
+            Cli::Model {
+                command: ModelCommand::List { dir },
+            } => assert_eq!(dir, PathBuf::from("/models")),
+            _ => panic!("expected model list"),
+        }
+    }
+
+    #[test]
+    fn model_info_uses_positional_path() {
+        let cli = Cli::try_parse_from(["vllm", "model", "info", "/models/llama-7b"])
+            .expect("documented positional form must parse");
+        match cli {
+            Cli::Model {
+                command: ModelCommand::Info { path },
+            } => assert_eq!(path, PathBuf::from("/models/llama-7b")),
+            _ => panic!("expected model info"),
+        }
     }
 }
