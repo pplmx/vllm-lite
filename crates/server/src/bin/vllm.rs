@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
 #[command(name = "vllm")]
-#[command(version = "0.1.0")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "vLLM-lite CLI tools", long_about = None)]
 enum Cli {
     Config {
@@ -298,6 +298,7 @@ fn find_model_files(path: &PathBuf) -> Vec<(PathBuf, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::{CommandFactory, Parser};
     use tempfile::TempDir;
 
     #[test]
@@ -382,6 +383,17 @@ server:
     // was rejected because the args were `#[arg(long)]` flags. Guard the
     // positional form (and the `--<flag>` spelling docs never claimed) so the
     // tool's own usage comment stays true.
+    #[test]
+    fn version_flag_reports_cargo_version() {
+        // RIL ISS-119: `--version` must track CARGO_PKG_VERSION (was a
+        // hardcoded "0.1.0" that would go stale on a version bump).
+        let rendered = Cli::command().render_version();
+        assert!(
+            rendered.contains(env!("CARGO_PKG_VERSION")),
+            "--version must contain the crate version; got: {rendered}"
+        );
+    }
+
     #[test]
     fn config_validate_uses_positional_file() {
         let cli = Cli::try_parse_from(["vllm", "config", "validate", "config.yaml"])

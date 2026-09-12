@@ -846,6 +846,23 @@ fn test_to_app_config_otlp_endpoint_no_override_when_not_set() {
 }
 
 #[test]
+fn version_flag_reports_cargo_version() {
+    // RIL ISS-119: `--version` must report `CARGO_PKG_VERSION` (the
+    // workspace-package version) — previously hardcoded "0.1.0", which
+    // would go stale the moment the crate version is bumped.
+    assert_eq!(
+        SERVER_VERSION,
+        env!("CARGO_PKG_VERSION"),
+        "SERVER_VERSION must track the crate version"
+    );
+    let rendered = CliArgs::command().render_version();
+    assert!(
+        rendered.contains(env!("CARGO_PKG_VERSION")),
+        "--version must contain the crate version; got: {rendered}"
+    );
+}
+
+#[test]
 fn every_help_visible_cli_arg_has_help_text() {
     // RIL ISS-115: `--help` is an operator-facing contract — a flag that
     // renders with a blank help section (pre-fix: `--model`, `--api-key`,

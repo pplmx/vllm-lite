@@ -94,10 +94,15 @@ fn validate_max_model_len(s: &str) -> Result<usize, CliValidationError> {
     parse_usize_in_range(s, 1, 4_000_000)
 }
 
+/// The server's semver, compiled from `[workspace.package]` / `[package]`
+/// `version` (RIL ISS-119). Single source of truth: bumping the crate
+/// version updates `--version` without touching code.
+pub static SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// `CliArgs`. See the type definition for fields and behavior.
 #[derive(Parser, Debug)]
 #[command(name = "vllm-server")]
-#[command(version = "0.1.0")]
+#[command(version = SERVER_VERSION)]
 #[command(about = "High-performance LLM inference server", long_about = None)]
 pub struct CliArgs {
     #[command(flatten)]
