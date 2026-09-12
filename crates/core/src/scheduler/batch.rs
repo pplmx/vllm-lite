@@ -354,8 +354,17 @@ impl crate::engine::Engine {
     /// every step is free. Called from every step path (regular,
     /// speculative, and the CUDA-graph `step_with_graph`), on success and
     /// error alike — the allocator state is whatever the step left behind.
+    ///
+    /// RIL ISS-120: `prefix_cache_nodes` had the SAME GetMetrics-only
+    /// writer (run.rs) and was omitted from the ISS-100 fix, so it pinned
+    /// at 0 under a /metrics-/debug-metrics-only scrape. `RadixTree::len`
+    /// is O(1) (a stored `entry_count` counter), so refreshing it every
+    /// step is free too.
     pub(crate) fn record_step_metrics(&self) {
         let (used, total) = self.scheduler.get_kv_cache_usage();
         self.scheduler.metrics.record_kv_cache_usage(used, total);
+        self.scheduler
+            .metrics
+            .record_prefix_cache_nodes(self.scheduler.prefix_cache().len());
     }
 }

@@ -355,6 +355,45 @@ fn test_kv_cache_usage_is_live_without_get_metrics() {
 }
 
 #[test]
+fn test_prefix_cache_nodes_is_live_without_get_metrics() {
+    // RIL ISS-120: `prefix_cache_nodes` (exposed on /debug/metrics) had
+    // the same GetMetrics-only writer as `kv_cache_usage_percent`, which
+    // ISS-100 fixed — a /metrics- or /debug-metrics-only deployment never
+    // round-trips, so the gauge pinned at 0 forever. A prefill step that
+    // installs a prefix-cache block must leave `snapshot().prefix_cache_nodes
+    // > 0` with no GetMetrics message sent.
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let (tx, _rx) = mpsc::channel(64);
+
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .runtime_snapshot()
+            .prefix_cache_nodes,
+        0,
+        "pre-step: no prefix blocks should exist"
+    );
+
+    // prefix_cache inserts only when a sequence reaches Finished (its
+    // prompt-covering blocks are cached then), so max_tokens=1 lets the
+    // prefill + first decode finish the sequence.
+    engine.add_request(Request::new(1, vec![7; 16], 1), tx);
+    let _ = engine.step();
+    let _ = engine.step();
+
+    let snap = engine.scheduler.metrics.runtime_snapshot();
+    assert!(
+        snap.prefix_cache_nodes > 0,
+        "prefix_cache_nodes must be live after a step that finished a sequence \
+         and inserted its prefix blocks (was pinned at 0 pre-fix — only \
+         GetMetrics refreshed it); got {}",
+        snap.prefix_cache_nodes
+    );
+}
+
+#[test]
 fn test_requests_in_flight_live_and_balanced() {
     // RIL ISS-082: `requests_in_flight` (Prometheus gauge / OTLP
     // `inflight_requests`) must be a live signal. Pre-fix the only
