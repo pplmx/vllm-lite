@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 104,
+  "round": 105,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-06T05:18:32+00:00",
+  "updated_at": "2026-09-12T18:49:47+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 101,
+      "touched_round": 105,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -7236,6 +7236,41 @@
       "source": "crates/server/tests/chat_integration_test.rs test_chat_streaming_include_usage_works_for_n_gt_one",
       "confidence": 1.0,
       "description": "n=2 + include_usage: penultimate SSE event is the choices:[] usage chunk with completion_tokens=4 (2 candidates x 2 tokens); full just ci green."
+    },
+    "ISS-115": {
+      "id": "ISS-115",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-12T18:28:48+00:00",
+      "updated_at": "2026-09-12T18:49:47+00:00",
+      "touched_round": 105,
+      "title": "CLI --help omits help text for six flags: --model, --api-key, --api-key-file, --insecure-allow-public-no-auth, --log-dir, --config all render with a blank help section (verified via cargo run -- --help), so a fresh operator reading --help learns nothing about the model path requirement, API-key sources, the SEC-01 escape hatch, JSON file logging, or the YAML config flag. Fields like CliArgs.model / AuthArgs api_key / ConfigArgs.config carry no #[arg(help=...)] or doc comment, so clap renders them undocumented.",
+      "severity": 2
+    },
+    "TASK-137": {
+      "id": "TASK-137",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-09-12T18:29:32+00:00",
+      "updated_at": "2026-09-12T18:49:47+00:00",
+      "touched_round": 105,
+      "category": "dx",
+      "severity": 2,
+      "title": "Add help text to the six undocumented CLI flags and guard with a test that asserts every non-positional arg has non-empty help",
+      "confidence": 1.0
+    },
+    "CHG-132": {
+      "id": "CHG-132",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-12T18:49:07+00:00",
+      "updated_at": "2026-09-12T18:49:07+00:00",
+      "touched_round": 105,
+      "commit": "4f9e86cc",
+      "title": "docs(server): document all CLI flags in --help (help text on --model/--api-key/--api-key-file/--insecure-allow-public-no-auth/--log-dir/--config + regressions test + backtick doc_markdown fix)"
     }
   },
   "edges": [
@@ -10454,6 +10489,30 @@
       "to": "TASK-136",
       "type": "implements",
       "created_at": "2026-09-06T05:18:32+00:00"
+    },
+    {
+      "from": "TASK-137",
+      "to": "ISS-115",
+      "type": "addresses",
+      "created_at": "2026-09-12T18:30:03+00:00"
+    },
+    {
+      "from": "ISS-115",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-12T18:31:35+00:00"
+    },
+    {
+      "from": "CHG-132",
+      "to": "TASK-137",
+      "type": "implements",
+      "created_at": "2026-09-12T18:49:47+00:00"
+    },
+    {
+      "from": "CHG-132",
+      "to": "ISS-115",
+      "type": "resolves",
+      "created_at": "2026-09-12T18:49:47+00:00"
     }
   ]
 }
