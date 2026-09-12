@@ -2143,6 +2143,9 @@ async fn stream_chat_completion(
             // RIL ISS-111 follow-up: completion-token counter feeding the
             // `include_usage` chunk, incremented once per sampled token.
             0usize,
+            // RIL ISS-126: OpenAI emits `role` only on the first delta chunk;
+            // later chunks carry "" (matches the n>1 first_emitted convention).
+            false,
         ),
         move |(
             mut rx,
@@ -2151,6 +2154,7 @@ async fn stream_chat_completion(
             mut terminal,
             mut decoder,
             mut completion_tokens,
+            mut role_emitted,
         )| {
             let tokenizer = tokenizer.clone();
             let model = model.clone();
@@ -2186,6 +2190,7 @@ async fn stream_chat_completion(
                                 terminal,
                                 decoder,
                                 completion_tokens,
+                                role_emitted,
                             ),
                         ))
                     }
@@ -2204,6 +2209,7 @@ async fn stream_chat_completion(
                                 terminal,
                                 decoder,
                                 completion_tokens,
+                                role_emitted,
                             ),
                         ))
                     }
@@ -2214,6 +2220,16 @@ async fn stream_chat_completion(
                             // text-skipped ones still were generated).
                             completion_tokens += 1;
                             let text = decoder.push(&tokenizer, sampled.token);
+                            // RIL ISS-126: OpenAI sends `role` only on the
+                            // stream's FIRST chunk; subsequent chunks carry
+                            // an empty role string (the n > 1 path already
+                            // applies this via `first_emitted`).
+                            let role = if role_emitted {
+                                String::new()
+                            } else {
+                                "assistant".to_string()
+                            };
+                            role_emitted = true;
                             if should_skip_token_text(&tokenizer, &text) {
                                 // RIL ISS-035: emit a well-formed chunk with
                                 // empty content instead of a bare `data: `
@@ -2227,7 +2243,7 @@ async fn stream_chat_completion(
                                     ChatChunkChoice {
                                         index: 0,
                                         delta: ChatMessage {
-                                            role: "assistant".to_string(),
+                                            role,
                                             content: String::new(),
                                             name: None,
                                         },
@@ -2247,6 +2263,7 @@ async fn stream_chat_completion(
                                         terminal,
                                         decoder,
                                         completion_tokens,
+                                        role_emitted,
                                     ),
                                 ));
                             }
@@ -2264,7 +2281,7 @@ async fn stream_chat_completion(
                                 ChatChunkChoice {
                                     index: 0,
                                     delta: ChatMessage {
-                                        role: "assistant".to_string(),
+                                        role,
                                         content: text,
                                         name: None,
                                     },
@@ -2289,9 +2306,20 @@ async fn stream_chat_completion(
                                     terminal,
                                     decoder,
                                     completion_tokens,
+                                    role_emitted,
                                 ),
                             ))
                         } else {
+                            // RIL ISS-126: even a zero-token stream carries
+                            // `role` on its first (possibly only) delta —
+                            // the finish chunk inherits "assistant" when no
+                            // token chunk preceded it.
+                            let role = if role_emitted {
+                                String::new()
+                            } else {
+                                "assistant".to_string()
+                            };
+                            role_emitted = true;
                             // Channel closed by the engine. Block on
                             // the reason oneshot — the engine sends
                             // the reason before closing the channel,
@@ -2326,7 +2354,7 @@ async fn stream_chat_completion(
                                     ChatChunkChoice {
                                         index: 0,
                                         delta: ChatMessage {
-                                            role: "assistant".to_string(),
+                                            role,
                                             content: tail,
                                             name: None,
                                         },
@@ -2346,6 +2374,7 @@ async fn stream_chat_completion(
                                         terminal,
                                         decoder,
                                         completion_tokens,
+                                        role_emitted,
                                     ),
                                 ));
                             }
@@ -2356,7 +2385,7 @@ async fn stream_chat_completion(
                                 ChatChunkChoice {
                                     index: 0,
                                     delta: ChatMessage {
-                                        role: "assistant".to_string(),
+                                        role,
                                         content: String::new(),
                                         name: None,
                                     },
@@ -2396,6 +2425,7 @@ async fn stream_chat_completion(
                                     terminal,
                                     decoder,
                                     completion_tokens,
+                                    role_emitted,
                                 ),
                             ))
                         }

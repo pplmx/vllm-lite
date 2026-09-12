@@ -337,6 +337,80 @@ async fn test_chat_streaming_done_is_separate_event() {
     );
 }
 
+/// RIL ISS-126: OpenAI emits `role: "assistant"` only on the stream's
+/// FIRST delta chunk; subsequent chunks carry an empty role. The n > 1
+/// path already applied this via `first_emitted`, but the n = 1 path
+/// stamped `"assistant"` on every chunk (4 `ChatChunk` construction
+/// sites). Regression: walk the n = 1 SSE stream and assert the
+/// chronological first delta has `role == "assistant"` and every later
+/// delta has `role == ""`.
+#[tokio::test]
+async fn test_chat_streaming_role_only_on_first_chunk() {
+    let (engine_tx, _handle) = spawn_mock_engine(vec![7, 8, 9]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(chat_request_json("llama-test", true)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+
+    // Collect the JSON delta chunks in stream order, skipping `[DONE]`.
+    let mut deltas: Vec<serde_json::Value> = Vec::new();
+    for event in body_str.split("\n\n").filter(|s| !s.is_empty()) {
+        if event.contains("[DONE]") {
+            continue;
+        }
+        let data = event.strip_prefix("data:").unwrap_or(event).trim();
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(data)
+            && let Some(delta) = v.pointer("/choices/0/delta")
+        {
+            deltas.push(delta.clone());
+        }
+    }
+    assert!(
+        deltas.len() >= 2,
+        "expected at least a role marker + one content/finish chunk, got {}; body: {body_str}",
+        deltas.len()
+    );
+
+    assert_eq!(
+        deltas[0]["role"], "assistant",
+        "the FIRST delta chunk must carry role=assistant, got: {deltas:?}"
+    );
+    for (i, delta) in deltas.iter().enumerate().skip(1) {
+        assert_eq!(
+            delta["role"],
+            serde_json::Value::String(String::new()),
+            "delta #{i} must carry an empty role (RIL ISS-126), got: {delta:?}"
+        );
+    }
+}
+
 /// RIL ISS-111 follow-up: the OpenAI streaming-usage contract
 /// (`stream_options.include_usage`). When `include_usage: true`, the
 /// stream must emit one extra final chunk — immediately BEFORE `[DONE]` —
