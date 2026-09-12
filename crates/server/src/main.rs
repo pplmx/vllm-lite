@@ -75,7 +75,12 @@ async fn main() -> Result<()> {
     #[cfg(not(feature = "opentelemetry"))]
     logging::init_logging(log_dir, &app_config.server.log_level);
 
-    tracing::info!("Starting vllm-lite");
+    // RIL ISS-119: stamp the version on the startup log — log-shredders
+    // and fleet inventories key on it when triaging --version mismatches.
+    tracing::info!(
+        version = vllm_server::cli::SERVER_VERSION,
+        "Starting vllm-lite"
+    );
 
     // RIL ISS-091: warn (once, at startup) for documented engine knobs this
     // build does not apply — a silent no-op config is a config-honesty trap

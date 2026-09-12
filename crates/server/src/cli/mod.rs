@@ -3,3 +3,7 @@
 mod args;
 
 pub use args::{CliArgs, CliValidationError, LogLevel, ModelArgs};
+
+/// The compiled server semver (`CARGO_PKG_VERSION`), re-exported for
+/// startup logging / `--version` consumers across the crate.
+pub use args::SERVER_VERSION;
