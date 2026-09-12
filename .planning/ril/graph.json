@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 111,
+  "round": 112,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-12T23:36:11+00:00",
+  "updated_at": "2026-09-12T23:53:07+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7572,6 +7572,28 @@
       "touched_round": 110,
       "title": "create_batch returns 202 Accepted (OpenAI Batch spec); router-level fallback returns OpenAI error envelope on unmatched paths; 4 tests",
       "commit": "de49761f"
+    },
+    "ISS-126": {
+      "id": "ISS-126",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-12T23:53:07+00:00",
+      "updated_at": "2026-09-12T23:53:07+00:00",
+      "touched_round": 111,
+      "severity": 2,
+      "title": "Chat n=1 streaming stamps role: assistant on EVERY delta chunk (4 sites) while the n>1 path already emits role only on the first event per candidate via first_emitted - OpenAI spec emits role once per stream"
+    },
+    "CHG-142": {
+      "id": "CHG-142",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-12T23:53:07+00:00",
+      "updated_at": "2026-09-12T23:53:07+00:00",
+      "touched_round": 111,
+      "title": "chat n=1 streaming emits role only on the first delta chunk (role_emitted flag in the unfold state; zero-token finish still carries assistant); 1 regression test",
+      "commit": "cac660bf"
     }
   },
   "edges": [
@@ -11006,6 +11028,12 @@
       "to": "ISS-125",
       "type": "resolves",
       "created_at": "2026-09-12T23:35:57+00:00"
+    },
+    {
+      "from": "CHG-142",
+      "to": "ISS-126",
+      "type": "resolves",
+      "created_at": "2026-09-12T23:53:07+00:00"
     }
   ]
 }
