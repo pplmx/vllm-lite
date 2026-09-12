@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 109,
+  "round": 110,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-12T22:53:14+00:00",
+  "updated_at": "2026-09-12T23:21:22+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7448,10 +7448,10 @@
     "ISS-122": {
       "id": "ISS-122",
       "type": "issue",
-      "status": "active",
-      "version": 2,
+      "status": "resolved",
+      "version": 3,
       "created_at": "2026-09-12T21:46:40+00:00",
-      "updated_at": "2026-09-12T21:48:00+00:00",
+      "updated_at": "2026-09-12T23:21:03+00:00",
       "touched_round": 109,
       "severity": 3,
       "title": "SSE chunk wire-contract gaps: (a) completions streaming chunks lack created AND model on all five json! build sites (completions.rs:1109,1171,1715,1752,1821) while non-streaming carries both; (b) n>1 chat final consolidated chunk is json!-built with only id/object/model/choices, dropping the required created that every sibling chunk carries; (c) ChatChunk::new/new_usage_chunk stamp created per chunk via unix_now_secs() (types.rs:699,715), contradicting the stream-start doc (types.rs:677) - finish vs usage chunks differ across a second boundary. Root cause: no single created captured once per request"
@@ -7485,17 +7485,15 @@
     "TASK-144": {
       "id": "TASK-144",
       "type": "task",
-      "status": "active",
-      "version": 2,
+      "status": "resolved",
+      "version": 4,
       "created_at": "2026-09-12T21:49:39+00:00",
-      "updated_at": "2026-09-12T21:50:59+00:00",
+      "updated_at": "2026-09-12T23:21:03+00:00",
       "touched_round": 109,
       "category": "correctness",
       "severity": 3,
       "title": "Make every SSE chunk carry a single per-request created (captured once at stream start) plus model on completions chunks and created on the n>1 chat consolidated chunk",
-      "confidence": 1.0,
-      "lock_owner": "vllm-lite-53",
-      "lock_until": "2026-09-12T22:35:59+00:00"
+      "confidence": 1.0
     },
     "CHG-138": {
       "id": "CHG-138",
@@ -7518,6 +7516,29 @@
       "touched_round": 109,
       "commit": "5b033a85",
       "title": "fix(server): n>1 stream keeps last candidate's split-byte tail (all_done branches) + Tokenizer::from_hf_tokenizer + byte-BPE regression test"
+    },
+    "CHG-140": {
+      "id": "CHG-140",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-12T23:20:53+00:00",
+      "updated_at": "2026-09-12T23:20:53+00:00",
+      "touched_round": 109,
+      "title": "SSE chunks carry model + created on completions (n=1 and n>1) and created on n>1 chat consolidated chunk; pinned wire-shape test updated",
+      "commit": "fdc80a41",
+      "note": "4 n=1 completions json! sites + 3 n>1 sites now stamp model (resolved request model) and one stream-epoch created (captured before unfold); n>1 chat consolidated chunk adds created from a stream-start capture. ChatChunk::new/new_usage_chunk per-chunk timestamps deferred to ISS-123. CI green (just ci)."
+    },
+    "ISS-123": {
+      "id": "ISS-123",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-12T23:21:12+00:00",
+      "updated_at": "2026-09-12T23:21:12+00:00",
+      "touched_round": 109,
+      "severity": 2,
+      "title": "ChatChunk::new and ChatChunk::new_usage_chunk stamp created per chunk via unix_now_secs() (types.rs) while their own doc says stream-start contract (types.rs:677) - finish vs usage chunks on the same stream can differ across a second boundary; n>1 intermediate finish events and the usage chunk use per-chunk now-times while the consolidated chunk uses the captured stream-epoch created (after ISS-122)"
     }
   },
   "edges": [
@@ -10922,6 +10943,24 @@
       "to": "ISS-121",
       "type": "resolves",
       "created_at": "2026-09-12T22:53:13+00:00"
+    },
+    {
+      "from": "CHG-140",
+      "to": "TASK-144",
+      "type": "implements",
+      "created_at": "2026-09-12T23:21:03+00:00"
+    },
+    {
+      "from": "CHG-140",
+      "to": "ISS-122",
+      "type": "resolves",
+      "created_at": "2026-09-12T23:21:03+00:00"
+    },
+    {
+      "from": "ISS-123",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-09-12T23:21:21+00:00"
     }
   ]
 }
