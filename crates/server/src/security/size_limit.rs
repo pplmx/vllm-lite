@@ -31,7 +31,8 @@ pub const DEFAULT_BODY_LIMIT_BYTES: usize = 1_048_576;
 ///
 /// `limit_bytes` is the maximum accepted body size; requests larger
 /// than this are rejected with HTTP 413 carrying the `OpenAI` error
-/// envelope (via [`size_limit_413_envelope`]).
+/// envelope (rewritten by the internal `size_limit_413_envelope`
+/// middleware mounted just outside the limit layer).
 pub fn with_body_size_limit(router: Router, limit_bytes: usize) -> Router {
     router
         .layer(RequestBodyLimitLayer::new(limit_bytes))
