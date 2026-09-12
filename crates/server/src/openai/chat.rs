@@ -1697,11 +1697,27 @@ async fn stream_n_parallel_chat(
                                         };
                                         serde_json::json!({
                                             "index": i,
-                                            // RIL ISS-105: preserve each
+                                            // RIL ISS-105: preserve the
                                             // candidate's held-back tail in
-                                            // its final delta.
+                                            // its final delta. The candidate
+                                            // that just finalized (the one
+                                            // that made all_done true) was
+                                            // ALREADY flushed into `tail`
+                                            // above — `flush()` clears
+                                            // pending, so re-flushing it
+                                            // here would return "" and drop
+                                            // its split multi-byte chars
+                                            // (RIL ISS-121). Other
+                                            // candidates flushed at their
+                                            // own intermediate finish
+                                            // events; their re-flush here is
+                                            // harmlessly empty.
                                             "delta": {
-                                                "content": state.decoders[i].flush(&state.tokenizer),
+                                                "content": if i == index {
+                                                    tail.clone()
+                                                } else {
+                                                    state.decoders[i].flush(&state.tokenizer)
+                                                },
                                                 "role": "",
                                             },
                                             "finish_reason": reason_str,

@@ -49,6 +49,41 @@ impl Tokenizer {
         }
     }
 
+    /// Construct a tokenizer from an already-built HF tokenizer.
+    ///
+    /// Mirrors [`Self::from_file`]'s field population (vocab size, added
+    /// `<...>` special tokens) but takes the HF tokenizer in hand — the
+    /// seam tests need when exercising a specific tokenizer shape (e.g.
+    /// the byte-level BPE that splits a multi-byte char across tokens,
+    /// RIL ISS-105/ISS-121) without a tokenizer.json on disk.
+    #[must_use]
+    pub fn from_hf_tokenizer(tokenizer: HFTokenizer) -> Self {
+        let vocab_size = tokenizer.get_vocab_size(true);
+        let mut special_tokens = Vec::new();
+        for id in tokenizer.get_added_tokens_decoder().keys() {
+            if let Some(token) = tokenizer.id_to_token(*id)
+                && !token.starts_with('▁')
+                && token.len() > 1
+                && token.starts_with('<')
+            {
+                special_tokens.push(token);
+            }
+        }
+        if special_tokens.is_empty() {
+            special_tokens = vec![
+                "<|endoftext|>".to_string(),
+                "<|im_end|>".to_string(),
+                "<|im_start|>".to_string(),
+            ];
+        }
+        Self {
+            inner: Some(Box::new(tokenizer)),
+            vocab_size,
+            special_tokens,
+            model_name: None,
+        }
+    }
+
     /// Construct a tokenizer from a tokenizer.json file.
     /// # Errors
     ///
@@ -380,12 +415,7 @@ mod streaming_decode_tests {
         );
         hf.with_pre_tokenizer(Some(ByteLevelPT::default()));
         hf.with_decoder(Some(ByteLevelDecoder::default()));
-        Tokenizer {
-            inner: Some(Box::new(hf)),
-            vocab_size: 5,
-            special_tokens: Vec::new(),
-            model_name: None,
-        }
+        Tokenizer::from_hf_tokenizer(hf)
     }
 
     /// Regression for RIL ISS-105: streaming the three split-byte tokens

@@ -8188,3 +8188,130 @@ async fn test_chat_n_above_one_streaming_final_event_has_finish_reason_per_index
         );
     }
 }
+
+/// Byte-level BPE whose vocab holds the raw bytes of U+4F60 (你, E4 BD A0)
+/// as three separate tokens (no merge ever combined them) — mirrors the
+/// vllm-model `split_char_tokenizer` fixture so the production streaming
+/// decode path sees a multi-byte char split across consecutive tokens
+/// (RIL ISS-105/ISS-121).
+fn split_char_tokenizer() -> vllm_model::tokenizer::Tokenizer {
+    use tokenizers::decoders::byte_level::ByteLevel as ByteLevelDecoder;
+    use tokenizers::models::bpe::BPE;
+    use tokenizers::pre_tokenizers::byte_level::ByteLevel as ByteLevelPT;
+    use tokenizers::tokenizer::Tokenizer as HFT;
+
+    fn byte_char(b: u8) -> char {
+        if (0x21..=0x7E).contains(&b) || (0xA1..=0xAC).contains(&b) || (0xAE..=0xFF).contains(&b) {
+            char::from(b)
+        } else {
+            let n = (0..b)
+                .filter(|x| {
+                    !(0x21..=0x7E).contains(x)
+                        && !(0xA1..=0xAC).contains(x)
+                        && !(0xAE..=0xFF).contains(x)
+                })
+                .count() as u32;
+            char::from_u32(0x100 + n).unwrap_or('\u{FFFD}')
+        }
+    }
+
+    let mut vocab: ahash::AHashMap<String, u32> = ahash::AHashMap::default();
+    vocab.insert("h".to_string(), 0);
+    vocab.insert("i".to_string(), 1);
+    vocab.insert(byte_char(0xe4).to_string(), 2);
+    vocab.insert(byte_char(0xbd).to_string(), 3);
+    vocab.insert(byte_char(0xa0).to_string(), 4);
+    let mut hf = HFT::new(
+        BPE::builder()
+            .vocab_and_merges(vocab, tokenizers::models::bpe::Merges::default())
+            .build()
+            .unwrap(),
+    );
+    hf.with_pre_tokenizer(Some(ByteLevelPT::default()));
+    hf.with_decoder(Some(ByteLevelDecoder::default()));
+    vllm_model::tokenizer::Tokenizer::from_hf_tokenizer(hf)
+}
+
+/// RIL ISS-121 regression: on the n > 1 chat stream, the LAST-finishing
+/// candidate had its held-back partial UTF-8 bytes flushed into `tail` at
+/// its own `Finished` event, but the consolidated all_done chunk then
+/// RE-flushed every candidate — `StreamingDecoder::flush` clears pending,
+/// so that candidate's tail came back "" and was dropped (defeating
+/// ISS-105's guarantee exactly at stream end). Each candidate generates
+/// [2, 3] = the first two bytes of 你; the last-finishing candidate's
+/// consolidated delta must carry the non-empty held-back tail.
+#[tokio::test]
+async fn test_n_gt_one_stream_preserves_last_candidate_held_back_tail() {
+    let (engine_tx, _handle) = spawn_mock_engine(vec![2, 3]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(split_char_tokenizer()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "stream": true,
+        "n": 2,
+        "max_tokens": 3,
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+    let events: Vec<&str> = body_str.split("\n\n").filter(|s| !s.is_empty()).collect();
+
+    // Find the consolidated final chunk — the data: event with BOTH
+    // choices (n == 2) — not the per-candidate intermediate events.
+    let consolidated = events
+        .iter()
+        .find_map(|e| {
+            let json: serde_json::Value =
+                serde_json::from_str(e.strip_prefix("data:").unwrap_or(e).trim()).ok()?;
+            json["choices"]
+                .as_array()
+                .is_some_and(|c| c.len() == 2)
+                .then_some(json)
+        })
+        .unwrap_or_else(|| panic!("no consolidated n>1 chunk in stream: {events:?}"));
+
+    let content0 = consolidated["choices"][0]["delta"]["content"]
+        .as_str()
+        .unwrap_or("");
+    let content1 = consolidated["choices"][1]["delta"]["content"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        !content0.is_empty() || !content1.is_empty(),
+        "the last-finishing candidate's held-back partial-UTF-8 tail must survive \
+         into the consolidated final chunk (pre-fix the all_done re-flush dropped \
+         it); content0={content0:?} content1={content1:?} events={events:?}"
+    );
+    assert!(
+        events.iter().any(|e| e.contains("[DONE]")),
+        "stream must end with [DONE]"
+    );
+}

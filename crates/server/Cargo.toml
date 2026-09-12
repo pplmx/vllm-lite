@@ -55,6 +55,11 @@ opentelemetry-proto = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 husky-rs = { workspace = true }
+# RIL ISS-121: build the byte-level BPE fixture that splits a multi-byte
+# char across tokens, to regression-test streamed tail preservation (same
+# version + default features vllm-model uses; both already in the lock).
+tokenizers = "0.23"
+ahash = "0.8"
 
 [features]
 # Enable CUDA-graph capture/replay through vllm-core. Off by default so

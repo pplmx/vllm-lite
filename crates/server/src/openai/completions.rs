@@ -1161,11 +1161,19 @@ async fn stream_n_parallel_completions(
                                         vllm_traits::FinishReason::Stop
                                         | vllm_traits::FinishReason::Cancelled => "stop",
                                     };
-                                    parallel_finish_choice(
-                                        i,
-                                        reason_str,
-                                        &state.decoders[i].flush(&state.tokenizer),
-                                    )
+                                    // RIL ISS-121: the candidate that just
+                                    // finalized (which made all_done true)
+                                    // was ALREADY flushed into `tail` above —
+                                    // `flush()` clears pending, so re-flushing
+                                    // it here returns "" and would drop its
+                                    // split multi-byte chars. Others flushed
+                                    // at their own intermediate finish events.
+                                    let content = if i == index {
+                                        tail.clone()
+                                    } else {
+                                        state.decoders[i].flush(&state.tokenizer)
+                                    };
+                                    parallel_finish_choice(i, reason_str, &content)
                                 })
                                 .collect();
                             let chunk = serde_json::json!({
