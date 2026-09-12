@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 109,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-12T21:28:22+00:00",
+  "updated_at": "2026-09-12T22:05:46+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -99,7 +99,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 71,
+      "touched_round": 109,
       "title": "core/sampling",
       "role": "sampler pipeline, temperature/top-p/top-k, stop sequences"
     },
@@ -2562,7 +2562,7 @@
       "version": 1,
       "created_at": "2026-08-10T11:42:18+00:00",
       "updated_at": "2026-08-10T11:42:18+00:00",
-      "touched_round": 103,
+      "touched_round": 109,
       "title": "vllm-server openai streaming SSE",
       "role": "chat/completions SSE 流式响应"
     },
@@ -7422,6 +7422,93 @@
       "touched_round": 109,
       "commit": "5813803c",
       "title": "feat(server): stamp SERVER_VERSION on the startup log via cli::SERVER_VERSION re-export (ISS-119 follow-up)"
+    },
+    "ISS-120": {
+      "id": "ISS-120",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-12T21:46:40+00:00",
+      "updated_at": "2026-09-12T22:05:46+00:00",
+      "touched_round": 109,
+      "severity": 4,
+      "title": "prefix_cache_nodes gauge is stale/dead: its only production writer is the EngineMessage::GetMetrics arm (core/src/engine/run.rs:63), but /metrics reads the collector snapshot directly and /debug/metrics reads via the same snapshot — neither ever triggers GetMetrics (only /health/details and /debug/kv-cache round-trip). So on a /metrics-only (or /debug/metrics-only) deployment the gauge pins at 0 forever, the exact ISS-100 class that record_step_metrics (batch.rs:345-360) fixed for kv_cache_usage_percent but omitted this sibling. RadixTree::len() is O(1) (entry_count counter, radix_cache/tree.rs:99)."
+    },
+    "ISS-121": {
+      "id": "ISS-121",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-12T21:46:40+00:00",
+      "updated_at": "2026-09-12T21:46:40+00:00",
+      "touched_round": 109,
+      "severity": 3,
+      "title": "n>1 streaming drops the last-finishing candidate's partial UTF-8 tail: each candidate's Finished handler flushes its StreamingDecoder tail (chat.rs:1656, completions.rs:1128) into a local , but when that candidate makes all_done=true the consolidated branch re-flushes every candidate (chat.rs:1704, completions.rs:1164) — flush() clears pending (tokenizer.rs:223-227) so the just-flushed last candidate returns \"\" and  is unused in the all_done branch. The last candidate's split multi-byte char is lost, defeating the ISS-105 guarantee exactly at stream end on the n>1 paths."
+    },
+    "ISS-122": {
+      "id": "ISS-122",
+      "type": "issue",
+      "status": "active",
+      "version": 2,
+      "created_at": "2026-09-12T21:46:40+00:00",
+      "updated_at": "2026-09-12T21:48:00+00:00",
+      "touched_round": 109,
+      "severity": 3,
+      "title": "SSE chunk wire-contract gaps: (a) completions streaming chunks lack created AND model on all five json! build sites (completions.rs:1109,1171,1715,1752,1821) while non-streaming carries both; (b) n>1 chat final consolidated chunk is json!-built with only id/object/model/choices, dropping the required created that every sibling chunk carries; (c) ChatChunk::new/new_usage_chunk stamp created per chunk via unix_now_secs() (types.rs:699,715), contradicting the stream-start doc (types.rs:677) - finish vs usage chunks differ across a second boundary. Root cause: no single created captured once per request"
+    },
+    "TASK-142": {
+      "id": "TASK-142",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-09-12T21:49:39+00:00",
+      "updated_at": "2026-09-12T22:05:46+00:00",
+      "touched_round": 109,
+      "category": "observability",
+      "severity": 4,
+      "title": "Refresh prefix_cache_nodes in record_step_metrics (mirror ISS-100), with a regression test asserting the gauge updates without any GetMetrics round-trip",
+      "confidence": 1.0
+    },
+    "TASK-143": {
+      "id": "TASK-143",
+      "type": "task",
+      "status": "active",
+      "version": 2,
+      "created_at": "2026-09-12T21:49:39+00:00",
+      "updated_at": "2026-09-12T21:50:59+00:00",
+      "touched_round": 109,
+      "category": "correctness",
+      "severity": 3,
+      "title": "Fix n>1 double-flush tail loss: the all_done branches (chat.rs + completions.rs) must use the just-flushed  for the last-finishing candidate, not re-flush (which clears pending); add a regression test",
+      "confidence": 1.0,
+      "lock_owner": "vllm-lite-53",
+      "lock_until": "2026-09-12T22:35:59+00:00"
+    },
+    "TASK-144": {
+      "id": "TASK-144",
+      "type": "task",
+      "status": "active",
+      "version": 2,
+      "created_at": "2026-09-12T21:49:39+00:00",
+      "updated_at": "2026-09-12T21:50:59+00:00",
+      "touched_round": 109,
+      "category": "correctness",
+      "severity": 3,
+      "title": "Make every SSE chunk carry a single per-request created (captured once at stream start) plus model on completions chunks and created on the n>1 chat consolidated chunk",
+      "confidence": 1.0,
+      "lock_owner": "vllm-lite-53",
+      "lock_until": "2026-09-12T22:35:59+00:00"
+    },
+    "CHG-138": {
+      "id": "CHG-138",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-12T22:05:46+00:00",
+      "updated_at": "2026-09-12T22:05:46+00:00",
+      "touched_round": 109,
+      "commit": "49c1d186",
+      "title": "fix(core): prefix_cache_nodes gauge live on the step path (record_step_metrics)"
     }
   },
   "edges": [
@@ -10766,6 +10853,54 @@
       "to": "TASK-141",
       "type": "implements",
       "created_at": "2026-09-12T21:28:22+00:00"
+    },
+    {
+      "from": "TASK-142",
+      "to": "ISS-120",
+      "type": "addresses",
+      "created_at": "2026-09-12T21:50:59+00:00"
+    },
+    {
+      "from": "TASK-143",
+      "to": "ISS-121",
+      "type": "addresses",
+      "created_at": "2026-09-12T21:50:59+00:00"
+    },
+    {
+      "from": "TASK-144",
+      "to": "ISS-122",
+      "type": "addresses",
+      "created_at": "2026-09-12T21:50:59+00:00"
+    },
+    {
+      "from": "ISS-120",
+      "to": "COMP-009",
+      "type": "located_in",
+      "created_at": "2026-09-12T21:50:59+00:00"
+    },
+    {
+      "from": "ISS-121",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-09-12T21:50:59+00:00"
+    },
+    {
+      "from": "ISS-122",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-09-12T21:50:59+00:00"
+    },
+    {
+      "from": "CHG-138",
+      "to": "TASK-142",
+      "type": "implements",
+      "created_at": "2026-09-12T22:05:46+00:00"
+    },
+    {
+      "from": "CHG-138",
+      "to": "ISS-120",
+      "type": "resolves",
+      "created_at": "2026-09-12T22:05:46+00:00"
     }
   ]
 }
