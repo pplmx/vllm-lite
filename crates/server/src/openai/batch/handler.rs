@@ -33,7 +33,16 @@ const MAX_BATCH_PROMPTS: usize = 10_000;
 /// to advance a `BatchJob` from `Pending` -> `InProgress` ->
 /// `Completed`. That worker now lives in [`super::worker`]: this
 /// handler persists the job, spawns the worker, and returns the
-/// `200 OK` batch object immediately.
+/// `202 Accepted` batch object immediately.
+///
+/// **202 vs 200 (RIL ISS-124):** `OpenAI`'s Batch API documents
+/// `POST /v1/batches` as `202 Accepted` — the job is queued for
+/// asynchronous execution, not synchronously completed. The pre-fix
+/// contract returned a plain `200 OK`, which matches neither the
+/// published spec nor vLLM's own batch endpoint; strict SDK clients
+/// that branch on the status code (e.g. checking `202` before
+/// polling `GET /v1/batches/{id}`) treated the response as an error.
+/// The body is the same `BatchResponse` object either way.
 ///
 /// # Errors
 ///
@@ -46,7 +55,10 @@ const MAX_BATCH_PROMPTS: usize = 10_000;
 pub async fn create_batch(
     State(state): State<ApiState>,
     OpenaiJson(req): OpenaiJson<SimpleBatchRequest>,
-) -> Result<Json<BatchResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+) -> Result<
+    (axum::http::StatusCode, Json<BatchResponse>),
+    (axum::http::StatusCode, Json<ErrorResponse>),
+> {
     if req.prompts.is_empty() {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
@@ -137,21 +149,24 @@ pub async fn create_batch(
     // `drop` — clippy::let_underscore_future).
     drop(super::worker::spawn_batch_worker(&state, job));
 
-    Ok(Json(
-        batch_to_response(&job_id, &state.batch_manager, || BatchResponse {
-            id: job_id.clone(),
-            object: "batch".to_string(),
-            // Fallback endpoint used only in the (impossible) race where
-            // the job vanished right after creation; the Chat marker is
-            // arbitrary since no real job exists to describe.
-            endpoint: BatchEndpoint::Chat,
-            status: "pending".to_string(),
-            created_at: crate::util::time::unix_now_secs(),
-            expires_at: crate::util::time::unix_now_secs() + 86_400,
-            completed_at: None,
-            request_counts: None,
-        })
-        .await,
+    Ok((
+        axum::http::StatusCode::ACCEPTED,
+        Json(
+            batch_to_response(&job_id, &state.batch_manager, || BatchResponse {
+                id: job_id.clone(),
+                object: "batch".to_string(),
+                // Fallback endpoint used only in the (impossible) race where
+                // the job vanished right after creation; the Chat marker is
+                // arbitrary since no real job exists to describe.
+                endpoint: BatchEndpoint::Chat,
+                status: "pending".to_string(),
+                created_at: crate::util::time::unix_now_secs(),
+                expires_at: crate::util::time::unix_now_secs() + 86_400,
+                completed_at: None,
+                request_counts: None,
+            })
+            .await,
+        ),
     ))
 }
 
@@ -454,7 +469,9 @@ mod tests {
             temperature: None,
         };
         let result = create_batch(State(state), OpenaiJson(req)).await;
-        let response = result.expect("a batch of exactly MAX_BATCH_PROMPTS must be accepted");
+        let (status, response) =
+            result.expect("a batch of exactly MAX_BATCH_PROMPTS must be accepted");
+        assert_eq!(status, axum::http::StatusCode::ACCEPTED);
         assert_eq!(response.status, "pending");
     }
 
@@ -499,6 +516,11 @@ mod tests {
 
         let result = create_batch(State(state), OpenaiJson(req)).await;
         let response = result.expect("create_batch must succeed once the worker exists");
+        // RIL ISS-124: OpenAI's `POST /v1/batches` returns 202 Accepted
+        // (the job runs asynchronously); the pre-fix contract returned a
+        // plain 200, which strict clients checking the status code rejected.
+        assert_eq!(response.0, axum::http::StatusCode::ACCEPTED);
+        let response = response.1;
         assert_eq!(response.status, "pending");
         assert!(response.id.starts_with("batch_"));
         // The job should be visible to the manager immediately.
@@ -640,7 +662,8 @@ mod tests {
         let state = create_test_state();
         let req = batch_request(None, Some(10));
         let result = create_batch(State(state), OpenaiJson(req)).await;
-        let response = result.expect("valid batch must be created");
+        let (status, response) = result.expect("valid batch must be created");
+        assert_eq!(status, axum::http::StatusCode::ACCEPTED);
         assert_eq!(
             response.expires_at - response.created_at,
             crate::openai::batch::types::DEFAULT_BATCH_RETENTION_SECS,

@@ -35,7 +35,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::Router;
+use axum::http::StatusCode;
 use axum::routing::{get, post};
 
 use crate::ApiState;
@@ -51,6 +53,7 @@ use crate::openai::chat::chat_completions;
 use crate::openai::completions::completions as openai_completions;
 use crate::openai::embeddings::embeddings;
 use crate::openai::models::{model_by_id_handler, models_handler};
+use crate::openai::types::ErrorResponse;
 use crate::security::audit::AuditLogger;
 use crate::security::audit_middleware::audit_middleware;
 use crate::security::correlation::correlation_id_middleware;
@@ -131,6 +134,12 @@ pub fn build_app(
         .route("/debug/audit", get(debug::audit_dump))
         // Shutdown
         .route("/shutdown", get(api::shutdown))
+        // OpenAI-envelope 404 for unmatched paths (RIL ISS-125): axum's
+        // default fallback answers plain-text "Not Found", which breaks
+        // OpenAI SDKs that parse every response as `{error: {...}}` — a
+        // typo'd route (e.g. `/v1/cheat/completions`) surfaces as a
+        // JSON parse error instead of a usable `error.message`.
+        .fallback(api_not_found)
         .with_state(state);
 
     // auth (innermost of the security stack): reads the body to
@@ -161,6 +170,20 @@ pub fn build_app(
     // CORS: outermost overall so even 413/401 responses carry the
     // Access-Control-Allow-Origin header for browser-direct callers.
     with_cors(app, cors)
+}
+
+/// Router-level fallback (RIL ISS-125): every unmatched path answers
+/// `404` with the `OpenAI` error envelope instead of axum's default
+/// plain-text "Not Found". `OpenAI` SDKs parse `error.message` on any
+/// non-2xx; without this, a mistyped route (a client bug, typo'd SDK
+/// base URL, or a `curl` miss) yields a body that fails JSON decoding
+/// and surfaces as an opaque client-side parse error rather than the
+/// actionable `{"error":{"message":"Not Found",...}}` contract.
+async fn api_not_found() -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::NOT_FOUND,
+        Json(ErrorResponse::new("Not Found", "invalid_request_error")),
+    )
 }
 
 #[cfg(test)]
