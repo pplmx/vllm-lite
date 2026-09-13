@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 115,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T03:26:32+00:00",
+  "updated_at": "2026-09-13T04:13:48+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7664,6 +7664,64 @@
       "touched_round": 115,
       "severity": 1,
       "title": "Rust 1.88 deprecates AtomicU64::fetch_update (lock_free.rs:349) but try_update is unstable until 1.92+ (atomic_try_update #135894) - warning-only today (clippy -D correctness/suspicious/perf does not trip deprecated), so defer the rename as an MSRV-locked housekeeping item; keep fetch_update while MSRV=1.88"
+    },
+    "ISS-129": {
+      "id": "ISS-129",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T03:54:06+00:00",
+      "updated_at": "2026-09-13T04:13:48+00:00",
+      "touched_round": 115,
+      "severity": 3,
+      "title": "GET /v1/models/{id} returns the model wrapped in a {object:list,data:[...]} envelope (models.rs:115-124) instead of the bare model object OpenAI documents - breaks SDK client.models.retrieve(id) which expects top-level id/object:model"
+    },
+    "ISS-130": {
+      "id": "ISS-130",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T03:54:06+00:00",
+      "updated_at": "2026-09-13T04:13:48+00:00",
+      "touched_round": 115,
+      "severity": 2,
+      "title": "Every chat response message serializes a name:null key OpenAI never emits: ChatMessage.name has no skip_serializing_if (types.rs:98-101) and is always None in responses (chat.rs build_chat_choice), null-lie on both non-streaming choices and stream deltas"
+    },
+    "ISS-131": {
+      "id": "ISS-131",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T03:54:06+00:00",
+      "updated_at": "2026-09-13T04:13:48+00:00",
+      "touched_round": 115,
+      "severity": 3,
+      "title": "Embeddings usage.prompt_tokens is the sum of embedding dimensions, not input token count (types.rs:1047-1056 EmbeddingsResponse::new derives usage from embedding.len()) - handler already has the true input_tokens (embeddings.rs:121); OpenAI reports real input tokens"
+    },
+    "TASK-146": {
+      "id": "TASK-146",
+      "type": "task",
+      "status": "active",
+      "version": 2,
+      "created_at": "2026-09-13T03:54:06+00:00",
+      "updated_at": "2026-09-13T03:54:49+00:00",
+      "touched_round": 115,
+      "category": "correctness",
+      "severity": 3,
+      "title": "Wire-parity polish batch: (1) GET /v1/models/{id} returns bare ModelObject (ISS-129), (2) ChatMessage.name skip_serializing_if drops the null-lie from responses (ISS-130), (3) EmbeddingsResponse::new takes the real prompt token count and reports it (ISS-131)",
+      "lock_owner": "graph-eng-session",
+      "lock_until": "2026-09-13T04:54:49+00:00"
+    },
+    "CHG-146": {
+      "id": "CHG-146",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T04:12:53+00:00",
+      "updated_at": "2026-09-13T04:12:53+00:00",
+      "touched_round": 115,
+      "commit": "f67b9ee2",
+      "title": "OpenAI wire parity batch: bare model object on GET /v1/models/{id} (ISS-129), ChatMessage.name skip_serializing_if omits the name:null lie (ISS-130), EmbeddingsResponse::new takes true prompt token count (ISS-131)"
     }
   },
   "edges": [
@@ -11140,6 +11198,48 @@
       "to": "COMP-014",
       "type": "located_in",
       "created_at": "2026-09-13T03:26:32+00:00"
+    },
+    {
+      "from": "TASK-146",
+      "to": "ISS-129",
+      "type": "addresses",
+      "created_at": "2026-09-13T03:54:49+00:00"
+    },
+    {
+      "from": "TASK-146",
+      "to": "ISS-130",
+      "type": "addresses",
+      "created_at": "2026-09-13T03:54:49+00:00"
+    },
+    {
+      "from": "TASK-146",
+      "to": "ISS-131",
+      "type": "addresses",
+      "created_at": "2026-09-13T03:54:49+00:00"
+    },
+    {
+      "from": "CHG-146",
+      "to": "ISS-129",
+      "type": "resolves",
+      "created_at": "2026-09-13T04:12:53+00:00"
+    },
+    {
+      "from": "CHG-146",
+      "to": "ISS-130",
+      "type": "resolves",
+      "created_at": "2026-09-13T04:12:53+00:00"
+    },
+    {
+      "from": "CHG-146",
+      "to": "ISS-131",
+      "type": "resolves",
+      "created_at": "2026-09-13T04:12:53+00:00"
+    },
+    {
+      "from": "CHG-146",
+      "to": "TASK-146",
+      "type": "implements",
+      "created_at": "2026-09-13T04:12:53+00:00"
     }
   ]
 }
