@@ -1010,7 +1010,7 @@ pub async fn chat_completions(
     // wrong-model). Matches OpenAI's `404 model_not_found`. Strict only
     // when the tokenizer can name the loaded model (lenient for the
     // fallback/stub tokenizer and the test seam).
-    validate_model_conformance(&req.model, state.tokenizer.model_name())?;
+    validate_model_conformance(Some(&req.model), state.tokenizer.model_name())?;
 
     // Production-readiness §6: the correlation_id middleware
     // (mounted as the OUTERMOST layer in main.rs) installs a

@@ -79,7 +79,7 @@ pub async fn embeddings(
     // RIL ISS-152: never embed with a model that isn't loaded — a
     // mismatched id previously ran the loaded model and echoed the
     // wrong id back with 200. Matches OpenAI's `404 model_not_found`.
-    validate_model_conformance(&req.model, state.tokenizer.model_name())?;
+    validate_model_conformance(Some(&req.model), state.tokenizer.model_name())?;
     if req.input.is_empty() {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,

@@ -983,16 +983,21 @@ pub fn validate_completion_request_fields(
 /// test seam `Tokenizer::new()`), there is nothing to conform against,
 /// so any non-empty id is accepted (`"unknown"` from `/v1/models` is not
 /// a real id). Empty ids are rejected by each endpoint's own
-/// `model is required` check before this runs.
+/// `model is required` check before this runs; `requested = None` (the
+/// completions endpoint's omitted `model`) is the legacy server-default
+/// and passes.
 ///
 /// # Errors
 ///
 /// Returns `(404, {error: {message, type, code: model_not_found}})` when
 /// the requested id differs from the loaded model's name.
 pub(crate) fn validate_model_conformance(
-    requested: &str,
+    requested: Option<&str>,
     loaded: Option<String>,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    let Some(requested) = requested else {
+        return Ok(());
+    };
     if let Some(loaded) = loaded
         && requested != loaded
     {
@@ -3274,13 +3279,13 @@ mod tests {
     // its model (lenient for fallback/stub tokenizers with no name).
     #[test]
     fn model_conformance_matching_passes() {
-        validate_model_conformance("qwen3", Some("qwen3".to_string()))
+        validate_model_conformance(Some("qwen3"), Some("qwen3".to_string()))
             .expect("a matching id must pass");
     }
 
     #[test]
     fn model_conformance_mismatch_returns_404() {
-        let err = validate_model_conformance("gpt-4o", Some("qwen3".to_string()))
+        let err = validate_model_conformance(Some("gpt-4o"), Some("qwen3".to_string()))
             .expect_err("a mismatched id must be rejected");
         assert_eq!(err.0, StatusCode::NOT_FOUND);
         assert_eq!(err.1.0.error.error_type, "invalid_request_error");
@@ -3295,6 +3300,15 @@ mod tests {
     fn model_conformance_lenient_when_server_cannot_name() {
         // No loaded name (fallback/stub tokenizer): nothing to
         // conform against — any id passes.
-        validate_model_conformance("anything", None).expect("unknown-loaded-model must be lenient");
+        validate_model_conformance(Some("anything"), None)
+            .expect("unknown-loaded-model must be lenient");
+    }
+
+    #[test]
+    fn model_conformance_none_requested_passes() {
+        // Completions omits `model` → legacy server-default path, no
+        // conformance check applies.
+        validate_model_conformance(None, Some("qwen3".to_string()))
+            .expect("omitted model must pass the conformance gate");
     }
 }

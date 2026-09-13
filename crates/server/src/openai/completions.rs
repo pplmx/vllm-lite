@@ -1497,9 +1497,7 @@ pub async fn completions(
     // conformance — see DEC-059). `None` stays the legacy server-default
     // path (fills the loaded model); strict only when the tokenizer can
     // name the loaded model.
-    if let Some(model) = &req.model {
-        validate_model_conformance(model, state.tokenizer.model_name())?;
-    }
+    validate_model_conformance(req.model.as_deref(), state.tokenizer.model_name())?;
 
     // RIL ISS-139: whitespace-only input parity — embeddings (and, in this
     // batch, chat + batch) reject whitespace-only input; a blank prompt
@@ -1556,19 +1554,17 @@ pub async fn completions(
     // combination; the runtime behavior is what changes — the
     // response shape becomes a non-streaming document because
     // `best_of` requires ranking N candidates first.
-    if let Some(n) = req.best_of {
-        if n > 1 {
-            return run_best_of(
-                state,
-                req,
-                prompt_tokens,
-                prompt,
-                prompt_tokens_len,
-                max_tokens,
-                correlation_id,
-            )
-            .await;
-        }
+    if req.best_of.is_some_and(|n| n > 1) {
+        return run_best_of(
+            state,
+            req,
+            prompt_tokens,
+            prompt,
+            prompt_tokens_len,
+            max_tokens,
+            correlation_id,
+        )
+        .await;
     }
 
     // P39 v0.x wire-type follow-up — engine wire-through: `n > 1`
@@ -1599,31 +1595,29 @@ pub async fn completions(
     // `[DONE]` follows after all N finalize. The non-streaming
     // helper (`run_n_parallel_completions`, Task 4) is unchanged
     // and still powers `n > 1 + stream = false`.
-    if let Some(n) = req.n {
-        if n > 1 {
-            return if is_streaming {
-                stream_n_parallel_completions(
-                    state,
-                    req,
-                    prompt_tokens,
-                    prompt,
-                    max_tokens,
-                    correlation_id,
-                )
-                .await
-            } else {
-                run_n_parallel_completions(
-                    state,
-                    req,
-                    prompt_tokens,
-                    prompt,
-                    prompt_tokens_len,
-                    max_tokens,
-                    correlation_id,
-                )
-                .await
-            };
-        }
+    if req.n.is_some_and(|n| n > 1) {
+        return if is_streaming {
+            stream_n_parallel_completions(
+                state,
+                req,
+                prompt_tokens,
+                prompt,
+                max_tokens,
+                correlation_id,
+            )
+            .await
+        } else {
+            run_n_parallel_completions(
+                state,
+                req,
+                prompt_tokens,
+                prompt,
+                prompt_tokens_len,
+                max_tokens,
+                correlation_id,
+            )
+            .await
+        };
     }
 
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, max_tokens);
