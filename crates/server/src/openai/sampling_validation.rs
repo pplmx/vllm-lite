@@ -959,6 +959,27 @@ pub fn validate_completion_request_fields(
             ));
         }
     }
+    // RIL ISS-158: `stream: true` + `best_of > 1` is irreconcilable with
+    // SSE. `run_best_of` must spawn N candidates, rank by mean logprob,
+    // and return ONE — the ranking cannot stream incrementally — so a
+    // stream request was silently downgraded to a single JSON document
+    // (Content-Type application/json), and an OpenAI SSE-stream client
+    // waited for `data:` lines / `[DONE]` that never arrived and hung
+    // until timeout. Reject the combination up front (mirrors the
+    // `n > 1` × `best_of` / `echo` / `suffix` cross-field rejects above)
+    // rather than silently serving a shape the caller didn't ask for.
+    if req.stream == Some(true)
+        && let Some(b) = req.best_of
+        && b > 1
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "stream = true is not compatible with best_of > 1 (best_of returns a single ranked completion, which cannot stream; set best_of = 1 or stream = false)",
+                "invalid_request_error",
+            )),
+        ));
+    }
     // P38 v0.3 wire-type engine wire-through: stop sequences are
     // now accepted (tokenized + forwarded by populate_completion_sampling_params).
     // Per-string validation lives in `validate_stop_sequences` (max 4
@@ -3271,6 +3292,53 @@ mod tests {
             "error message must name n; got: {}",
             err.1.0.error.message
         );
+    }
+
+    #[test]
+    fn test_completions_stream_with_best_of_returns_400() {
+        // RIL ISS-158: stream:true + best_of>1 is a silent downgrade — the
+        // handler's best_of dispatch (run_best_of) returns a single JSON
+        // document with Content-Type application/json, so a client that
+        // requested an SSE stream waits for `data:` lines / `[DONE]` that
+        // never arrive and hangs until timeout. `best_of` semantically
+        // requires ranking N candidates before returning ONE, which is
+        // irreconcilable with streaming, so the combination must be
+        // rejected up front rather than silently degraded. Pinned so a
+        // future refactor can't reintroduce the silent fallback.
+        let mut req = completion_request_with_n(None);
+        req.stream = Some(true);
+        req.best_of = Some(2);
+        let err = validate_completion_request_fields(&req).unwrap_err();
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(
+            err.1.0.error.message.contains("stream"),
+            "error message must name stream; got: {}",
+            err.1.0.error.message
+        );
+        assert!(
+            err.1.0.error.message.contains("best_of"),
+            "error message must name best_of; got: {}",
+            err.1.0.error.message
+        );
+    }
+
+    #[test]
+    fn test_completions_stream_with_best_of_one_passes() {
+        // best_of = 1 (the default) with stream:true is fine — a single
+        // candidate can genuinely stream. Only best_of > 1 is rejected.
+        let mut req = completion_request_with_n(None);
+        req.stream = Some(true);
+        req.best_of = Some(1);
+        validate_completion_request_fields(&req).expect("stream + best_of = 1 must pass");
+    }
+
+    #[test]
+    fn test_completions_best_of_without_stream_passes() {
+        // Non-streaming best_of > 1 remains valid (ranked single result).
+        let mut req = completion_request_with_n(None);
+        req.stream = Some(false);
+        req.best_of = Some(5);
+        validate_completion_request_fields(&req).expect("non-streaming best_of > 1 must pass");
     }
 
     // RIL ISS-152: model-name conformance — a requested model that
