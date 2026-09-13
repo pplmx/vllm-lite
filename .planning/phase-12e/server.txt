@@ -1446,6 +1446,7 @@ pub struct vllm_server::security::tls::TlsConfig
 pub type vllm_server::api::EngineHandle = tokio::sync::mpsc::bounded::Sender<vllm_core::types::messages::EngineMessage>
 pub type vllm_server::openai::json::OpenaiJson<T>::Rejection = (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)
 pub vllm_server::api::HealthDetailResponse::kv_cache_usage_percent: core::option::Option<f32>
+pub vllm_server::api::HealthDetailResponse::model: core::option::Option<alloc::string::String>
 pub vllm_server::api::HealthDetailResponse::prefill_throughput: core::option::Option<f32>
 pub vllm_server::api::HealthDetailResponse::status: alloc::string::String
 pub vllm_server::api::HealthResponse::status: alloc::string::String
