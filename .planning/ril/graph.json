@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T22:12:08+00:00",
+  "updated_at": "2026-09-13T22:53:30+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7657,13 +7657,13 @@
     "ISS-128": {
       "id": "ISS-128",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "abandoned",
+      "version": 2,
       "created_at": "2026-09-13T03:26:12+00:00",
-      "updated_at": "2026-09-13T03:26:12+00:00",
-      "touched_round": 115,
+      "updated_at": "2026-09-13T22:53:30+00:00",
+      "touched_round": 117,
       "severity": 1,
-      "title": "Rust 1.88 deprecates AtomicU64::fetch_update (lock_free.rs:349) but try_update is unstable until 1.92+ (atomic_try_update #135894) - warning-only today (clippy -D correctness/suspicious/perf does not trip deprecated), so defer the rename as an MSRV-locked housekeeping item; keep fetch_update while MSRV=1.88"
+      "title": "ISS-128 abandoned (EV-124 refutes premise): AtomicU64::fetch_update is NOT deprecated in rustc 1.88 std (stable since 1.53, no #[deprecated] attr; schema note defers deprecation until try_update stabilizes); cargo build+clippy vllm-core emit zero warnings for lock_free.rs:353"
     },
     "ISS-129": {
       "id": "ISS-129",
@@ -8316,6 +8316,18 @@
       "touched_round": 116,
       "commit": "5968d40e",
       "title": "completions lifecycle logs + chat model field"
+    },
+    "EV-124": {
+      "id": "EV-124",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T22:49:25+00:00",
+      "updated_at": "2026-09-13T22:49:25+00:00",
+      "touched_round": 117,
+      "source": "rustc 1.88.0 std src atomic.rs:1287 (fetch_update stable since 1.53, no #[deprecated] attr; comment says deprecation deferred until try_update stabilizes)",
+      "confidence": 0.95,
+      "title": "ISS-128 premise false: fetch_update NOT deprecated in 1.88; cargo build+clippy vllm-core emit zero deprecation warnings on lock_free.rs:353"
     }
   },
   "edges": [
