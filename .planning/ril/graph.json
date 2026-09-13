@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 114,
+  "round": 115,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T00:26:22+00:00",
+  "updated_at": "2026-09-13T03:26:32+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2562,7 +2562,7 @@
       "version": 1,
       "created_at": "2026-08-10T11:42:18+00:00",
       "updated_at": "2026-08-10T11:42:18+00:00",
-      "touched_round": 109,
+      "touched_round": 115,
       "title": "vllm-server openai streaming SSE",
       "role": "chat/completions SSE 流式响应"
     },
@@ -7532,11 +7532,11 @@
     "ISS-123": {
       "id": "ISS-123",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-12T23:21:12+00:00",
-      "updated_at": "2026-09-12T23:21:12+00:00",
-      "touched_round": 109,
+      "updated_at": "2026-09-13T03:26:32+00:00",
+      "touched_round": 115,
       "severity": 2,
       "title": "ChatChunk::new and ChatChunk::new_usage_chunk stamp created per chunk via unix_now_secs() (types.rs) while their own doc says stream-start contract (types.rs:677) - finish vs usage chunks on the same stream can differ across a second boundary; n>1 intermediate finish events and the usage chunk use per-chunk now-times while the consolidated chunk uses the captured stream-epoch created (after ISS-122)"
     },
@@ -7627,6 +7627,43 @@
       "touched_round": 113,
       "title": "complete ISS-126 for n>1: zero-token candidates carry the assistant role marker on their intermediate-finish or consolidated-final delta; flag flipped after the finish delta so the consolidated chunk does not repeat it; 1 regression test",
       "commit": "6f98850d"
+    },
+    "TASK-145": {
+      "id": "TASK-145",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-09-13T03:10:28+00:00",
+      "updated_at": "2026-09-13T03:26:32+00:00",
+      "touched_round": 115,
+      "category": "correctness",
+      "severity": 2,
+      "title": "ChatChunk constructors must stamp the stream-start created (ISS-123): make ChatChunk::new/new_usage_chunk take an explicit created: i64 honoring the struct's documented stream-start contract; thread one captured created through all 7 chat.rs streaming call sites (n>1 already has it at 1541; capture one for n=1), add unit + integration regression tests",
+      "addresses": "ISS-123",
+      "lock_owner": "graph-eng-session",
+      "lock_until": "2026-09-13T04:11:06+00:00"
+    },
+    "CHG-145": {
+      "id": "CHG-145",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T03:26:12+00:00",
+      "updated_at": "2026-09-13T03:26:12+00:00",
+      "touched_round": 115,
+      "commit": "4fe1d574",
+      "title": "ChatChunk::new/new_usage_chunk take explicit created: i64 (stream-start timestamp contract); n=1 chat path captures one stream-epoch created; unit + integration regression tests"
+    },
+    "ISS-128": {
+      "id": "ISS-128",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T03:26:12+00:00",
+      "updated_at": "2026-09-13T03:26:12+00:00",
+      "touched_round": 115,
+      "severity": 1,
+      "title": "Rust 1.88 deprecates AtomicU64::fetch_update (lock_free.rs:349) but try_update is unstable until 1.92+ (atomic_try_update #135894) - warning-only today (clippy -D correctness/suspicious/perf does not trip deprecated), so defer the rename as an MSRV-locked housekeeping item; keep fetch_update while MSRV=1.88"
     }
   },
   "edges": [
@@ -11079,6 +11116,30 @@
       "to": "ISS-126",
       "type": "resolves",
       "created_at": "2026-09-13T00:26:22+00:00"
+    },
+    {
+      "from": "TASK-145",
+      "to": "ISS-123",
+      "type": "addresses",
+      "created_at": "2026-09-13T03:11:34+00:00"
+    },
+    {
+      "from": "CHG-145",
+      "to": "ISS-123",
+      "type": "resolves",
+      "created_at": "2026-09-13T03:26:32+00:00"
+    },
+    {
+      "from": "CHG-145",
+      "to": "TASK-145",
+      "type": "implements",
+      "created_at": "2026-09-13T03:26:32+00:00"
+    },
+    {
+      "from": "ISS-128",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-09-13T03:26:32+00:00"
     }
   ]
 }
