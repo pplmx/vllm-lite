@@ -94,6 +94,11 @@ impl Tokenizer {
             source: e,
         })?;
         let vocab_size = tokenizer.get_vocab_size(true);
+        // RIL ISS-147: derive the model id from the `--model` directory
+        // (the parent of `tokenizer.json`), never a hardcoded constant —
+        // a fabricated identity would make `/v1/models` and
+        // `/health/details` advertise the wrong model to operations.
+        let model_name = derive_model_name_from_path(path);
 
         let mut special_tokens = Vec::new();
         for id in tokenizer.get_added_tokens_decoder().keys() {
@@ -118,7 +123,7 @@ impl Tokenizer {
             inner: Some(Box::new(tokenizer)),
             vocab_size,
             special_tokens,
-            model_name: Some("Qwen3.5-0.8B".to_string()),
+            model_name,
         })
     }
 
@@ -185,6 +190,20 @@ impl Tokenizer {
     pub fn model_name(&self) -> Option<String> {
         self.model_name.clone()
     }
+}
+
+/// Derive the model id from a `tokenizer.json` path (RIL ISS-147).
+///
+/// `Tokenizer::from_file` is given `<model_dir>/tokenizer.json`, so the
+/// parent directory's basename is exactly the `--model` directory the
+/// operator pointed at — the honest identity to report through
+/// `/v1/models` and `/health/details`. Returns `None` for a bare
+/// filename with no parent (unusual; defensive).
+fn derive_model_name_from_path(path: &str) -> Option<String> {
+    std::path::Path::new(path)
+        .parent()
+        .and_then(|dir| dir.file_name())
+        .map(|name| name.to_string_lossy().into_owned())
 }
 
 impl Default for Tokenizer {
@@ -286,6 +305,36 @@ mod tests {
     fn test_tokenizer_vocab_size() {
         let tokenizer = Tokenizer::new();
         assert_eq!(tokenizer.vocab_size(), 151_936);
+    }
+
+    // RIL ISS-147: the model id reported by `Tokenizer::from_file` must
+    // be derived from the model directory (the `--model` dir the operator
+    // pointed at), never a hardcoded constant — the pre-fix tokenizer
+    // reported `"Qwen3.5-0.8B"` for EVERY real checkpoint (a Llama or
+    // Mistral deploy advertised a fabricated Qwen id to `/v1/models`,
+    // `/v1/models/{id}`, and `/health/details`). The derivation helper is
+    // tested directly (no tokenizer.json needed on disk).
+    #[test]
+    fn test_derive_model_name_from_path() {
+        // A tokenizer inside a named model dir → the dir's basename.
+        assert_eq!(
+            crate::tokenizer::derive_model_name_from_path(
+                "/models/Qwen2.5-0.5B-Instruct/tokenizer.json"
+            ),
+            Some("Qwen2.5-0.5B-Instruct".to_string())
+        );
+        // A relative model dir works too.
+        assert_eq!(
+            crate::tokenizer::derive_model_name_from_path(
+                "checkpoints/llama-3.2-1b/tokenizer.json"
+            ),
+            Some("llama-3.2-1b".to_string())
+        );
+        // A bare filename (no directory) has no derivable id.
+        assert_eq!(
+            crate::tokenizer::derive_model_name_from_path("tokenizer.json"),
+            None
+        );
     }
 
     #[test]
