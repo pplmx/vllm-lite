@@ -44,7 +44,15 @@ pub struct HealthResponse {
 /// `Device initialized` startup log. (RIL ISS-092)
 #[derive(Debug, Serialize)]
 pub struct HealthDetailResponse {
+    /// Readiness status derived from the `HealthChecker`
+    /// (`"ok"` / `"not_ready"` / `"unhealthy"`) — a draining pod reports
+    /// `not_ready` (RIL ISS-141). Pre-fix this was hardcoded `"ok"`.
     pub status: String,
+    /// Loaded model id from the tokenizer's name; absent from the wire
+    /// when the fallback tokenizer exposes none (no null lie, RIL
+    /// ISS-141).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     /// Mean prefill-phase throughput in tokens per second over the
     /// recent sampling window, when the engine answered `GetMetrics`.
     /// `None` when the engine was mid-step and the bounded wait elapsed.
@@ -92,8 +100,18 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
     // hardcoded `true` and `prefill_throughput` mislabeled as a "% util")
     // are not emitted at all — an ops dashboard reading `gpu_utilization`
     // as a percentage saw a busy server report 0% forever.
+    //
+    // RIL ISS-141: `status` comes from the real HealthChecker readiness
+    // (a draining pod reports `not_ready`; pre-fix it was hardcoded "ok"),
+    // and the loaded model id is exposed when the tokenizer names one.
+    // `model` stays `None` for a fallback tokenizer (absent, not a null lie).
     Json(HealthDetailResponse {
-        status: "ok".to_string(),
+        status: state
+            .health
+            .read()
+            .map_or("unhealthy", |h| h.check_readiness().as_str())
+            .to_string(),
+        model: state.tokenizer.model_name(),
         prefill_throughput: Some(metrics.prefill_throughput as f32),
         kv_cache_usage_percent: Some(metrics.kv_cache_usage_percent as f32),
     })

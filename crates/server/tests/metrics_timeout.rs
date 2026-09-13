@@ -105,6 +105,49 @@ async fn metrics_endpoint_returns_promptly_when_engine_unresponsive() {
     );
 }
 
+/// RIL ISS-141: `/health/details` status must reflect the real
+/// HealthChecker readiness — a draining pod (`mark_not_ready` via the
+/// SIGTERM/shutdown path) must NOT keep reporting `"status":"ok"` while
+/// `/health/ready` returns 503. Pre-fix `status` was hardcoded `"ok"`.
+#[tokio::test]
+async fn health_details_status_reflects_readiness() {
+    let state = api_state(vllm_model::config::Architecture::Qwen3);
+    // Simulate graceful shutdown flipping readiness off (through the
+    // Arc<RwLock> interior — no binding mutability needed).
+    state.health.write().unwrap().mark_not_ready();
+    let audit = std::sync::Arc::new(vllm_server::security::audit::AuditLogger::new(1000));
+    let app = vllm_server::app::build_app(state, None, audit, &CorsConfig::default());
+
+    let (status, body) = collect(get(&app, "/health/details").await).await;
+    assert_eq!(
+        status,
+        axum::http::StatusCode::OK,
+        "endpoint itself still serves 200"
+    );
+    assert!(
+        body.contains("\"status\":\"not_ready\""),
+        "draining pod must report not_ready, got: {body}"
+    );
+}
+
+/// RIL ISS-141: a ready server reports `"ok"` (and the loaded model id
+/// when the tokenizer exposes one — the fixture's default tokenizer has
+/// no name, so the field is honestly ABSENT, not a null lie).
+#[tokio::test]
+async fn health_details_reports_ok_and_omits_unknown_model() {
+    let (app, _engine_rx) = app_with_dead_engine();
+    let (status, body) = collect(get(&app, "/health/details").await).await;
+    assert_eq!(status, axum::http::StatusCode::OK);
+    assert!(
+        body.contains("\"status\":\"ok\""),
+        "ready server must report ok, got: {body}"
+    );
+    assert!(
+        !body.contains("\"model\":null"),
+        "unknown model must be ABSENT (no null lie, RIL ISS-141), got: {body}"
+    );
+}
+
 /// RIL ISS-092: `/health/details` must not report fabricated GPU state.
 ///
 /// The pre-fix response carried `gpu_available: true` (hardcoded) and
