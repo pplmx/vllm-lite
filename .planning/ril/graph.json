@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 112,
+  "round": 113,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-12T23:53:07+00:00",
+  "updated_at": "2026-09-13T00:06:05+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7594,6 +7594,28 @@
       "touched_round": 111,
       "title": "chat n=1 streaming emits role only on the first delta chunk (role_emitted flag in the unfold state; zero-token finish still carries assistant); 1 regression test",
       "commit": "cac660bf"
+    },
+    "ISS-127": {
+      "id": "ISS-127",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T00:06:05+00:00",
+      "updated_at": "2026-09-13T00:06:05+00:00",
+      "touched_round": 112,
+      "severity": 1,
+      "title": "inference_latency_ns histogram is write-only: recorded on every build_batch into a DashMap that no exporter, debug snapshot, or metrics snapshot ever reads (only a unit test touches it) while the same step paths already feed the exposed avg_latency_ms/p50/p90/p99 gauges"
+    },
+    "CHG-143": {
+      "id": "CHG-143",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T00:06:05+00:00",
+      "updated_at": "2026-09-13T00:06:05+00:00",
+      "touched_round": 112,
+      "title": "remove write-only inference_latency_ns histogram end-to-end (method, field, call site, unit test, CHANGELOG public-api entry)",
+      "commit": "00030299"
     }
   },
   "edges": [
@@ -11034,6 +11056,12 @@
       "to": "ISS-126",
       "type": "resolves",
       "created_at": "2026-09-12T23:53:07+00:00"
+    },
+    {
+      "from": "CHG-143",
+      "to": "ISS-127",
+      "type": "resolves",
+      "created_at": "2026-09-13T00:06:05+00:00"
     }
   ]
 }
