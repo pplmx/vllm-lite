@@ -36,8 +36,15 @@ async fn main() -> Result<()> {
     });
 
     if let Err(errors) = app_config.validate() {
+        // RIL ISS-148: this runs BEFORE `logging::init_logging` installs a
+        // subscriber (main.rs init_logging is below the validate gate), so
+        // `tracing::error!` would drop the messages — the operator saw a
+        // bare exit code 78 with no diagnostic. stderr is the actionable
+        // channel here, mirroring the `--config` load-error branch above
+        // (ISS-132): print the violations the way `vllm config validate`
+        // does, then exit the config-error family.
         for err in &errors.0 {
-            tracing::error!(error = %err, "Config validation failed");
+            eprintln!("invalid: {err}");
         }
         // Distinct exit code (78) for config errors — distinguishable from
         // generic startup failures in supervisor restart policies.

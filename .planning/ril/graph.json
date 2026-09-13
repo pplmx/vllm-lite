@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 116,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T12:16:13+00:00",
+  "updated_at": "2026-09-13T12:40:15+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -33,7 +33,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 52,
+      "touched_round": 116,
       "title": "vllm-model",
       "role": "model architectures, kernels, paged tensor store"
     },
@@ -8117,6 +8117,28 @@
       "touched_round": 116,
       "commit": "fc288ae7",
       "title": "Batch get_all_jobs newest-first deterministic"
+    },
+    "ISS-147": {
+      "id": "ISS-147",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T12:40:15+00:00",
+      "updated_at": "2026-09-13T12:40:15+00:00",
+      "touched_round": 116,
+      "title": "Tokenizer::from_file hardcodes model_name 'Qwen3.5-0.8B' for every real checkpoint — /v1/models, /v1/models/{id}, /health/details advertise a fabricated id",
+      "severity": 8
+    },
+    "CHG-157": {
+      "id": "CHG-157",
+      "type": "change",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T12:40:15+00:00",
+      "updated_at": "2026-09-13T12:40:15+00:00",
+      "touched_round": 116,
+      "commit": "b58bfabb",
+      "title": "Tokenizer derives model id from --model dir"
     }
   },
   "edges": [
@@ -11857,6 +11879,18 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-09-13T12:16:13+00:00"
+    },
+    {
+      "from": "CHG-157",
+      "to": "ISS-147",
+      "type": "resolves",
+      "created_at": "2026-09-13T12:40:15+00:00"
+    },
+    {
+      "from": "ISS-147",
+      "to": "COMP-003",
+      "type": "located_in",
+      "created_at": "2026-09-13T12:40:15+00:00"
     }
   ]
 }
