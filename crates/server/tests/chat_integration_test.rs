@@ -411,6 +411,101 @@ async fn test_chat_streaming_role_only_on_first_chunk() {
     }
 }
 
+/// RIL ISS-126 (n > 1 follow-up): a candidate that finalizes with ZERO
+/// token chunks never emits a `role` marker — its finish delta is its
+/// first (and only) delta, and pre-fix the intermediate-finish chunk and
+/// the consolidated final chunk both carried `role: ""` for it. Clients
+/// that initialise a choice's author from the first delta saw no author.
+/// Regression: drive `n = 2` through a zero-token mock and assert every
+/// candidate's first delta carries `role: "assistant"` (and no candidate
+/// is left without a marker).
+#[tokio::test]
+async fn test_chat_streaming_n_gt_one_zero_token_candidates_carry_role_marker() {
+    // Empty reply → both candidates emit ZERO tokens: no token chunks, only
+    // finish events → intermediate finish (candidate 0) + consolidated final
+    // chunk (both candidates) + [DONE].
+    let (engine_tx, _handle) = spawn_mock_engine(vec![]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "stream": true,
+        "n": 2,
+        "max_tokens": 3,
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+
+    // Collect, per candidate index, every delta role seen across the stream.
+    let mut roles_by_index: std::collections::BTreeMap<i64, Vec<String>> =
+        std::collections::BTreeMap::default();
+    for event in body_str.split("\n\n").filter(|s| !s.is_empty()) {
+        if event.contains("[DONE]") {
+            continue;
+        }
+        let data = event.strip_prefix("data:").unwrap_or(event).trim();
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(data) {
+            if let Some(choices) = v["choices"].as_array() {
+                for choice in choices {
+                    if let Some(index) = choice["index"].as_i64()
+                        && let Some(role) = choice["delta"]["role"].as_str()
+                    {
+                        roles_by_index
+                            .entry(index)
+                            .or_default()
+                            .push(role.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    assert_eq!(
+        roles_by_index.keys().copied().collect::<Vec<_>>(),
+        vec![0, 1],
+        "both zero-token candidates must appear in the stream (via finish deltas); body: {body_str}"
+    );
+    for index in [0_i64, 1] {
+        let roles = roles_by_index
+            .get(&index)
+            .unwrap_or_else(|| panic!("candidate {index} never appeared in the stream"));
+        assert!(
+            roles.contains(&"assistant".to_string()),
+            "candidate {index}'s first (and only) delta must carry role=assistant (RIL ISS-126), got: {roles:?}"
+        );
+    }
+}
+
 /// RIL ISS-111 follow-up: the OpenAI streaming-usage contract
 /// (`stream_options.include_usage`). When `include_usage: true`, the
 /// stream must emit one extra final chunk — immediately BEFORE `[DONE]` —

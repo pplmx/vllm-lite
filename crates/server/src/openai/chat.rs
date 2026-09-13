@@ -1722,7 +1722,19 @@ async fn stream_n_parallel_chat(
                                                 } else {
                                                     state.decoders[i].flush(&state.tokenizer)
                                                 },
-                                                "role": "",
+                                                // RIL ISS-126 follow-up: the
+                                                // consolidated chunk is the
+                                                // ONLY delta a zero-token
+                                                // candidate ever gets (roles
+                                                // of token-emitting candidates
+                                                // were set on their earlier
+                                                // token chunks) — carry the
+                                                // `assistant` marker for those.
+                                                "role": if state.first_emitted[i] {
+                                                    ""
+                                                } else {
+                                                    "assistant"
+                                                },
                                             },
                                             "finish_reason": reason_str,
                                         })
@@ -1764,7 +1776,19 @@ async fn stream_n_parallel_chat(
                                     ChatChunkChoice {
                                         index: index as i32,
                                         delta: ChatMessage {
-                                            role: String::new(),
+                                            // RIL ISS-126 follow-up: a
+                                            // candidate that finalized with
+                                            // ZERO token chunks has this
+                                            // finish delta as its first (and
+                                            // only) delta — it must carry the
+                                            // `assistant` role marker like any
+                                            // first delta. Candidates that
+                                            // already emitted tokens carry "".
+                                            role: if state.first_emitted[index] {
+                                                String::new()
+                                            } else {
+                                                "assistant".to_string()
+                                            },
                                             // RIL ISS-105: preserve the
                                             // candidate's held-back tail.
                                             content: tail,
@@ -1777,6 +1801,11 @@ async fn stream_n_parallel_chat(
                                 let sse_payload = serde_json::to_string(&chunk)
                                     // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
                                     .expect("Failed to serialize chat chunk");
+                                // RIL ISS-126: this finish delta was this
+                                // candidate's first (zero-token) delta, so its
+                                // role marker is now spent — the consolidated
+                                // chunk must not repeat it.
+                                state.first_emitted[index] = true;
                                 Some((Ok(Event::default().data(sse_payload)), state))
                             }
                         }
