@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 116,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T14:46:19+00:00",
+  "updated_at": "2026-09-13T15:02:29+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8272,6 +8272,28 @@
       "touched_round": 116,
       "commit": "3aa41323",
       "title": "vllm subcommand help descriptions"
+    },
+    "ISS-154": {
+      "id": "ISS-154",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T15:02:29+00:00",
+      "updated_at": "2026-09-13T15:02:29+00:00",
+      "touched_round": 116,
+      "title": "CLI range limits (max_batch_size<=8192, tp<=64, max_waiting_batches 1..100, max_model_len<=4M) bypassed on the YAML config path — validate() only checked >0 with no upper bounds",
+      "severity": 6
+    },
+    "CHG-163": {
+      "id": "CHG-163",
+      "type": "change",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T15:02:29+00:00",
+      "updated_at": "2026-09-13T15:02:29+00:00",
+      "touched_round": 116,
+      "commit": "388c9c52",
+      "title": "CLI-parity range bounds on YAML config path"
     }
   },
   "edges": [
@@ -12102,6 +12124,18 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-09-13T14:46:19+00:00"
+    },
+    {
+      "from": "CHG-163",
+      "to": "ISS-154",
+      "type": "resolves",
+      "created_at": "2026-09-13T15:02:29+00:00"
+    },
+    {
+      "from": "ISS-154",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T15:02:29+00:00"
     }
   ]
 }
