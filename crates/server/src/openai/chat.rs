@@ -561,6 +561,7 @@ async fn handle_chat(
 
     tracing::info!(
         request_id = %request_id,
+        model = %req.model,
         user = ?req.user,
         response_format = ?req.response_format,
         seed = ?req.seed,
@@ -681,6 +682,7 @@ fn assemble_chat_response(
 
     tracing::info!(
         request_id = %request_id,
+        model = %req.model,
         user = ?req.user,
         response_format = ?req.response_format,
         seed = ?req.seed,

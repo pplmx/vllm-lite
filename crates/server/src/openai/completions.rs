@@ -1400,6 +1400,19 @@ async fn run_best_of(
         usage,
     );
 
+    // RIL ISS-155: completion lifecycle parity with chat's
+    // "Request completed" — `model` + output tokens so a best_of
+    // completion is attributable in logs. The best_of path is
+    // `run_best_of`, which has no shared timer, so latency is left to
+    // the streaming path's own... (the `start` timer lives in the
+    // caller — see the single-shot path for duration).
+    tracing::info!(
+        request_id = %correlation_id.0,
+        model = ?response_model(&req, &state),
+        best_of_candidates = n,
+        output_tokens = best_tokens.len(),
+        "Request completed"
+    );
     Ok(Json(response).into_response())
 }
 
@@ -1510,6 +1523,21 @@ pub async fn completions(
     let prompt_tokens = state.tokenizer.encode(&prompt);
     let prompt_tokens_len = prompt_tokens.len();
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
+
+    // RIL ISS-155: log every `/v1/completions` request start with the
+    // same structured fields as the chat handler — `model` (the most
+    // important field for attributing output), the correlation id, and
+    // the prompt-token count. Pre-fix the legacy endpoint had ZERO
+    // request lifecycle logs (only the stop-sequence warning), so
+    // debugging a completions quality/regression required re-running.
+    tracing::info!(
+        request_id = %correlation_id.0,
+        model = ?response_model(&req, &state),
+        stream = is_streaming,
+        prompt_tokens = prompt_tokens_len,
+        max_tokens = max_tokens,
+        "Request started"
+    );
 
     // Production-readiness §4: same context-length gate as the chat handler.
     super::chat::check_context_length(prompt_tokens_len, max_tokens, state.max_model_len)?;
@@ -1965,6 +1993,15 @@ pub async fn completions(
         response_model(&req, &state),
         vec![choice],
         usage,
+    );
+
+    // RIL ISS-155: single-shot non-streaming completion lifecycle log
+    // (parity with chat's "Request completed").
+    tracing::info!(
+        request_id = %correlation_id.0,
+        model = ?response_model(&req, &state),
+        output_tokens = tokens.len(),
+        "Request completed"
     );
 
     Ok(Json(response).into_response())
