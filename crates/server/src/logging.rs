@@ -50,7 +50,17 @@ pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
     let subscriber = tracing_subscriber::registry().with(env_filter);
 
     if let Some(dir) = log_dir {
-        std::fs::create_dir_all(&dir).ok();
+        // RIL ISS-150: fail fast when the log directory can't be created
+        // instead of panicking deep inside `RollingFileAppender::new` with
+        // an init stack trace and exit 101. `create_dir_all(...).ok()` used
+        // to swallow the error here, so a typo'd `--log-dir` (parent is a
+        // file, or no write permission) turned a config mistake into a raw
+        // panic. stderr is the actionable channel (called before/without
+        // tracing attached to a file yet).
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            eprintln!("log dir error: {}", e);
+            std::process::exit(1);
+        }
         let file_appender = RollingFileAppender::new(Rotation::DAILY, dir, "vllm-lite.log");
         let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 

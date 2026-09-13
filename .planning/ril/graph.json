@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 116,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T12:40:15+00:00",
+  "updated_at": "2026-09-13T12:49:26+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8139,6 +8139,28 @@
       "touched_round": 116,
       "commit": "b58bfabb",
       "title": "Tokenizer derives model id from --model dir"
+    },
+    "ISS-148": {
+      "id": "ISS-148",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T12:49:25+00:00",
+      "updated_at": "2026-09-13T12:49:25+00:00",
+      "touched_round": 116,
+      "title": "Semantic config-validation failures exit code 78 silently — tracing::error! runs before init_logging, so violations are dropped (supervisor sees exit code only)",
+      "severity": 8
+    },
+    "CHG-158": {
+      "id": "CHG-158",
+      "type": "change",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T12:49:25+00:00",
+      "updated_at": "2026-09-13T12:49:25+00:00",
+      "touched_round": 116,
+      "commit": "38902fa5",
+      "title": "eprintln violations before exit 78"
     }
   },
   "edges": [
@@ -11891,6 +11913,18 @@
       "to": "COMP-003",
       "type": "located_in",
       "created_at": "2026-09-13T12:40:15+00:00"
+    },
+    {
+      "from": "CHG-158",
+      "to": "ISS-148",
+      "type": "resolves",
+      "created_at": "2026-09-13T12:49:26+00:00"
+    },
+    {
+      "from": "ISS-148",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T12:49:26+00:00"
     }
   ]
 }

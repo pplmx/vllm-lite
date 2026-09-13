@@ -130,8 +130,13 @@ impl ModelLoaderInner {
         allow_stub: bool,
     ) -> Result<Self> {
         let config_path = Path::new(&model_dir).join("config.json");
-        let content = std::fs::read_to_string(&config_path)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {e}")))?;
+        // RIL ISS-149: name the config file in the error — "Failed to read
+        // config" (no path) left the operator guessing which config on a
+        // typo'd / missing `--model` dir, the single most common startup
+        // mistake ("some config" ≠ "this model's config.json").
+        let content = std::fs::read_to_string(&config_path).map_err(|e| {
+            candle_core::Error::msg(format!("Failed to read {}: {e}", config_path.display()))
+        })?;
         let config_json: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {e}")))?;
 
@@ -254,8 +259,10 @@ impl ModelLoader {
     #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
     pub(crate) fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         let config_path = Path::new(&self.inner.model_dir).join("config.json");
-        let content = std::fs::read_to_string(config_path)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {e}")))?;
+        // RIL ISS-149: name the file in the error (see `ModelLoaderInner::new`).
+        let content = std::fs::read_to_string(&config_path).map_err(|e| {
+            candle_core::Error::msg(format!("Failed to read {}: {e}", config_path.display()))
+        })?;
         serde_json::from_str(&content)
             .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {e}")))
     }
