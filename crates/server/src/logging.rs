@@ -58,7 +58,7 @@ pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
         // panic. stderr is the actionable channel (called before/without
         // tracing attached to a file yet).
         if let Err(e) = std::fs::create_dir_all(&dir) {
-            eprintln!("log dir error: {}", e);
+            eprintln!("log dir error: {e}");
             std::process::exit(1);
         }
         let file_appender = RollingFileAppender::new(Rotation::DAILY, dir, "vllm-lite.log");
