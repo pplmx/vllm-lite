@@ -26,7 +26,6 @@ impl core::clone::Clone for vllm_core::scheduler::phase_scheduler::SchedulerStat
 impl core::clone::Clone for vllm_core::scheduler::policy::trait_def::PriorityScore
 impl core::clone::Clone for vllm_core::scheduler::policy::trait_def::SchedulingContext
 impl core::clone::Clone for vllm_core::scheduler::radix_cache::tree::PrefixMatchResult
-impl core::clone::Clone for vllm_core::scheduler::stats::SchedulerStats
 impl core::clone::Clone for vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 impl core::clone::Clone for vllm_core::speculative::adaptive::DraftAccuracyTracker
 impl core::clone::Clone for vllm_core::speculative::config::SpeculationConfig
@@ -115,7 +114,6 @@ impl core::default::Default for vllm_core::scheduler::policy::sjf::SjfPolicy
 impl core::default::Default for vllm_core::scheduler::radix_cache::node::RadixNode
 impl core::default::Default for vllm_core::scheduler::radix_cache::tree::RadixTree
 impl core::default::Default for vllm_core::scheduler::request_queue::RequestQueue
-impl core::default::Default for vllm_core::scheduler::stats::SchedulerStats
 impl core::default::Default for vllm_core::speculative::config::SpeculationConfig
 impl core::default::Default for vllm_core::speculative::config::SpeculationConfigBuilder
 impl core::default::Default for vllm_core::speculative::memory_budget::MemoryBudget
@@ -187,7 +185,6 @@ impl core::fmt::Debug for vllm_core::scheduler::radix_cache::node::RadixNode
 impl core::fmt::Debug for vllm_core::scheduler::radix_cache::tree::PrefixMatchResult
 impl core::fmt::Debug for vllm_core::scheduler::radix_cache::tree::RadixTree
 impl core::fmt::Debug for vllm_core::scheduler::request_queue::RequestQueue
-impl core::fmt::Debug for vllm_core::scheduler::stats::SchedulerStats
 impl core::fmt::Debug for vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 impl core::fmt::Debug for vllm_core::speculative::adaptive::DraftAccuracyTracker
 impl core::fmt::Debug for vllm_core::speculative::config::SpeculationConfig
@@ -245,7 +242,7 @@ impl core::marker::Freeze for vllm_core::error::EngineError
 impl core::marker::Freeze for vllm_core::metrics::collector::DraftMetricsSnapshot
 impl core::marker::Freeze for vllm_core::metrics::exporter::InMemoryMetricsExporter
 impl core::marker::Freeze for vllm_core::metrics::exporter::MetricsError
-impl core::marker::Freeze for vllm_core::metrics::LockFreeMetrics
+impl !core::marker::Freeze for vllm_core::metrics::LockFreeMetrics
 impl core::marker::Freeze for vllm_core::metrics::PrometheusExporter
 impl core::marker::Freeze for vllm_core::MetricsSnapshot
 impl core::marker::Freeze for vllm_core::metrics::types::MetricLabels
@@ -288,7 +285,6 @@ impl core::marker::Freeze for vllm_core::scheduler::radix_cache::node::RadixNode
 impl core::marker::Freeze for vllm_core::scheduler::radix_cache::tree::PrefixMatchResult
 impl core::marker::Freeze for vllm_core::scheduler::radix_cache::tree::RadixTree
 impl core::marker::Freeze for vllm_core::scheduler::request_queue::RequestQueue
-impl core::marker::Freeze for vllm_core::scheduler::stats::SchedulerStats
 impl core::marker::Freeze for vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 impl core::marker::Freeze for vllm_core::speculative::adaptive::DraftAccuracyTracker
 impl core::marker::Freeze for vllm_core::speculative::config::SpeculationConfig
@@ -371,7 +367,6 @@ impl core::marker::Send for vllm_core::scheduler::radix_cache::node::RadixNode
 impl core::marker::Send for vllm_core::scheduler::radix_cache::tree::PrefixMatchResult
 impl core::marker::Send for vllm_core::scheduler::radix_cache::tree::RadixTree
 impl core::marker::Send for vllm_core::scheduler::request_queue::RequestQueue
-impl core::marker::Send for vllm_core::scheduler::stats::SchedulerStats
 impl core::marker::Send for vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 impl core::marker::Send for vllm_core::speculative::adaptive::DraftAccuracyTracker
 impl core::marker::Send for vllm_core::speculative::config::SpeculationConfig
@@ -467,7 +462,6 @@ impl core::marker::Sync for vllm_core::scheduler::radix_cache::node::RadixNode
 impl core::marker::Sync for vllm_core::scheduler::radix_cache::tree::PrefixMatchResult
 impl core::marker::Sync for vllm_core::scheduler::radix_cache::tree::RadixTree
 impl core::marker::Sync for vllm_core::scheduler::request_queue::RequestQueue
-impl core::marker::Sync for vllm_core::scheduler::stats::SchedulerStats
 impl core::marker::Sync for vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 impl core::marker::Sync for vllm_core::speculative::adaptive::DraftAccuracyTracker
 impl core::marker::Sync for vllm_core::speculative::config::SpeculationConfig
@@ -550,7 +544,6 @@ impl core::marker::Unpin for vllm_core::scheduler::radix_cache::node::RadixNode
 impl core::marker::Unpin for vllm_core::scheduler::radix_cache::tree::PrefixMatchResult
 impl core::marker::Unpin for vllm_core::scheduler::radix_cache::tree::RadixTree
 impl core::marker::Unpin for vllm_core::scheduler::request_queue::RequestQueue
-impl core::marker::Unpin for vllm_core::scheduler::stats::SchedulerStats
 impl core::marker::Unpin for vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 impl core::marker::Unpin for vllm_core::speculative::adaptive::DraftAccuracyTracker
 impl core::marker::Unpin for vllm_core::speculative::config::SpeculationConfig
@@ -633,7 +626,6 @@ impl core::marker::UnsafeUnpin for vllm_core::scheduler::radix_cache::node::Radi
 impl core::marker::UnsafeUnpin for vllm_core::scheduler::radix_cache::tree::PrefixMatchResult
 impl core::marker::UnsafeUnpin for vllm_core::scheduler::radix_cache::tree::RadixTree
 impl core::marker::UnsafeUnpin for vllm_core::scheduler::request_queue::RequestQueue
-impl core::marker::UnsafeUnpin for vllm_core::scheduler::stats::SchedulerStats
 impl core::marker::UnsafeUnpin for vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 impl core::marker::UnsafeUnpin for vllm_core::speculative::adaptive::DraftAccuracyTracker
 impl core::marker::UnsafeUnpin for vllm_core::speculative::config::SpeculationConfig
@@ -673,7 +665,7 @@ impl !core::panic::unwind_safe::RefUnwindSafe for vllm_core::error::EngineError
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::metrics::collector::DraftMetricsSnapshot
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::metrics::exporter::InMemoryMetricsExporter
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::metrics::exporter::MetricsError
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::metrics::LockFreeMetrics
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_core::metrics::LockFreeMetrics
 impl !core::panic::unwind_safe::RefUnwindSafe for vllm_core::metrics::PrometheusExporter
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::MetricsSnapshot
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::metrics::types::MetricLabels
@@ -716,7 +708,6 @@ impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::scheduler::radix_cac
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::scheduler::radix_cache::tree::PrefixMatchResult
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::scheduler::radix_cache::tree::RadixTree
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::scheduler::request_queue::RequestQueue
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::scheduler::stats::SchedulerStats
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::speculative::adaptive::DraftAccuracyTracker
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::speculative::config::SpeculationConfig
@@ -799,7 +790,6 @@ impl core::panic::unwind_safe::UnwindSafe for vllm_core::scheduler::radix_cache:
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::scheduler::radix_cache::tree::PrefixMatchResult
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::scheduler::radix_cache::tree::RadixTree
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::scheduler::request_queue::RequestQueue
-impl core::panic::unwind_safe::UnwindSafe for vllm_core::scheduler::stats::SchedulerStats
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::speculative::adaptive::DraftAccuracyTracker
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::speculative::config::SpeculationConfig
@@ -897,7 +887,6 @@ impl vllm_core::scheduler::policy::trait_def::SchedulingPolicy for vllm_core::sc
 impl vllm_core::scheduler::radix_cache::node::RadixNode
 impl vllm_core::scheduler::radix_cache::tree::RadixTree
 impl vllm_core::scheduler::request_queue::RequestQueue
-impl vllm_core::scheduler::stats::SchedulerStats
 impl vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 impl vllm_core::speculative::adaptive::DraftAccuracyTracker
 impl vllm_core::speculative::config::SpeculationConfig
@@ -975,10 +964,6 @@ pub const fn vllm_core::scheduler::policy::priority::PriorityPolicy::new(f32, u8
 pub const fn vllm_core::scheduler::policy::sjf::SjfPolicy::new(f32, f32) -> Self
 pub const fn vllm_core::scheduler::radix_cache::tree::RadixTree::is_empty(&self) -> bool
 pub const fn vllm_core::scheduler::radix_cache::tree::RadixTree::len(&self) -> usize
-pub const fn vllm_core::scheduler::stats::SchedulerStats::record_decode(&mut self)
-pub const fn vllm_core::scheduler::stats::SchedulerStats::record_eviction(&mut self)
-pub const fn vllm_core::scheduler::stats::SchedulerStats::record_preemption(&mut self)
-pub const fn vllm_core::scheduler::stats::SchedulerStats::record_prefill(&mut self)
 pub const fn vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder::accuracy_tracker(&self) -> &vllm_core::speculative::adaptive::DraftAccuracyTracker
 pub const fn vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder::current_max_draft_tokens(&self) -> usize
 pub const fn vllm_core::speculative::config::SpeculationConfigBuilder::draft_count(self, usize) -> Self
@@ -1125,7 +1110,6 @@ pub fn vllm_core::EnhancedMetricsCollector::record_batch_size(&self, usize)
 pub fn vllm_core::EnhancedMetricsCollector::record_cuda_graph_hit(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_cuda_graph_miss(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_dropped_token(&self)
-pub fn vllm_core::EnhancedMetricsCollector::record_inference_latency(&self, u64)
 pub fn vllm_core::EnhancedMetricsCollector::record_kv_cache_usage(&self, u64, u64)
 pub fn vllm_core::EnhancedMetricsCollector::record_latency(&self, f64)
 pub fn vllm_core::EnhancedMetricsCollector::record_packing_efficiency(&self, f64)
@@ -1136,7 +1120,6 @@ pub fn vllm_core::EnhancedMetricsCollector::record_prefix_cache_request(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_request(&self)
 pub fn vllm_core::EnhancedMetricsCollector::record_scheduler_wait_time(&self, f64)
 pub fn vllm_core::EnhancedMetricsCollector::record_speculative_adjustment(&self)
-pub fn vllm_core::EnhancedMetricsCollector::record_speculative_efficiency(&self, f64)
 pub fn vllm_core::EnhancedMetricsCollector::record_tokens(&self, u64)
 pub fn vllm_core::EnhancedMetricsCollector::remove_per_request(&self, vllm_traits::types::SeqId)
 pub fn vllm_core::EnhancedMetricsCollector::set_active_sequences(&self, u64)
@@ -1409,10 +1392,6 @@ pub fn vllm_core::scheduler::SchedulerObserver::on_memory_pressure(&self, usize)
 pub fn vllm_core::scheduler::SchedulerObserver::on_preemption(&self, vllm_traits::types::SeqId, &str)
 pub fn vllm_core::scheduler::SchedulerObserver::on_request_arrived(&self, vllm_traits::types::SeqId, usize)
 pub fn vllm_core::scheduler::SchedulerObserver::on_sequence_finished(&self, vllm_traits::types::SeqId, usize)
-pub fn vllm_core::scheduler::stats::SchedulerStats::clone(&self) -> vllm_core::scheduler::stats::SchedulerStats
-pub fn vllm_core::scheduler::stats::SchedulerStats::default() -> Self
-pub fn vllm_core::scheduler::stats::SchedulerStats::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_core::scheduler::stats::SchedulerStats::new() -> Self
 pub fn vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder::clone(&self) -> vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 pub fn vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder::new(vllm_core::types::AdaptiveDraftConfig) -> Self
@@ -1591,7 +1570,6 @@ pub mod vllm_core::scheduler::radix_cache
 pub mod vllm_core::scheduler::radix_cache::node
 pub mod vllm_core::scheduler::radix_cache::tree
 pub mod vllm_core::scheduler::request_queue
-pub mod vllm_core::scheduler::stats
 pub mod vllm_core::speculative
 pub mod vllm_core::speculative::adaptive
 pub mod vllm_core::speculative::config
@@ -1691,9 +1669,7 @@ pub struct vllm_core::scheduler::SchedulerCudaGraphConfig
 pub struct vllm_core::scheduler::SchedulerEngine
 pub struct vllm_core::scheduler::SchedulerObservers
 pub struct vllm_core::scheduler::SchedulerState
-pub struct vllm_core::scheduler::SchedulerStats
 pub struct vllm_core::scheduler::SequencePacker
-pub struct vllm_core::scheduler::stats::SchedulerStats
 pub struct vllm_core::speculative::adaptive::AdaptiveDraftConfig
 pub struct vllm_core::speculative::adaptive::AdaptiveSpeculativeDecoder
 pub struct vllm_core::speculative::adaptive::DraftAccuracyTracker
@@ -2049,24 +2025,6 @@ pub vllm_core::scheduler::SchedulerState::decode_queue_len: usize
 pub vllm_core::scheduler::SchedulerState::prefill_queue_len: usize
 pub vllm_core::scheduler::SchedulerState::running_count: usize
 pub vllm_core::scheduler::SchedulerState::waiting_count: usize
-pub vllm_core::scheduler::SchedulerStats::avg_batch_size: f64
-pub vllm_core::scheduler::SchedulerStats::batch_size_sum: u64
-pub vllm_core::scheduler::SchedulerStats::last_batch_size: usize
-pub vllm_core::scheduler::SchedulerStats::last_update: std::time::Instant
-pub vllm_core::scheduler::SchedulerStats::total_batches: usize
-pub vllm_core::scheduler::SchedulerStats::total_decode_requests: usize
-pub vllm_core::scheduler::SchedulerStats::total_evictions: usize
-pub vllm_core::scheduler::SchedulerStats::total_preemptions: usize
-pub vllm_core::scheduler::SchedulerStats::total_prefill_requests: usize
-pub vllm_core::scheduler::stats::SchedulerStats::avg_batch_size: f64
-pub vllm_core::scheduler::stats::SchedulerStats::batch_size_sum: u64
-pub vllm_core::scheduler::stats::SchedulerStats::last_batch_size: usize
-pub vllm_core::scheduler::stats::SchedulerStats::last_update: std::time::Instant
-pub vllm_core::scheduler::stats::SchedulerStats::total_batches: usize
-pub vllm_core::scheduler::stats::SchedulerStats::total_decode_requests: usize
-pub vllm_core::scheduler::stats::SchedulerStats::total_evictions: usize
-pub vllm_core::scheduler::stats::SchedulerStats::total_preemptions: usize
-pub vllm_core::scheduler::stats::SchedulerStats::total_prefill_requests: usize
 pub vllm_core::speculative::adaptive::AdaptiveDraftConfig::accuracy_window_size: usize
 pub vllm_core::speculative::adaptive::AdaptiveDraftConfig::adjustment_step: usize
 pub vllm_core::speculative::adaptive::AdaptiveDraftConfig::cooldown_steps: usize
