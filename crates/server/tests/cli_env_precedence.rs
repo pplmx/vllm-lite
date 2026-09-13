@@ -50,7 +50,9 @@ impl Drop for EnvGuard {
 fn env_var_flows_into_resolved_config() {
     let _guard = EnvGuard::set("9005");
 
-    let config = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]).to_app_config();
+    let config = CliArgs::parse_from(["vllm-server", "-m", "/test/model"])
+        .to_app_config()
+        .unwrap();
     assert_eq!(
         config.server.port, 9005,
         "VLLM_PORT env must flow through to_app_config (env > YAML > defaults)"
@@ -61,8 +63,9 @@ fn env_var_flows_into_resolved_config() {
 fn explicit_flag_beats_env_var() {
     let _guard = EnvGuard::set("9005");
 
-    let config =
-        CliArgs::parse_from(["vllm-server", "-m", "/test/model", "-p", "7777"]).to_app_config();
+    let config = CliArgs::parse_from(["vllm-server", "-m", "/test/model", "-p", "7777"])
+        .to_app_config()
+        .unwrap();
     assert_eq!(
         config.server.port, 7777,
         "explicit -p flag must beat the VLLM_PORT env (CLI > env)"

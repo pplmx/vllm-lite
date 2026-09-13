@@ -24,7 +24,16 @@ async fn main() -> Result<()> {
     const ENGINE_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
     let cli = cli::CliArgs::parse();
-    let app_config = cli.to_app_config();
+    let app_config = cli.to_app_config().unwrap_or_else(|err| {
+        // RIL ISS-132: fail fast when an explicitly-requested config
+        // (`--config` / `$VLLM_CONFIG_PATH`) can't be honored — never boot
+        // a healthy-looking server on defaults that silently discard the
+        // operator's settings. Tracing isn't initialized yet, so stderr is
+        // the actionable channel; exit 78 (config-error family) matches
+        // the validation path below.
+        eprintln!("config error: {err}");
+        std::process::exit(78);
+    });
 
     if let Err(errors) = app_config.validate() {
         for err in &errors.0 {

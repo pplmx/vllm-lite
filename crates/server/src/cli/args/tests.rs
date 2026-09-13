@@ -239,7 +239,7 @@ fn test_to_app_config_basic() {
         .expect("env lock");
     let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model", "-p", "9000"]);
 
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
 
     assert_eq!(config.server.port, 9000);
 }
@@ -277,7 +277,7 @@ fn test_to_app_config_all_fields() {
         "debug",
     ]);
 
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
 
     assert_eq!(config.server.host, "192.168.1.1");
     assert_eq!(config.server.port, 9000);
@@ -309,11 +309,11 @@ fn test_to_app_config_max_model_len() {
         "--max-model-len",
         "32768",
     ]);
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
     assert_eq!(config.engine.max_model_len, Some(32768usize));
 
     let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
     assert_eq!(
         config.engine.max_model_len, None,
         "max_model_len must default to None so the checkpoint value is used"
@@ -338,7 +338,7 @@ fn test_to_app_config_with_api_keys() {
         "sk-test-key",
     ]);
 
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
 
     assert_eq!(config.auth.api_keys.len(), 1);
     assert_eq!(config.auth.api_keys[0], "sk-test-key");
@@ -578,7 +578,7 @@ fn test_to_app_config_with_log_dir() {
         "/var/log/vllm",
     ]);
 
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
 
     assert_eq!(config.server.log_dir, Some("/var/log/vllm".to_string()));
 }
@@ -630,7 +630,7 @@ engine:
         "-c",
         config_path.to_string_lossy().as_ref(),
     ]);
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
 
     assert_eq!(config.server.host, "127.0.0.1");
     assert_eq!(config.server.port, 9999);
@@ -677,7 +677,7 @@ fn test_to_app_config_flag_overrides_yaml() {
         "--max-draft-tokens",
         "32",
     ]);
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
 
     assert_eq!(
         config.engine.num_kv_blocks, 2048,
@@ -738,7 +738,7 @@ fn test_to_app_config_keeps_config_defaults_when_unset() {
         .lock()
         .expect("env lock");
     let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
     let defaults = AppConfig::default();
 
     assert_eq!(config.server.host, defaults.server.host);
@@ -817,7 +817,7 @@ fn test_to_app_config_otlp_endpoint_overrides_yaml() {
         "--otlp-endpoint",
         "http://otlp-collector:4317",
     ]);
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
 
     // --otlp-endpoint implicitly enables OTLP and overrides the endpoint.
     assert!(config.observability.otlp.enabled);
@@ -839,7 +839,7 @@ fn test_to_app_config_otlp_endpoint_no_override_when_not_set() {
         .lock()
         .expect("env lock");
     let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
-    let config = cli.to_app_config();
+    let config = cli.to_app_config().unwrap();
 
     // Without --otlp-endpoint, OTLP stays disabled (default).
     assert!(!config.observability.otlp.enabled);

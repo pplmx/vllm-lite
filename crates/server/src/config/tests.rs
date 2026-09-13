@@ -440,24 +440,36 @@ auth:
 #[test]
 fn app_config_load_defaults_when_no_path() {
     let _guard = crate::test_fixtures::ENV_TEST_LOCK.lock().unwrap();
-    let config = AppConfig::load(None);
+    let config = AppConfig::load(None).unwrap();
     assert_eq!(config.server.port, 8000);
 }
 
+/// RIL ISS-132 / DEC-057 (replaces TASK-107's "degrade to defaults"): an
+/// EXPLICITLY-passed config source that cannot be honored is an operator
+/// error, not a silent fallback. Pre-fix, a missing `--config` path
+/// degraded to defaults and the server booted healthy-looking on the
+/// WRONG settings (the audit's flagship boot-UX hazard). `load` now
+/// fails fast with a `Missing` error naming the path.
 #[test]
-fn app_config_load_nonexistent_file_uses_defaults() {
+fn app_config_load_nonexistent_file_is_an_error() {
     let _guard = crate::test_fixtures::ENV_TEST_LOCK.lock().unwrap();
-    let config = AppConfig::load(Some("/__nonexistent__/config.yml".into()));
-    assert_eq!(config.server.port, 8000);
+    remove_test_env("VLLM_CONFIG_PATH");
+    let err = AppConfig::load(Some("/__nonexistent__/config.yml".into())).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("/__nonexistent__/config.yml"),
+        "missing-config error must name the path: {msg}"
+    );
+    assert!(matches!(err, ConfigLoadError::Missing(_)));
 }
 
-/// RIL TASK-107: a `--config` file that *exists* but fails to parse must
-/// degrade gracefully (fall back to defaults) rather than panic — and that
-/// failure is logged as a `WARN` by `load_config_file`, not swallowed
-/// silently. Guards the no-panic/fallback leg; the warning itself is the
-/// operator-facing affordance.
+/// RIL ISS-132 / DEC-057 (supersedes TASK-107's graceful-degradation
+/// leg): a config file that *exists* but fails to parse must NOT boot
+/// the server on defaults — the operator's deliberate settings silently
+/// vanish and the healthy-looking server runs the wrong configuration.
+/// Parse failures fail fast with the path and the parse reason.
 #[test]
-fn app_config_load_malformed_file_degrades_to_defaults() {
+fn app_config_load_malformed_file_is_an_error() {
     let _guard = crate::test_fixtures::ENV_TEST_LOCK.lock().unwrap();
     let dir = tempfile::tempdir().expect("temp dir");
     let file_path = dir.path().join("bad_config.yml");
@@ -465,10 +477,15 @@ fn app_config_load_malformed_file_degrades_to_defaults() {
     std::fs::write(&file_path, "server:\n  port: not-a-number\n").expect("write file");
     remove_test_env("VLLM_CONFIG_PATH");
 
-    let config = AppConfig::load(Some(file_path));
-    assert_eq!(
-        config.server.port, 8000,
-        "malformed config must fall back to defaults, not panic or half-load"
+    let err = AppConfig::load(Some(file_path.clone())).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("bad_config.yml"),
+        "parse error must name the config path: {msg}"
+    );
+    assert!(
+        matches!(err, ConfigLoadError::Parse(..)),
+        "malformed file must surface a Parse error, got: {err:?}"
     );
 }
 
@@ -484,12 +501,12 @@ fn app_config_load_from_file_with_env_override() {
 
     // 1. File loading without env var set: the file argument is used.
     remove_test_env("VLLM_CONFIG_PATH");
-    let config = AppConfig::load(Some(file_path.clone()));
+    let config = AppConfig::load(Some(file_path.clone())).unwrap();
     assert_eq!(config.server.port, 9999);
 
     // 2. Env path takes precedence over the file argument.
     set_test_env("VLLM_CONFIG_PATH", env_path.to_string_lossy().as_ref());
-    let config = AppConfig::load(Some(file_path));
+    let config = AppConfig::load(Some(file_path)).unwrap();
     assert_eq!(config.server.port, 7777);
 
     // Cleanup so this doesn't leak into other tests.
@@ -584,7 +601,7 @@ fn example_yaml_stays_valid() {
         .join("../../config/example.yaml")
         .canonicalize()
         .expect("example.yaml must exist next to the repo config/ dir");
-    let config = AppConfig::load(Some(path));
+    let config = AppConfig::load(Some(path)).unwrap();
     assert!(
         config.validate().is_ok(),
         "config/example.yaml must satisfy AppConfig::validate()"

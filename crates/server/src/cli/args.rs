@@ -2,7 +2,7 @@
 //!
 //! Parsed once at startup; the resolved config is then handed to the
 //! engine constructor. Use `--help` for the full list of flags.
-use crate::config::AppConfig;
+use crate::config::{AppConfig, ConfigLoadError};
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
@@ -319,9 +319,18 @@ struct ConfigArgs {
 }
 
 impl CliArgs {
-    #[must_use]
-    pub fn to_app_config(&self) -> AppConfig {
-        let mut config = AppConfig::load(self.config.config.clone());
+    /// Fold CLI flags + env vars over the config source (defaults, a
+    /// `--config` file, or `$VLLM_CONFIG_PATH` — which `AppConfig::load`
+    /// strictly validates). Returns `Err` when an explicitly-requested
+    /// config cannot be honored (RIL ISS-132): the operator's deliberate
+    /// settings must not silently degrade to defaults.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`ConfigLoadError`] from the config source (missing /
+    /// unreadable / unparseable `--config` or `$VLLM_CONFIG_PATH` file).
+    pub fn to_app_config(&self) -> Result<AppConfig, ConfigLoadError> {
+        let mut config = AppConfig::load(self.config.config.clone())?;
 
         // RIL ISS-081: only override a field when the operator actually
         // specified it through a flag or env var (`Some`). The `Option<T>`
@@ -385,7 +394,7 @@ impl CliArgs {
             config.observability.otlp.endpoint.clone_from(endpoint);
         }
 
-        config
+        Ok(config)
     }
 
     #[must_use]

@@ -150,28 +150,36 @@ fn unknown_top_level_keys(contents: &str) -> Vec<String> {
         .collect()
 }
 
-/// Read and parse a config file, returning `None` (with a `WARN` log — never
-/// a hard failure) when the file *exists* but cannot be read or parsed. When
-/// it parses, a `WARN` is still emitted for any unknown top-level key (RIL
-/// ISS-097) — the lenient parse is authoritative, so a typo'd section no
-/// longer degrades silently.
+/// Error when an EXPLICITLY-requested config source (`--config` or
+/// `$VLLM_CONFIG_PATH`) cannot be honored. Pre-fix (RIL TASK-107) a
+/// missing or unparseable config degraded silently to built-in defaults,
+/// booting a healthy-looking server on the WRONG settings for an operator
+/// who deliberately pointed at a config (RIL ISS-132). Load now fails
+/// fast with the path and reason; a genuinely unconfigured server (no
+/// `--config`, no env var) still uses defaults.
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigLoadError {
+    #[error("config file does not exist: {0}")]
+    Missing(PathBuf),
+    #[error("config file cannot be read: {0} ({1})")]
+    Unreadable(PathBuf, String),
+    #[error("config file failed to parse: {0} ({1})")]
+    Parse(PathBuf, String),
+}
+
+/// Read and parse a config file strictly (RIL ISS-132): every failure is
+/// an [`Err`] naming the path and reason — an explicitly-referenced
+/// config must never silently degrade to defaults.
 ///
-/// Missing files are not the caller's fault here — callers filter on
-/// `Path::exists()` first — so only read/parse failures hit this function,
-/// where the warning is exactly what an operator needs to notice a typo'd
-/// YAML that would otherwise silently fall back to defaults.
-fn load_config_file(path: &Path) -> Option<AppConfig> {
-    let contents = match std::fs::read_to_string(path) {
-        Ok(contents) => contents,
-        Err(e) => {
-            tracing::warn!(
-                path = %path.display(),
-                error = %e,
-                "config load: cannot read config file; falling back to defaults"
-            );
-            return None;
-        }
-    };
+/// Unknown top-level keys still only `WARN` (RIL ISS-097): the lenient
+/// `AppConfig` parse is authoritative, so misspelled sections surface as
+/// warnings rather than hard failures.
+fn load_config_file(path: &Path) -> Result<AppConfig, ConfigLoadError> {
+    if !path.exists() {
+        return Err(ConfigLoadError::Missing(path.to_path_buf()));
+    }
+    let contents = std::fs::read_to_string(path)
+        .map_err(|e| ConfigLoadError::Unreadable(path.to_path_buf(), e.to_string()))?;
     for key in unknown_top_level_keys(&contents) {
         tracing::warn!(
             path = %path.display(),
@@ -181,45 +189,39 @@ fn load_config_file(path: &Path) -> Option<AppConfig> {
              recognised sections are listed in 'sections'"
         );
     }
-    match serde_saphyr::from_str::<AppConfig>(&contents) {
-        Ok(config) => Some(config),
-        Err(e) => {
-            tracing::warn!(
-                path = %path.display(),
-                error = %e,
-                "config load: failed to parse config file; falling back to defaults"
-            );
-            None
-        }
-    }
+    serde_saphyr::from_str::<AppConfig>(&contents)
+        .map_err(|e| ConfigLoadError::Parse(path.to_path_buf(), e.to_string()))
 }
 
 impl AppConfig {
     /// Load an [`AppConfig`] starting from `Self::default()` and layering
-    /// optional overrides:
-    ///   1. YAML file at `path` (if `Some` and the file exists).
-    ///   2. YAML file at `$VLLM_CONFIG_PATH` (if the env var is set and the
-    ///      file exists; takes precedence over `path`).
+    /// optional overrides from an explicitly-requested source:
+    ///   1. YAML file at `$VLLM_CONFIG_PATH` (if the env var is set; takes
+    ///      precedence over `path`).
+    ///   2. YAML file at `path` (the `--config` flag, if given).
     ///
-    /// Missing files are silently ignored — `--config` is optional and
-    /// defaults win. A file that *exists* but cannot be read or parsed is
-    /// **not** silent: it logs a `WARN` (via `load_config_file`) so an
-    /// operator's typo'd YAML surfaces instead of silently degrading to
-    /// defaults. Use [`AppConfig::validate`] after loading to surface
-    /// semantically invalid configs.
-    #[must_use]
-    pub fn load(path: Option<PathBuf>) -> Self {
-        let config = path
-            .filter(|config_path| config_path.exists())
-            .and_then(|config_path| load_config_file(&config_path))
-            .unwrap_or_default();
-
-        std::env::var("VLLM_CONFIG_PATH")
+    /// When NO source is requested (`None` / env unset), `Ok(defaults)`.
+    /// A source that IS requested but cannot be honored — missing,
+    /// unreadable, or unparseable — is an **error** (RIL ISS-132 /
+    /// DEC-057): the operator's deliberate settings must not silently
+    /// vanish behind a defaults boot. Use [`AppConfig::validate`] after
+    /// loading to surface semantically invalid configs.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigLoadError::Missing`] when the effective source
+    /// path does not exist, [`ConfigLoadError::Unreadable`] when it
+    /// exists but cannot be read, and [`ConfigLoadError::Parse`] when it
+    /// cannot be parsed as a typed [`AppConfig`].
+    pub fn load(path: Option<PathBuf>) -> Result<Self, ConfigLoadError> {
+        // `$VLLM_CONFIG_PATH` takes precedence over `--config` (both are
+        // deliberate; only the effective source needs strict validation).
+        let source = std::env::var("VLLM_CONFIG_PATH")
             .ok()
             .map(PathBuf::from)
-            .filter(|config_path| config_path.exists())
-            .and_then(|config_path| load_config_file(&config_path))
-            .unwrap_or(config)
+            .or(path);
+
+        source.map_or_else(|| Ok(Self::default()), |source| load_config_file(&source))
     }
 
     /// Check the loaded config against all invariants. Collects every
