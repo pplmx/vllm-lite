@@ -20,6 +20,7 @@ impl core::clone::Clone for vllm_server::config::ServerConfig
 impl core::clone::Clone for vllm_server::health::HealthStatus
 impl core::clone::Clone for vllm_server::openai::batch::types::BatchEndpoint
 impl core::clone::Clone for vllm_server::openai::batch::types::BatchJob
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchListResponse
 impl core::clone::Clone for vllm_server::openai::batch::types::BatchResponse
 impl core::clone::Clone for vllm_server::openai::batch::types::BatchResultItem
 impl core::clone::Clone for vllm_server::openai::batch::types::BatchResults
@@ -47,6 +48,7 @@ impl core::clone::Clone for vllm_server::openai::types::ErrorDetail
 impl core::clone::Clone for vllm_server::openai::types::ErrorResponse
 impl core::clone::Clone for vllm_server::openai::types::FunctionDefinition
 impl core::clone::Clone for vllm_server::openai::types::ResponseFormat
+impl core::clone::Clone for vllm_server::openai::types::StreamOptions
 impl core::clone::Clone for vllm_server::openai::types::Tool
 impl core::clone::Clone for vllm_server::openai::types::ToolChoice
 impl core::clone::Clone for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -99,6 +101,7 @@ impl core::default::Default for vllm_server::config::MultiNodeConfig
 impl core::default::Default for vllm_server::config::ServerConfig
 impl core::default::Default for vllm_server::health::HealthChecker
 impl core::default::Default for vllm_server::openai::batch::manager::BatchManager
+impl core::default::Default for vllm_server::openai::types::StreamOptions
 impl core::default::Default for vllm_server::security::audit::AuditLogger
 impl core::default::Default for vllm_server::security::correlation::CorrelationIdMiddleware
 impl core::default::Default for vllm_server::security::cors::CorsConfig
@@ -134,6 +137,7 @@ impl core::fmt::Debug for vllm_server::health::HealthStatus
 impl core::fmt::Debug for vllm_server::openai::batch::manager::BatchManager
 impl core::fmt::Debug for vllm_server::openai::batch::types::BatchEndpoint
 impl core::fmt::Debug for vllm_server::openai::batch::types::BatchJob
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchListResponse
 impl core::fmt::Debug for vllm_server::openai::batch::types::BatchResponse
 impl core::fmt::Debug for vllm_server::openai::batch::types::BatchResultItem
 impl core::fmt::Debug for vllm_server::openai::batch::types::BatchResults
@@ -161,6 +165,7 @@ impl core::fmt::Debug for vllm_server::openai::types::ErrorDetail
 impl core::fmt::Debug for vllm_server::openai::types::ErrorResponse
 impl core::fmt::Debug for vllm_server::openai::types::FunctionDefinition
 impl core::fmt::Debug for vllm_server::openai::types::ResponseFormat
+impl core::fmt::Debug for vllm_server::openai::types::StreamOptions
 impl core::fmt::Debug for vllm_server::openai::types::Tool
 impl core::fmt::Debug for vllm_server::openai::types::ToolChoice
 impl core::fmt::Debug for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -195,6 +200,7 @@ impl core::marker::Copy for vllm_server::health::HealthStatus
 impl core::marker::Copy for vllm_server::openai::batch::types::BatchEndpoint
 impl core::marker::Copy for vllm_server::openai::chat_template::ChatTemplate
 impl core::marker::Copy for vllm_server::openai::types::ResponseFormat
+impl core::marker::Copy for vllm_server::openai::types::StreamOptions
 impl core::marker::Copy for vllm_server::openai::types::ToolChoiceMode
 impl core::marker::Copy for vllm_server::openai::types::ToolType
 impl core::marker::Copy for vllm_server::security::rbac::AuthenticatedRole
@@ -226,6 +232,7 @@ impl core::marker::Freeze for vllm_server::health::HealthStatus
 impl core::marker::Freeze for vllm_server::openai::batch::manager::BatchManager
 impl core::marker::Freeze for vllm_server::openai::batch::types::BatchEndpoint
 impl core::marker::Freeze for vllm_server::openai::batch::types::BatchJob
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchListResponse
 impl core::marker::Freeze for vllm_server::openai::batch::types::BatchResponse
 impl core::marker::Freeze for vllm_server::openai::batch::types::BatchResultItem
 impl core::marker::Freeze for vllm_server::openai::batch::types::BatchResults
@@ -253,6 +260,7 @@ impl core::marker::Freeze for vllm_server::openai::types::ErrorDetail
 impl core::marker::Freeze for vllm_server::openai::types::ErrorResponse
 impl core::marker::Freeze for vllm_server::openai::types::FunctionDefinition
 impl core::marker::Freeze for vllm_server::openai::types::ResponseFormat
+impl core::marker::Freeze for vllm_server::openai::types::StreamOptions
 impl core::marker::Freeze for vllm_server::openai::types::Tool
 impl core::marker::Freeze for vllm_server::openai::types::ToolChoice
 impl core::marker::Freeze for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -302,6 +310,7 @@ impl core::marker::Send for vllm_server::health::HealthStatus
 impl core::marker::Send for vllm_server::openai::batch::manager::BatchManager
 impl core::marker::Send for vllm_server::openai::batch::types::BatchEndpoint
 impl core::marker::Send for vllm_server::openai::batch::types::BatchJob
+impl core::marker::Send for vllm_server::openai::batch::types::BatchListResponse
 impl core::marker::Send for vllm_server::openai::batch::types::BatchResponse
 impl core::marker::Send for vllm_server::openai::batch::types::BatchResultItem
 impl core::marker::Send for vllm_server::openai::batch::types::BatchResults
@@ -329,6 +338,7 @@ impl core::marker::Send for vllm_server::openai::types::ErrorDetail
 impl core::marker::Send for vllm_server::openai::types::ErrorResponse
 impl core::marker::Send for vllm_server::openai::types::FunctionDefinition
 impl core::marker::Send for vllm_server::openai::types::ResponseFormat
+impl core::marker::Send for vllm_server::openai::types::StreamOptions
 impl core::marker::Send for vllm_server::openai::types::Tool
 impl core::marker::Send for vllm_server::openai::types::ToolChoice
 impl core::marker::Send for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -392,6 +402,7 @@ impl core::marker::Sync for vllm_server::health::HealthStatus
 impl core::marker::Sync for vllm_server::openai::batch::manager::BatchManager
 impl core::marker::Sync for vllm_server::openai::batch::types::BatchEndpoint
 impl core::marker::Sync for vllm_server::openai::batch::types::BatchJob
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchListResponse
 impl core::marker::Sync for vllm_server::openai::batch::types::BatchResponse
 impl core::marker::Sync for vllm_server::openai::batch::types::BatchResultItem
 impl core::marker::Sync for vllm_server::openai::batch::types::BatchResults
@@ -419,6 +430,7 @@ impl core::marker::Sync for vllm_server::openai::types::ErrorDetail
 impl core::marker::Sync for vllm_server::openai::types::ErrorResponse
 impl core::marker::Sync for vllm_server::openai::types::FunctionDefinition
 impl core::marker::Sync for vllm_server::openai::types::ResponseFormat
+impl core::marker::Sync for vllm_server::openai::types::StreamOptions
 impl core::marker::Sync for vllm_server::openai::types::Tool
 impl core::marker::Sync for vllm_server::openai::types::ToolChoice
 impl core::marker::Sync for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -468,6 +480,7 @@ impl core::marker::Unpin for vllm_server::health::HealthStatus
 impl core::marker::Unpin for vllm_server::openai::batch::manager::BatchManager
 impl core::marker::Unpin for vllm_server::openai::batch::types::BatchEndpoint
 impl core::marker::Unpin for vllm_server::openai::batch::types::BatchJob
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchListResponse
 impl core::marker::Unpin for vllm_server::openai::batch::types::BatchResponse
 impl core::marker::Unpin for vllm_server::openai::batch::types::BatchResultItem
 impl core::marker::Unpin for vllm_server::openai::batch::types::BatchResults
@@ -495,6 +508,7 @@ impl core::marker::Unpin for vllm_server::openai::types::ErrorDetail
 impl core::marker::Unpin for vllm_server::openai::types::ErrorResponse
 impl core::marker::Unpin for vllm_server::openai::types::FunctionDefinition
 impl core::marker::Unpin for vllm_server::openai::types::ResponseFormat
+impl core::marker::Unpin for vllm_server::openai::types::StreamOptions
 impl core::marker::Unpin for vllm_server::openai::types::Tool
 impl core::marker::Unpin for vllm_server::openai::types::ToolChoice
 impl core::marker::Unpin for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -544,6 +558,7 @@ impl core::marker::UnsafeUnpin for vllm_server::health::HealthStatus
 impl core::marker::UnsafeUnpin for vllm_server::openai::batch::manager::BatchManager
 impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchEndpoint
 impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchJob
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchListResponse
 impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchResponse
 impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchResultItem
 impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchResults
@@ -571,6 +586,7 @@ impl core::marker::UnsafeUnpin for vllm_server::openai::types::ErrorDetail
 impl core::marker::UnsafeUnpin for vllm_server::openai::types::ErrorResponse
 impl core::marker::UnsafeUnpin for vllm_server::openai::types::FunctionDefinition
 impl core::marker::UnsafeUnpin for vllm_server::openai::types::ResponseFormat
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::StreamOptions
 impl core::marker::UnsafeUnpin for vllm_server::openai::types::Tool
 impl core::marker::UnsafeUnpin for vllm_server::openai::types::ToolChoice
 impl core::marker::UnsafeUnpin for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -620,6 +636,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::health::HealthStat
 impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::manager::BatchManager
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchEndpoint
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchJob
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchListResponse
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchResponse
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchResultItem
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchResults
@@ -647,6 +664,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::Err
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ErrorResponse
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::FunctionDefinition
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ResponseFormat
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::StreamOptions
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::Tool
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ToolChoice
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -696,6 +714,7 @@ impl core::panic::unwind_safe::UnwindSafe for vllm_server::health::HealthStatus
 impl !core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::manager::BatchManager
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchEndpoint
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchJob
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchListResponse
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchResponse
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchResultItem
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchResults
@@ -723,6 +742,7 @@ impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ErrorD
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ErrorResponse
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::FunctionDefinition
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ResponseFormat
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::StreamOptions
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::Tool
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ToolChoice
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -777,6 +797,7 @@ impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::Error
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ErrorResponse
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::FunctionDefinition
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ResponseFormat
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::StreamOptions
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::Tool
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ToolChoice
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -798,6 +819,7 @@ impl serde_core::ser::Serialize for vllm_server::debug::AuditDumpResponse
 impl serde_core::ser::Serialize for vllm_server::debug::KvCacheDumpResponse
 impl serde_core::ser::Serialize for vllm_server::debug::MetricsSnapshotResponse
 impl serde_core::ser::Serialize for vllm_server::debug::TraceStatusResponse
+impl serde_core::ser::Serialize for vllm_server::openai::batch::types::BatchListResponse
 impl serde_core::ser::Serialize for vllm_server::openai::batch::types::BatchResponse
 impl serde_core::ser::Serialize for vllm_server::openai::batch::types::BatchResultItem
 impl serde_core::ser::Serialize for vllm_server::openai::batch::types::BatchResults
@@ -823,6 +845,7 @@ impl serde_core::ser::Serialize for vllm_server::openai::types::ErrorDetail
 impl serde_core::ser::Serialize for vllm_server::openai::types::ErrorResponse
 impl serde_core::ser::Serialize for vllm_server::openai::types::FunctionDefinition
 impl serde_core::ser::Serialize for vllm_server::openai::types::ResponseFormat
+impl serde_core::ser::Serialize for vllm_server::openai::types::StreamOptions
 impl serde_core::ser::Serialize for vllm_server::openai::types::Tool
 impl serde_core::ser::Serialize for vllm_server::openai::types::ToolChoice
 impl serde_core::ser::Serialize for vllm_server::openai::types::ToolChoiceFunctionRef
@@ -832,6 +855,15 @@ impl serde_core::ser::Serialize for vllm_server::openai::types::ToolType
 impl serde_core::ser::Serialize for vllm_server::openai::types::Usage
 impl serde_core::ser::Serialize for vllm_server::security::audit::AuditEvent
 impl serde_core::ser::Serialize for vllm_server::security::jwt::Claims
+impl<S, T> axum_core::extract::FromRequest<S> for vllm_server::openai::json::OpenaiJson<T> where S: core::marker::Send + core::marker::Sync, T: serde_core::de::DeserializeOwned
+impl<T: core::fmt::Debug> core::fmt::Debug for vllm_server::openai::json::OpenaiJson<T>
+impl<T> core::marker::Freeze for vllm_server::openai::json::OpenaiJson<T> where T: core::marker::Freeze
+impl<T> core::marker::Send for vllm_server::openai::json::OpenaiJson<T> where T: core::marker::Send
+impl<T> core::marker::Sync for vllm_server::openai::json::OpenaiJson<T> where T: core::marker::Sync
+impl<T> core::marker::Unpin for vllm_server::openai::json::OpenaiJson<T> where T: core::marker::Unpin
+impl<T> core::marker::UnsafeUnpin for vllm_server::openai::json::OpenaiJson<T> where T: core::marker::UnsafeUnpin
+impl<T> core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::json::OpenaiJson<T> where T: core::panic::unwind_safe::RefUnwindSafe
+impl<T> core::panic::unwind_safe::UnwindSafe for vllm_server::openai::json::OpenaiJson<T> where T: core::panic::unwind_safe::UnwindSafe
 impl vllm_core::speculative::draft_resolver::DraftLoader for vllm_server::draft_loader::ServerDraftLoader
 impl vllm_server::auth::AuthMiddleware
 impl vllm_server::AuthConfig
@@ -870,10 +902,10 @@ pub async fn vllm_server::health_handlers::health_handler(axum::extract::state::
 pub async fn vllm_server::health_handlers::metrics_handler(axum::extract::state::State<vllm_server::ApiState>) -> axum_core::response::Response
 pub async fn vllm_server::health_handlers::ready_handler(axum::extract::state::State<vllm_server::ApiState>) -> axum_core::response::Response
 pub async fn vllm_server::openai::batch::handler::cancel_batch(axum::extract::state::State<vllm_server::ApiState>, axum::extract::path::Path<alloc::string::String>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResponse>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
-pub async fn vllm_server::openai::batch::handler::create_batch(axum::extract::state::State<vllm_server::ApiState>, axum::json::Json<vllm_server::openai::batch::types::SimpleBatchRequest>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResponse>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub async fn vllm_server::openai::batch::handler::create_batch(axum::extract::state::State<vllm_server::ApiState>, vllm_server::openai::json::OpenaiJson<vllm_server::openai::batch::types::SimpleBatchRequest>) -> core::result::Result<(http::status::StatusCode, axum::json::Json<vllm_server::openai::batch::types::BatchResponse>), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub async fn vllm_server::openai::batch::handler::get_batch(axum::extract::state::State<vllm_server::ApiState>, axum::extract::path::Path<alloc::string::String>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResponse>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub async fn vllm_server::openai::batch::handler::get_batch_results(axum::extract::state::State<vllm_server::ApiState>, axum::extract::path::Path<alloc::string::String>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResults>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
-pub async fn vllm_server::openai::batch::handler::list_batches(axum::extract::state::State<vllm_server::ApiState>) -> axum::json::Json<alloc::vec::Vec<vllm_server::openai::batch::types::BatchResponse>>
+pub async fn vllm_server::openai::batch::handler::list_batches(axum::extract::state::State<vllm_server::ApiState>) -> axum::json::Json<vllm_server::openai::batch::types::BatchListResponse>
 pub async fn vllm_server::openai::batch::manager::BatchManager::add_result(&self, &str, vllm_server::openai::batch::types::BatchResultItem)
 pub async fn vllm_server::openai::batch::manager::BatchManager::create_job(&self, vllm_server::openai::batch::types::BatchEndpoint, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<i64>, core::option::Option<f32>) -> alloc::string::String
 pub async fn vllm_server::openai::batch::manager::BatchManager::get_all_jobs(&self) -> alloc::vec::Vec<vllm_server::openai::batch::types::BatchJob>
@@ -884,9 +916,11 @@ pub async fn vllm_server::openai::batch::manager::BatchManager::request_cancel(&
 pub async fn vllm_server::openai::batch::manager::BatchManager::set_completed(&self, &str)
 pub async fn vllm_server::openai::batch::manager::BatchManager::set_failed(&self, &str)
 pub async fn vllm_server::openai::batch::manager::BatchManager::update_job(&self, vllm_server::openai::batch::types::BatchJob)
-pub async fn vllm_server::openai::chat::chat_completions(axum::extract::state::State<vllm_server::ApiState>, axum::extension::Extension<vllm_server::security::correlation::CorrelationId>, axum::json::Json<vllm_server::openai::types::ChatRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
-pub async fn vllm_server::openai::completions::completions(axum::extract::state::State<vllm_server::ApiState>, axum::extension::Extension<vllm_server::security::correlation::CorrelationId>, axum::json::Json<vllm_server::openai::types::CompletionRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
-pub async fn vllm_server::openai::embeddings::embeddings(axum::extract::state::State<vllm_server::ApiState>, axum::json::Json<vllm_server::openai::types::EmbeddingsRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub async fn vllm_server::openai::chat::chat_completions(axum::extract::state::State<vllm_server::ApiState>, axum::extension::Extension<vllm_server::security::correlation::CorrelationId>, vllm_server::openai::json::OpenaiJson<vllm_server::openai::types::ChatRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub async fn vllm_server::openai::completions::completions(axum::extract::state::State<vllm_server::ApiState>, axum::extension::Extension<vllm_server::security::correlation::CorrelationId>, vllm_server::openai::json::OpenaiJson<vllm_server::openai::types::CompletionRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub async fn vllm_server::openai::embeddings::embeddings(axum::extract::state::State<vllm_server::ApiState>, vllm_server::openai::json::OpenaiJson<vllm_server::openai::types::EmbeddingsRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub async fn vllm_server::openai::json::OpenaiJson<T>::from_request(axum_core::extract::Request, &S) -> core::result::Result<Self, Self::Rejection>
+pub async fn vllm_server::openai::models::model_by_id_handler(axum::extract::path::Path<alloc::string::String>, axum::extract::state::State<vllm_server::ApiState>) -> axum_core::response::Response
 pub async fn vllm_server::openai::models::models_handler(axum::extract::state::State<vllm_server::ApiState>) -> axum_core::response::Response
 pub async fn vllm_server::security::audit::AuditLogger::clear(&self)
 pub async fn vllm_server::security::audit::AuditLogger::get_events(&self) -> alloc::vec::Vec<vllm_server::security::audit::AuditEvent>
@@ -1054,6 +1088,9 @@ pub fn vllm_server::openai::batch::types::BatchEndpoint::parse(&str) -> core::op
 pub fn vllm_server::openai::batch::types::BatchJob::clone(&self) -> vllm_server::openai::batch::types::BatchJob
 pub fn vllm_server::openai::batch::types::BatchJob::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::openai::batch::types::BatchJob::new(alloc::string::String, vllm_server::openai::batch::types::BatchEndpoint, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<i64>, core::option::Option<f32>) -> Self
+pub fn vllm_server::openai::batch::types::BatchListResponse::clone(&self) -> vllm_server::openai::batch::types::BatchListResponse
+pub fn vllm_server::openai::batch::types::BatchListResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_server::openai::batch::types::BatchListResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_server::openai::batch::types::BatchResponse::clone(&self) -> vllm_server::openai::batch::types::BatchResponse
 pub fn vllm_server::openai::batch::types::BatchResponse::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub fn vllm_server::openai::batch::types::BatchResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1082,6 +1119,7 @@ pub fn vllm_server::openai::chat::build_prompt_from_messages(vllm_server::openai
 pub fn vllm_server::openai::chat_template::ChatTemplate::clone(&self) -> vllm_server::openai::chat_template::ChatTemplate
 pub fn vllm_server::openai::chat_template::ChatTemplate::eq(&self, &vllm_server::openai::chat_template::ChatTemplate) -> bool
 pub fn vllm_server::openai::chat_template::ChatTemplate::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_server::openai::json::OpenaiJson<T>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::openai::sampling_validation::validate_chat_logprobs(core::option::Option<bool>, core::option::Option<u32>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_chat_request_fields(&vllm_server::openai::types::ChatRequest) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_chat_response_format(core::option::Option<&vllm_server::openai::types::ResponseFormat>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
@@ -1110,7 +1148,8 @@ pub fn vllm_server::openai::types::ChatChunkChoice::serialize<__S>(&self, __S) -
 pub fn vllm_server::openai::types::ChatChunk::clone(&self) -> vllm_server::openai::types::ChatChunk
 pub fn vllm_server::openai::types::ChatChunk::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub fn vllm_server::openai::types::ChatChunk::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_server::openai::types::ChatChunk::new(alloc::string::String, alloc::string::String, vllm_server::openai::types::ChatChunkChoice) -> Self
+pub fn vllm_server::openai::types::ChatChunk::new(alloc::string::String, alloc::string::String, i64, vllm_server::openai::types::ChatChunkChoice) -> Self
+pub fn vllm_server::openai::types::ChatChunk::new_usage_chunk(alloc::string::String, alloc::string::String, i64, vllm_server::openai::types::Usage) -> Self
 pub fn vllm_server::openai::types::ChatChunk::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_server::openai::types::ChatLogprob::clone(&self) -> vllm_server::openai::types::ChatLogprob
 pub fn vllm_server::openai::types::ChatLogprob::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
@@ -1183,6 +1222,11 @@ pub fn vllm_server::openai::types::ResponseFormat::deserialize<__D>(__D) -> core
 pub fn vllm_server::openai::types::ResponseFormat::eq(&self, &vllm_server::openai::types::ResponseFormat) -> bool
 pub fn vllm_server::openai::types::ResponseFormat::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::openai::types::ResponseFormat::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn vllm_server::openai::types::StreamOptions::clone(&self) -> vllm_server::openai::types::StreamOptions
+pub fn vllm_server::openai::types::StreamOptions::default() -> vllm_server::openai::types::StreamOptions
+pub fn vllm_server::openai::types::StreamOptions::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn vllm_server::openai::types::StreamOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_server::openai::types::StreamOptions::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_server::openai::types::ToolChoice::clone(&self) -> vllm_server::openai::types::ToolChoice
 pub fn vllm_server::openai::types::ToolChoice::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub fn vllm_server::openai::types::ToolChoice::eq(&self, &vllm_server::openai::types::ToolChoice) -> bool
@@ -1291,6 +1335,7 @@ pub mod vllm_server::openai::chat
 pub mod vllm_server::openai::chat_template
 pub mod vllm_server::openai::completions
 pub mod vllm_server::openai::embeddings
+pub mod vllm_server::openai::json
 pub mod vllm_server::openai::models
 pub mod vllm_server::openai::sampling_validation
 pub mod vllm_server::openai::types
@@ -1306,6 +1351,7 @@ pub mod vllm_server::security::timing
 pub mod vllm_server::security::tls
 pub mod vllm_server::util
 pub mod vllm_server::util::time
+pub static vllm_server::cli::SERVER_VERSION: &str
 pub struct vllm_server::api::HealthDetailResponse
 pub struct vllm_server::api::HealthResponse
 pub struct vllm_server::ApiState
@@ -1336,11 +1382,13 @@ pub struct vllm_server::openai::batch::BatchManager
 pub struct vllm_server::openai::batch::BatchResponse
 pub struct vllm_server::openai::batch::manager::BatchManager
 pub struct vllm_server::openai::batch::types::BatchJob
+pub struct vllm_server::openai::batch::types::BatchListResponse
 pub struct vllm_server::openai::batch::types::BatchResponse
 pub struct vllm_server::openai::batch::types::BatchResultItem
 pub struct vllm_server::openai::batch::types::BatchResults
 pub struct vllm_server::openai::batch::types::RequestCounts
 pub struct vllm_server::openai::batch::types::SimpleBatchRequest
+pub struct vllm_server::openai::json::OpenaiJson<T>(pub T)
 pub struct vllm_server::openai::types::ChatChoice
 pub struct vllm_server::openai::types::ChatChoiceLogprobs
 pub struct vllm_server::openai::types::ChatChunk
@@ -1360,6 +1408,7 @@ pub struct vllm_server::openai::types::EmbeddingsResponse
 pub struct vllm_server::openai::types::ErrorDetail
 pub struct vllm_server::openai::types::ErrorResponse
 pub struct vllm_server::openai::types::FunctionDefinition
+pub struct vllm_server::openai::types::StreamOptions
 pub struct vllm_server::openai::types::Tool
 pub struct vllm_server::openai::types::ToolChoiceFunctionRef
 pub struct vllm_server::openai::types::ToolChoiceSpecific
@@ -1383,6 +1432,7 @@ pub struct vllm_server::security::rbac::RbacMiddleware
 pub struct vllm_server::security::TlsConfig
 pub struct vllm_server::security::tls::TlsConfig
 pub type vllm_server::api::EngineHandle = tokio::sync::mpsc::bounded::Sender<vllm_core::types::messages::EngineMessage>
+pub type vllm_server::openai::json::OpenaiJson<T>::Rejection = (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)
 pub vllm_server::api::HealthDetailResponse::kv_cache_usage_percent: core::option::Option<f32>
 pub vllm_server::api::HealthDetailResponse::prefill_throughput: core::option::Option<f32>
 pub vllm_server::api::HealthDetailResponse::status: alloc::string::String
@@ -1533,6 +1583,8 @@ pub vllm_server::openai::batch::types::BatchJob::prompts: alloc::vec::Vec<alloc:
 pub vllm_server::openai::batch::types::BatchJob::results: alloc::vec::Vec<vllm_server::openai::batch::types::BatchResultItem>
 pub vllm_server::openai::batch::types::BatchJob::status: vllm_server::openai::batch::types::BatchStatus
 pub vllm_server::openai::batch::types::BatchJob::temperature: core::option::Option<f32>
+pub vllm_server::openai::batch::types::BatchListResponse::data: alloc::vec::Vec<vllm_server::openai::batch::types::BatchResponse>
+pub vllm_server::openai::batch::types::BatchListResponse::object: alloc::string::String
 pub vllm_server::openai::batch::types::BatchResponse::completed_at: core::option::Option<i64>
 pub vllm_server::openai::batch::types::BatchResponse::created_at: i64
 pub vllm_server::openai::batch::types::BatchResponse::endpoint: vllm_server::openai::batch::types::BatchEndpoint
@@ -1579,6 +1631,7 @@ pub vllm_server::openai::types::ChatChunk::created: i64
 pub vllm_server::openai::types::ChatChunk::id: alloc::string::String
 pub vllm_server::openai::types::ChatChunk::model: alloc::string::String
 pub vllm_server::openai::types::ChatChunk::object: alloc::string::String
+pub vllm_server::openai::types::ChatChunk::usage: core::option::Option<vllm_server::openai::types::Usage>
 pub vllm_server::openai::types::ChatLogprob::bytes: core::option::Option<alloc::vec::Vec<u8>>
 pub vllm_server::openai::types::ChatLogprob::logprob: f32
 pub vllm_server::openai::types::ChatLogprob::token: alloc::string::String
@@ -1598,6 +1651,7 @@ pub vllm_server::openai::types::ChatRequest::response_format: core::option::Opti
 pub vllm_server::openai::types::ChatRequest::seed: core::option::Option<i64>
 pub vllm_server::openai::types::ChatRequest::stop: core::option::Option<alloc::vec::Vec<alloc::string::String>>
 pub vllm_server::openai::types::ChatRequest::stream: core::option::Option<bool>
+pub vllm_server::openai::types::ChatRequest::stream_options: core::option::Option<vllm_server::openai::types::StreamOptions>
 pub vllm_server::openai::types::ChatRequest::temperature: core::option::Option<f32>
 pub vllm_server::openai::types::ChatRequest::tool_choice: core::option::Option<vllm_server::openai::types::ToolChoice>
 pub vllm_server::openai::types::ChatRequest::tools: core::option::Option<alloc::vec::Vec<vllm_server::openai::types::Tool>>
@@ -1661,6 +1715,7 @@ pub vllm_server::openai::types::FunctionDefinition::name: alloc::string::String
 pub vllm_server::openai::types::FunctionDefinition::parameters: core::option::Option<serde_json::value::Value>
 pub vllm_server::openai::types::ResponseFormat::JsonObject
 pub vllm_server::openai::types::ResponseFormat::Text
+pub vllm_server::openai::types::StreamOptions::include_usage: bool
 pub vllm_server::openai::types::ToolChoiceFunctionRef::name: alloc::string::String
 pub vllm_server::openai::types::ToolChoiceMode::Auto
 pub vllm_server::openai::types::ToolChoiceMode::None
