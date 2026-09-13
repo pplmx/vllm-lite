@@ -10,6 +10,7 @@ use axum::{
 };
 use serde::Serialize;
 use tokio::sync::mpsc;
+use vllm_core::metrics::MetricsSnapshot;
 use vllm_core::types::EngineMessage;
 
 use crate::ApiState;
@@ -55,10 +56,13 @@ pub struct HealthDetailResponse {
     pub model: Option<String>,
     /// Mean prefill-phase throughput in tokens per second over the
     /// recent sampling window, when the engine answered `GetMetrics`.
-    /// `None` when the engine was mid-step and the bounded wait elapsed.
+    /// `None` when the engine was mid-step and the bounded wait elapsed
+    /// (RIL ISS-151) — omitted from the wire, not a `null` lie.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub prefill_throughput: Option<f32>,
     /// Fraction of KV-cache blocks currently in use (0.0–1.0 scale),
     /// when the engine answered `GetMetrics`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub kv_cache_usage_percent: Option<f32>,
 }
 
@@ -88,12 +92,18 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
     // steps, which can take seconds to minutes on a large batch. An
     // unbounded `recv().await` would hang this ops endpoint (and the
     // Prometheus scrape of /metrics) for the whole step, so fall back
-    // to defaults after METRICS_RESPONSE_TIMEOUT instead.
-    let metrics = tokio::time::timeout(METRICS_RESPONSE_TIMEOUT, response_rx.recv())
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_default();
+    // to `None` after METRICS_RESPONSE_TIMEOUT instead.
+    //
+    // RIL ISS-151: keep the `Option` — a timeout (or closed channel) is
+    // "unknown", NOT "0 tokens/sec, 0% KV used". Emitting `Some(0.0)` for
+    // an engine that was mid-step made a long decode look like an idle or
+    // dead engine to dashboards. `None` signals the operator the engine
+    // didn't answer.
+    let metrics: Option<MetricsSnapshot> =
+        tokio::time::timeout(METRICS_RESPONSE_TIMEOUT, response_rx.recv())
+            .await
+            .ok()
+            .flatten();
 
     // RIL ISS-092: report only real data. vllm-lite does not sample GPU
     // utilization, so `gpu_available`/`gpu_utilization` (previously a
@@ -112,8 +122,12 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
             .map_or("unhealthy", |h| h.check_readiness().as_str())
             .to_string(),
         model: state.tokenizer.model_name(),
-        prefill_throughput: Some(metrics.prefill_throughput as f32),
-        kv_cache_usage_percent: Some(metrics.kv_cache_usage_percent as f32),
+        // RIL ISS-151: only `Some` when the engine actually answered —
+        // on timeout both stay `None` (omitted from the wire via
+        // `skip_serializing_if`), so a dashboard sees "unknown" instead
+        // of fabricated `0.0` for an engine mid-step.
+        prefill_throughput: metrics.as_ref().map(|m| m.prefill_throughput as f32),
+        kv_cache_usage_percent: metrics.as_ref().map(|m| m.kv_cache_usage_percent as f32),
     })
 }
 

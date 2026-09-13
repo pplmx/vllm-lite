@@ -157,18 +157,26 @@ async fn health_details_reports_ok_and_omits_unknown_model() {
 /// it did not have). vllm-lite does not sample real GPU utilization, so
 /// the honest endpoint omits both fields and exposes `prefill_throughput`
 /// under its own name.
+///
+/// RIL ISS-151: when the engine does NOT answer `GetMetrics` (bounded
+/// wait elapses — the fixture below is a dead engine), the per-metric
+/// fields must ALSO be absent (`None`), not `"prefill_throughput": 0.0`.
+/// A dashboard reading 0.0 during a long decode step can't distinguish
+/// "idle engine" from "unresponsive engine"; an honest `null` signals
+/// "unknown", which is what an operator needs to decide whether to wake
+/// someone.
 #[tokio::test]
 async fn health_details_omits_fabricated_gpu_fields() {
     let (app, _engine_rx) = app_with_dead_engine();
     let (status, body) = collect(get(&app, "/health/details").await).await;
     assert_eq!(status, axum::http::StatusCode::OK);
     assert!(
-        body.contains("prefill_throughput"),
-        "health/details must expose prefill_throughput under its own name: {body}"
+        !body.contains("prefill_throughput"),
+        "unresponsive engine must OMIT prefill_throughput (None, not 0.0): {body}"
     );
     assert!(
-        body.contains("kv_cache_usage_percent"),
-        "health/details must keep kv_cache_usage_percent: {body}"
+        !body.contains("kv_cache_usage_percent"),
+        "unresponsive engine must OMIT kv_cache_usage_percent (None, not 0.0): {body}"
     );
     assert!(
         !body.contains("gpu_utilization"),
@@ -178,4 +186,40 @@ async fn health_details_omits_fabricated_gpu_fields() {
         !body.contains("gpu_available"),
         "health/details must NOT emit the hardcoded gpu_available field: {body}"
     );
+}
+
+/// RIL ISS-151: when the engine ANSWERS `GetMetrics` with a live
+/// snapshot, `prefill_throughput` / `kv_cache_usage_percent` are present
+/// with real values (not `None`) — the honest-data companion to the
+/// timeout case above.
+#[tokio::test]
+async fn health_details_reports_metrics_when_engine_answers() {
+    let mut state = api_state(vllm_model::config::Architecture::Qwen3);
+    let (engine_tx, mut engine_rx) =
+        tokio::sync::mpsc::channel::<vllm_core::types::EngineMessage>(16);
+    state.engine_tx = engine_tx;
+    let audit = std::sync::Arc::new(vllm_server::security::audit::AuditLogger::new(1000));
+    let app = vllm_server::app::build_app(state, None, audit, &CorsConfig::default());
+
+    // Engine worker: answer every GetMetrics with a live snapshot.
+    let app_clone = app.clone();
+    let worker = tokio::spawn(async move {
+        while let Some(msg) = engine_rx.recv().await {
+            if let vllm_core::types::EngineMessage::GetMetrics { response_tx } = msg {
+                let _ = response_tx.send(vllm_core::metrics::MetricsSnapshot::default());
+            }
+        }
+    });
+
+    let (status, body) = collect(get(&app_clone, "/health/details").await).await;
+    assert_eq!(status, axum::http::StatusCode::OK);
+    assert!(
+        body.contains("prefill_throughput"),
+        "answering engine must expose prefill_throughput: {body}"
+    );
+    assert!(
+        body.contains("kv_cache_usage_percent"),
+        "answering engine must expose kv_cache_usage_percent: {body}"
+    );
+    worker.abort();
 }
