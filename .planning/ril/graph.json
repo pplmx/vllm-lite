@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 116,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T10:26:10+00:00",
+  "updated_at": "2026-09-13T12:16:13+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 115,
+      "touched_round": 116,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -8062,6 +8062,61 @@
       "touched_round": 115,
       "severity": 1,
       "title": "/v1/models (list + by-id) stamps created: unix_now_secs() per call (models.rs:88,132), so the reported 'creation date' moves every request - OpenAI model objects carry a stable epoch. ISS-098 deliberately chose a per-request epoch; a stable server-start value would need a startup timestamp in ApiState/HealthChecker (constructor churn). Tracked as LOW deferral; decision-document before changing."
+    },
+    "ISS-144": {
+      "id": "ISS-144",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T12:11:03+00:00",
+      "updated_at": "2026-09-13T12:11:03+00:00",
+      "touched_round": 116,
+      "title": "EmbeddingsRequest.input is Vec<String> only — OpenAI accepts string | array<string>, so the single-string form (one of the most common embeddings calls) 400s at deserialization",
+      "severity": 7
+    },
+    "ISS-145": {
+      "id": "ISS-145",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T12:11:39+00:00",
+      "updated_at": "2026-09-13T12:11:39+00:00",
+      "touched_round": 116,
+      "title": "Wrong-verb requests on known paths (POST /v1/models, GET /v1/chat/completions) return axum's plain-text 405, breaking OpenAI SDK error parsing (sibling of ISS-125 404)",
+      "severity": 6
+    },
+    "ISS-146": {
+      "id": "ISS-146",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T12:11:39+00:00",
+      "updated_at": "2026-09-13T12:11:39+00:00",
+      "touched_round": 116,
+      "title": "BatchManager.get_all_jobs returns HashMap iteration order — BatchListResponse.data doc promises 'newest first' but data[0] is arbitrary",
+      "severity": 4
+    },
+    "CHG-155": {
+      "id": "CHG-155",
+      "type": "change",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T12:12:13+00:00",
+      "updated_at": "2026-09-13T12:12:13+00:00",
+      "touched_round": 116,
+      "commit": "28d81d87",
+      "title": "Embeddings single-string input + 405 OpenAI envelope"
+    },
+    "CHG-156": {
+      "id": "CHG-156",
+      "type": "change",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T12:12:13+00:00",
+      "updated_at": "2026-09-13T12:12:13+00:00",
+      "touched_round": 116,
+      "commit": "fc288ae7",
+      "title": "Batch get_all_jobs newest-first deterministic"
     }
   },
   "edges": [
@@ -11766,6 +11821,42 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-09-13T07:47:29+00:00"
+    },
+    {
+      "from": "CHG-155",
+      "to": "ISS-144",
+      "type": "resolves",
+      "created_at": "2026-09-13T12:13:59+00:00"
+    },
+    {
+      "from": "CHG-155",
+      "to": "ISS-145",
+      "type": "resolves",
+      "created_at": "2026-09-13T12:13:59+00:00"
+    },
+    {
+      "from": "CHG-156",
+      "to": "ISS-146",
+      "type": "resolves",
+      "created_at": "2026-09-13T12:13:59+00:00"
+    },
+    {
+      "from": "ISS-144",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T12:16:13+00:00"
+    },
+    {
+      "from": "ISS-145",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T12:16:13+00:00"
+    },
+    {
+      "from": "ISS-146",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T12:16:13+00:00"
     }
   ]
 }
