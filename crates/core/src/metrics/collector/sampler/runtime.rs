@@ -144,16 +144,4 @@ impl EnhancedMetricsCollector {
     pub fn set_active_sequences(&self, count: u64) {
         self.active_sequences.store(count, Ordering::Relaxed);
     }
-
-    /// Append a single inference latency sample (nanoseconds) to the rolling histogram.
-    pub fn record_inference_latency(&self, duration_ns: u64) {
-        let mut buckets = self
-            .inference_latency_ns
-            .entry("inference".to_string())
-            .or_default();
-        buckets.push(duration_ns);
-        if buckets.len() > 10000 {
-            buckets.remove(0);
-        }
-    }
 }

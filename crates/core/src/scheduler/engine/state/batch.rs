@@ -27,8 +27,6 @@ impl SchedulerEngine {
         )
         .entered();
 
-        let start_time = Instant::now();
-
         // Get current scheduler state
         let state = SchedulerState {
             waiting_count: self.request_queue.len(),
@@ -166,11 +164,6 @@ impl SchedulerEngine {
                 batch_size: batch.seq_ids.len(),
             });
         }
-
-        // Record batch scheduling latency
-        let duration = start_time.elapsed();
-        self.metrics
-            .record_inference_latency(u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX));
 
         let prefill_count = batch.is_prefill.iter().filter(|&&x| x).count();
         tracing::debug!(

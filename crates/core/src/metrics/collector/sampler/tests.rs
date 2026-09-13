@@ -66,21 +66,6 @@ fn test_collector_records_speculative_acceptance() {
     assert_eq!(rate, 80000);
 }
 
-#[test]
-fn test_collector_records_inference_latency() {
-    let collector = EnhancedMetricsCollector::new();
-    collector.record_inference_latency(1_000_000);
-    collector.record_inference_latency(2_000_000);
-    assert_eq!(
-        collector
-            .inference_latency_ns
-            .get("inference")
-            .unwrap()
-            .len(),
-        2
-    );
-}
-
 // ---- Plan 17.4-H: Metrics Tests ----
 
 /// RIL ISS-108: `speculative_acceptance_rate` and `speculative_efficiency`

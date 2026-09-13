@@ -76,8 +76,6 @@ pub struct EnhancedMetricsCollector {
     draft_load_failures_total: AtomicU64,
     /// Total runtime errors thrown by the draft backend.
     draft_runtime_errors_total: AtomicU64,
-    /// Per-endpoint inference-latency histograms (nanoseconds).
-    inference_latency_ns: DashMap<String, Vec<u64>>,
     /// Per-request accepted / drafted token tallies.
     per_request_acceptance: DashMap<SeqId, (AtomicU64, AtomicU64)>,
 }
@@ -103,7 +101,6 @@ impl EnhancedMetricsCollector {
             draft_resolutions_none_total: AtomicU64::new(0),
             draft_load_failures_total: AtomicU64::new(0),
             draft_runtime_errors_total: AtomicU64::new(0),
-            inference_latency_ns: DashMap::new(),
             per_request_acceptance: DashMap::new(),
         }
     }
