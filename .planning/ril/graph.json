@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 115,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T04:54:55+00:00",
+  "updated_at": "2026-09-13T05:15:42+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7768,6 +7768,42 @@
       "touched_round": 115,
       "commit": "9421d193",
       "title": "Config fail-fast: AppConfig::load/to_app_config return Result<_, ConfigLoadError>; main prints config error + exit 78 (ISS-132/TASK-147)"
+    },
+    "ISS-133": {
+      "id": "ISS-133",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T05:04:26+00:00",
+      "updated_at": "2026-09-13T05:15:42+00:00",
+      "touched_round": 115,
+      "severity": 2,
+      "title": "Engine step errors_total is written in production (engine/run.rs record_engine_error) and exposed on the admin-gated /debug/metrics, but absent from the Prometheus /metrics export (prometheus.rs) and the OTLP SCHEMA_MAP (otlp.rs) - operators scraping the primary surfaces get zero step-error signal"
+    },
+    "TASK-148": {
+      "id": "TASK-148",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-09-13T05:04:27+00:00",
+      "updated_at": "2026-09-13T05:15:42+00:00",
+      "touched_round": 115,
+      "category": "observability",
+      "severity": 2,
+      "title": "Export errors_total on Prometheus /metrics (HELP/TYPE/value via get_counter) and add the SCHEMA_MAP entry (engine.errors, Counter, Atomic) so OTLP emits it too (ISS-133); parity test + live-value test",
+      "lock_owner": "graph-eng-session",
+      "lock_until": "2026-09-13T06:04:27+00:00"
+    },
+    "CHG-148": {
+      "id": "CHG-148",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T05:15:42+00:00",
+      "updated_at": "2026-09-13T05:15:42+00:00",
+      "touched_round": 115,
+      "commit": "14c590af",
+      "title": "Export errors_total on Prometheus /metrics + OTLP engine.errors; parity + live-value tests (ISS-133)"
     }
   },
   "edges": [
@@ -11316,6 +11352,24 @@
       "to": "TASK-147",
       "type": "implements",
       "created_at": "2026-09-13T04:53:55+00:00"
+    },
+    {
+      "from": "TASK-148",
+      "to": "ISS-133",
+      "type": "addresses",
+      "created_at": "2026-09-13T05:04:27+00:00"
+    },
+    {
+      "from": "CHG-148",
+      "to": "ISS-133",
+      "type": "resolves",
+      "created_at": "2026-09-13T05:15:42+00:00"
+    },
+    {
+      "from": "CHG-148",
+      "to": "TASK-148",
+      "type": "implements",
+      "created_at": "2026-09-13T05:15:42+00:00"
     }
   ]
 }
