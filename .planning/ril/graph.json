@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 116,
+  "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T15:02:29+00:00",
+  "updated_at": "2026-09-13T22:12:08+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8294,6 +8294,28 @@
       "touched_round": 116,
       "commit": "388c9c52",
       "title": "CLI-parity range bounds on YAML config path"
+    },
+    "ISS-155": {
+      "id": "ISS-155",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T16:21:50+00:00",
+      "updated_at": "2026-09-13T16:21:50+00:00",
+      "touched_round": 116,
+      "title": "vllm/completions has zero request lifecycle logs (only a stop-sequence warning) and chat non-stream request logs omit model — completions quality/regression untraceable",
+      "severity": 5
+    },
+    "CHG-164": {
+      "id": "CHG-164",
+      "type": "change",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T16:21:50+00:00",
+      "updated_at": "2026-09-13T16:21:50+00:00",
+      "touched_round": 116,
+      "commit": "5968d40e",
+      "title": "completions lifecycle logs + chat model field"
     }
   },
   "edges": [
@@ -12136,6 +12158,18 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-09-13T15:02:29+00:00"
+    },
+    {
+      "from": "CHG-164",
+      "to": "ISS-155",
+      "type": "resolves",
+      "created_at": "2026-09-13T16:21:50+00:00"
+    },
+    {
+      "from": "ISS-155",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T16:21:50+00:00"
     }
   ]
 }
