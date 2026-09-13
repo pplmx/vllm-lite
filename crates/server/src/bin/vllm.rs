@@ -135,6 +135,16 @@ fn show_model_info(path: &PathBuf) -> Result<()> {
     }
 
     let config_path = path.join("config.json");
+    // RIL ISS-142: a dir that exists but isn't a model (no config.json)
+    // must bail with an actionable message instead of printing a
+    // size-only "Model:" line and exiting 0 — the operator asked for
+    // model metadata.
+    if !config_path.exists() {
+        anyhow::bail!(
+            "no config.json found in {} (not a model directory?)",
+            path.display()
+        );
+    }
     let mut info = serde_json::Map::new();
 
     if config_path.exists() {
@@ -428,5 +438,24 @@ server:
             } => assert_eq!(path, PathBuf::from("/models/llama-7b")),
             _ => panic!("expected model info"),
         }
+    }
+
+    // RIL ISS-142: `vllm model info` on a directory that exists but is
+    // NOT a model (no config.json) must bail with an actionable message
+    // instead of silently printing "Model: <dir>" with size-only fields
+    // and exiting 0 — the operator asked for model metadata and got
+    // nothing meaningful (contrast `model list` unknown-dir and `config
+    // validate` bad-config, whose messages are actionable).
+    #[test]
+    fn model_info_requires_config_json() {
+        let temp = TempDir::new().unwrap();
+        let not_a_model = temp.path().join("empty_dir");
+        std::fs::create_dir(&not_a_model).unwrap();
+        let err = show_model_info(&not_a_model)
+            .expect_err("a directory without config.json must be rejected");
+        assert!(
+            err.to_string().contains("config.json"),
+            "error must name the missing config.json, got: {err}"
+        );
     }
 }
