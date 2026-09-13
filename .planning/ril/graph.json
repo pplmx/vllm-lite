@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 116,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T14:05:59+00:00",
+  "updated_at": "2026-09-13T14:10:13+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8243,12 +8243,12 @@
     "CHG-161": {
       "id": "CHG-161",
       "type": "change",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-13T14:05:59+00:00",
-      "updated_at": "2026-09-13T14:05:59+00:00",
+      "updated_at": "2026-09-13T14:09:07+00:00",
       "touched_round": 116,
-      "commit": "pending",
+      "commit": "2024a3c8",
       "title": "Strict model-name conformance across chat/completions/embeddings"
     }
   },
@@ -12050,6 +12050,24 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-09-13T13:21:21+00:00"
+    },
+    {
+      "from": "CHG-161",
+      "to": "ISS-152",
+      "type": "resolves",
+      "created_at": "2026-09-13T14:09:07+00:00"
+    },
+    {
+      "from": "ISS-152",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T14:09:07+00:00"
+    },
+    {
+      "from": "DEC-059",
+      "to": "COMP-004",
+      "type": "governs",
+      "created_at": "2026-09-13T14:10:13+00:00"
     }
   ]
 }
