@@ -21,13 +21,17 @@ pub struct MetricsSnapshot {
     pub tokens_total: u64,
     /// Cumulative requests processed since process start.
     pub requests_total: u64,
-    /// Mean request latency in milliseconds.
+    // RIL ISS-134: these measure ONE engine scheduler step (record_latency
+    // fires once per step from batch.rs/dispatch.rs/graph_step.rs), NOT
+    // end-to-end request latency — labeled honestly to stop operators
+    // misreading step time as request time.
+    /// Mean engine-step latency in milliseconds.
     pub avg_latency_ms: f64,
-    /// 50th-percentile request latency in milliseconds.
+    /// 50th-percentile engine-step latency in milliseconds.
     pub p50_latency_ms: f64,
-    /// 90th-percentile request latency in milliseconds.
+    /// 90th-percentile engine-step latency in milliseconds.
     pub p90_latency_ms: f64,
-    /// 99th-percentile request latency in milliseconds.
+    /// 99th-percentile engine-step latency in milliseconds.
     pub p99_latency_ms: f64,
     /// Mean batch size over the recent sampling window.
     pub avg_batch_size: f64,

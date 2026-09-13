@@ -70,7 +70,7 @@ the main HTTP server port — there is no separate metrics listener):
 
 - `requests_total` — total requests processed
 - `tokens_total` — total tokens generated
-- `avg_latency_ms` / `latency_p50_ms` / `latency_p90_ms` / `latency_p99_ms` — inference latency
+- `avg_latency_ms` / `latency_p50_ms` / `latency_p90_ms` / `latency_p99_ms` — engine step latency (per scheduler step, not end-to-end request latency)
 - `prefix_cache_hit_rate` — prefix cache effectiveness (0–100)
 - `kv_cache_usage_percent` — KV cache block usage (0–100)
 - `prefill_throughput_tps` / `decode_throughput_tps` — per-phase throughput

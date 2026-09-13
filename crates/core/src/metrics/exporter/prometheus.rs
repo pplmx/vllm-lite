@@ -200,19 +200,23 @@ impl PrometheusExporter {
         output.push_str("# TYPE tokens_total counter\n");
         let _ = write!(output, "tokens_total {}\n", snap.tokens_total);
 
-        output.push_str("# HELP avg_latency_ms Average inference latency (ms)\n");
+        // RIL ISS-134: honest HELP — the recorded value is ONE engine
+        // scheduler step (batch.rs/dispatch.rs/graph_step.rs call
+        // record_latency once per step), NOT end-to-end request latency
+        // or TTFT. Operators misread step time as request time.
+        output.push_str("# HELP avg_latency_ms Average engine step latency (ms)\n");
         output.push_str("# TYPE avg_latency_ms gauge\n");
         let _ = write!(output, "avg_latency_ms {:.3}\n", snap.avg_latency_ms);
 
-        output.push_str("# HELP latency_p50_ms Inference latency p50 (ms)\n");
+        output.push_str("# HELP latency_p50_ms Engine step latency p50 (ms)\n");
         output.push_str("# TYPE latency_p50_ms gauge\n");
         let _ = write!(output, "latency_p50_ms {:.3}\n", snap.p50_latency_ms);
 
-        output.push_str("# HELP latency_p90_ms Inference latency p90 (ms)\n");
+        output.push_str("# HELP latency_p90_ms Engine step latency p90 (ms)\n");
         output.push_str("# TYPE latency_p90_ms gauge\n");
         let _ = write!(output, "latency_p90_ms {:.3}\n", snap.p90_latency_ms);
 
-        output.push_str("# HELP latency_p99_ms Inference latency p99 (ms)\n");
+        output.push_str("# HELP latency_p99_ms Engine step latency p99 (ms)\n");
         output.push_str("# TYPE latency_p99_ms gauge\n");
         let _ = write!(output, "latency_p99_ms {:.3}\n", snap.p99_latency_ms);
 

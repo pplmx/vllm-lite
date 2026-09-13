@@ -901,6 +901,26 @@ mod tests {
         );
     }
 
+    /// RIL ISS-134: the latency gauges measure one engine scheduler step
+    /// (record_latency fires once per step), NOT end-to-end request
+    /// latency / TTFT — pin the honest HELP text so the label can't
+    /// regress to the misleading "inference/request latency".
+    #[tokio::test]
+    async fn latency_gauge_help_labels_engine_step_not_request() {
+        let collector = crate::metrics::EnhancedMetricsCollector::new();
+        let exporter =
+            crate::metrics::PrometheusExporter::new(std::sync::Arc::new(collector), 9090);
+        let out = exporter.export_to_string().await;
+        assert!(
+            out.contains("# HELP avg_latency_ms Average engine step latency (ms)"),
+            "avg_latency_ms HELP must call it engine step latency, got:\n{out}"
+        );
+        assert!(
+            !out.contains("inference latency") && !out.contains("request latency"),
+            "latency HELP must not mislabel as inference/request latency, got:\n{out}"
+        );
+    }
+
     /// RIL ISS-103: the fabricated always-0 instruments must not come back.
     #[test]
     fn schema_map_excludes_fabricated_instruments() {
