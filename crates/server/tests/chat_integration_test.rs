@@ -76,6 +76,115 @@ async fn test_chat_completions_rejects_empty_model() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
+/// RIL ISS-152: a chat request naming a model that is NOT the loaded one
+/// must 404 `model_not_found` at the HTTP boundary instead of silently
+/// running the loaded model and echoing the wrong id back (silent
+/// wrong-model). Uses a real tokenizer from disk — which derives its
+/// model id from the dir name (RIL ISS-147) — for the loaded name, so
+/// the conformance check fires. Mirrors the `/models`-guarded test
+/// pattern used throughout `tokenizer.rs` (skipped when no checkpoint is
+/// present, e.g. fresh CI without the model cache).
+#[tokio::test]
+async fn test_chat_completions_rejects_model_that_is_not_loaded() {
+    let model_dir = std::path::Path::new("/models/Qwen3-0.6B");
+    let tokenizer_path = model_dir.join("tokenizer.json");
+    if !tokenizer_path.exists() {
+        eprintln!("skipping: /models/Qwen3-0.6B tokenizer not present");
+        return;
+    }
+    let loaded_name = "Qwen3-0.6B".to_string();
+
+    let mut state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
+    state.tokenizer = std::sync::Arc::new(
+        vllm_model::tokenizer::Tokenizer::from_file(tokenizer_path.to_str().unwrap())
+            .expect("load on-disk tokenizer"),
+    );
+    assert_eq!(
+        state.tokenizer.model_name().as_deref(),
+        Some(loaded_name.as_str()),
+        "on-disk tokenizer must report the dir name as its model id (RIL ISS-147)"
+    );
+    let app = router(state);
+
+    // A wrong-model request must be rejected BEFORE reaching the engine.
+    let body = serde_json::json!({
+        "model": "gpt-4o",
+        "messages": [{"role": "user", "content": "Hi"}]
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&bytes).expect("404 body must be valid JSON");
+    assert_eq!(json["error"]["code"], "model_not_found");
+    assert_eq!(json["error"]["type"], "invalid_request_error");
+}
+
+/// RIL ISS-152 companion: the SAME conformance gate applies to the
+/// streaming SSE path (the pre-fix `validate_chat_request` ran only on
+/// the non-stream path for `n = 1` — ISS-069 fixed that for structural
+/// validation; this pins the model-conformance gate also fires on
+/// `stream: true`).
+#[tokio::test]
+async fn test_chat_stream_rejects_model_that_is_not_loaded() {
+    let model_dir = std::path::Path::new("/models/Qwen3-0.6B");
+    let tokenizer_path = model_dir.join("tokenizer.json");
+    if !tokenizer_path.exists() {
+        eprintln!("skipping: /models/Qwen3-0.6B tokenizer not present");
+        return;
+    }
+
+    let mut state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
+    state.tokenizer = std::sync::Arc::new(
+        vllm_model::tokenizer::Tokenizer::from_file(tokenizer_path.to_str().unwrap())
+            .expect("load on-disk tokenizer"),
+    );
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-fake",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stream": true,
+        "max_tokens": 3
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::NOT_FOUND,
+        "streaming path must apply the model-conformance gate"
+    );
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&bytes).expect("404 body must be valid JSON");
+    assert_eq!(json["error"]["code"], "model_not_found");
+}
+
 /// RIL ISS-069 / TASK-082: `stream=true` must apply the same
 /// model/messages non-empty validation as the non-streaming path. Pre-fix
 /// `validate_chat_request` ran only in `handle_chat` (the n=1 non-stream

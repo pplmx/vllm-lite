@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 116,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T13:02:44+00:00",
+  "updated_at": "2026-09-13T14:05:59+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8194,6 +8194,62 @@
       "touched_round": 116,
       "commit": "2e50326a",
       "title": "Actionable startup errors (config path + log-dir)"
+    },
+    "ISS-151": {
+      "id": "ISS-151",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T13:21:21+00:00",
+      "updated_at": "2026-09-13T13:21:21+00:00",
+      "touched_round": 116,
+      "title": "/health/details fabricates 0.0 throughput/KV-usage (Some(default)) when GetMetrics times out — dashboards can't distinguish idle from unresponsive engine; doc promises None",
+      "severity": 7
+    },
+    "CHG-160": {
+      "id": "CHG-160",
+      "type": "change",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T13:21:21+00:00",
+      "updated_at": "2026-09-13T13:21:21+00:00",
+      "touched_round": 116,
+      "commit": "579332b5",
+      "title": "health/details missing metrics = None (omitted) on timeout"
+    },
+    "ISS-152": {
+      "id": "ISS-152",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T13:31:04+00:00",
+      "updated_at": "2026-09-13T14:02:44+00:00",
+      "touched_round": 116,
+      "title": "Inference endpoints accept ANY non-empty model id and serve the loaded model, echoing the requested id back — silent-wrong-model (OpenAI 404s unknown models); completions proxy convention documented but not decisioned",
+      "severity": 7
+    },
+    "DEC-059": {
+      "id": "DEC-059",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T14:02:44+00:00",
+      "updated_at": "2026-09-13T14:02:44+00:00",
+      "touched_round": 116,
+      "title": "Strict model-name conformance supersedes completions echo-verbatim proxy convention",
+      "rationale": "OpenAI returns 404 model_not_found for an unloadable model; every endpoint previously accepted ANY non-empty model id and served the loaded model, echoing the wrong id back with 200 — silent-wrong-model, mis-attributing generations to monitoring/proxy stacks keyed on response.model. Strict check fires only when the tokenizer can name the loaded model (lenient for fallback/stub tokenizer and the Tokenizer::new() test seam). Completions model:None stays the legacy server-default path. Reverse of the undocumented 'proxy convention' comment (which had no DEC).",
+      "alternatives_rejected": "Lenient + WARN-only: keeps silent-wrong-model for the common typo case and provides no operator-visible signal; config-flag gating (strict by default, non-strict via flag): adds a knob for a superseded convention with no decision evidence"
+    },
+    "CHG-161": {
+      "id": "CHG-161",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T14:05:59+00:00",
+      "updated_at": "2026-09-13T14:05:59+00:00",
+      "touched_round": 116,
+      "commit": "pending",
+      "title": "Strict model-name conformance across chat/completions/embeddings"
     }
   },
   "edges": [
@@ -11982,6 +12038,18 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-09-13T13:02:44+00:00"
+    },
+    {
+      "from": "CHG-160",
+      "to": "ISS-151",
+      "type": "resolves",
+      "created_at": "2026-09-13T13:21:21+00:00"
+    },
+    {
+      "from": "ISS-151",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T13:21:21+00:00"
     }
   ]
 }

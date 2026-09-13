@@ -19,7 +19,9 @@ use tokio::sync::mpsc;
 
 use super::chat_template::{self, ChatTemplate};
 use super::json::OpenaiJson;
-use super::sampling_validation::{validate_chat_request_fields, validate_sampling_params};
+use super::sampling_validation::{
+    validate_chat_request_fields, validate_model_conformance, validate_sampling_params,
+};
 use super::types::{
     ChatChoice, ChatChoiceLogprobs, ChatChunk, ChatChunkChoice, ChatLogprob, ChatMessage,
     ChatRequest, ChatResponse, ErrorResponse, Usage,
@@ -999,6 +1001,14 @@ pub async fn chat_completions(
     // `stream: true` produced a 200 SSE of nothing instead of the 400
     // sync completions returns for an empty prompt (completions.rs:1402).
     validate_chat_request(&req)?;
+
+    // RIL ISS-152: never serve a request for a model that isn't loaded —
+    // a typo'd or wrong id (`"gpt-4o"` against a Qwen deploy) previously
+    // ran the loaded model and echoed the wrong id back with 200 (silent
+    // wrong-model). Matches OpenAI's `404 model_not_found`. Strict only
+    // when the tokenizer can name the loaded model (lenient for the
+    // fallback/stub tokenizer and the test seam).
+    validate_model_conformance(&req.model, state.tokenizer.model_name())?;
 
     // Production-readiness §6: the correlation_id middleware
     // (mounted as the OUTERMOST layer in main.rs) installs a

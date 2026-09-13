@@ -967,6 +967,47 @@ pub fn validate_completion_request_fields(
     Ok(())
 }
 
+/// Reject a client-provided `model` id that does not match the model
+/// actually serving (RIL ISS-152).
+///
+/// Every inference endpoint previously accepted ANY non-empty `model`
+/// string and served it with the loaded model, echoing the requested
+/// (wrong) id back — a typo'd `"gpt-4o"` against a Qwen deployment
+/// silently produced output from the wrong model with a `200`, and any
+/// monitoring/proxy stack keying routing on `response.model`
+/// mis-attributes generations. `OpenAI` returns `404 model_not_found`
+/// for an unloadable model; this mirrors that contract.
+///
+/// The check is **strict only when the server can name its model**:
+/// when the tokenizer exposes no name (fallback/stub tokenizer, or the
+/// test seam `Tokenizer::new()`), there is nothing to conform against,
+/// so any non-empty id is accepted (`"unknown"` from `/v1/models` is not
+/// a real id). Empty ids are rejected by each endpoint's own
+/// `model is required` check before this runs.
+///
+/// # Errors
+///
+/// Returns `(404, {error: {message, type, code: model_not_found}})` when
+/// the requested id differs from the loaded model's name.
+pub(crate) fn validate_model_conformance(
+    requested: &str,
+    loaded: Option<String>,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    if let Some(loaded) = loaded
+        && requested != loaded
+    {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse::with_code(
+                &format!("The model '{requested}' does not exist or you do not have access to it"),
+                "invalid_request_error",
+                "model_not_found",
+            )),
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3225,5 +3266,35 @@ mod tests {
             "error message must name n; got: {}",
             err.1.0.error.message
         );
+    }
+
+    // RIL ISS-152: model-name conformance — a requested model that
+    // differs from the loaded model must 404 model_not_found (OpenAI
+    // contract), and the check is strict only when the server can name
+    // its model (lenient for fallback/stub tokenizers with no name).
+    #[test]
+    fn model_conformance_matching_passes() {
+        validate_model_conformance("qwen3", Some("qwen3".to_string()))
+            .expect("a matching id must pass");
+    }
+
+    #[test]
+    fn model_conformance_mismatch_returns_404() {
+        let err = validate_model_conformance("gpt-4o", Some("qwen3".to_string()))
+            .expect_err("a mismatched id must be rejected");
+        assert_eq!(err.0, StatusCode::NOT_FOUND);
+        assert_eq!(err.1.0.error.error_type, "invalid_request_error");
+        assert_eq!(
+            err.1.0.error.code.as_deref(),
+            Some("model_not_found"),
+            "mismatch must carry the model_not_found code"
+        );
+    }
+
+    #[test]
+    fn model_conformance_lenient_when_server_cannot_name() {
+        // No loaded name (fallback/stub tokenizer): nothing to
+        // conform against — any id passes.
+        validate_model_conformance("anything", None).expect("unknown-loaded-model must be lenient");
     }
 }

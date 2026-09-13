@@ -12,7 +12,9 @@ use std::convert::Infallible;
 use tokio::sync::mpsc;
 
 use super::json::OpenaiJson;
-use super::sampling_validation::{validate_completion_request_fields, validate_sampling_params};
+use super::sampling_validation::{
+    validate_completion_request_fields, validate_model_conformance, validate_sampling_params,
+};
 use super::types::{
     CompletionChoice, CompletionChoiceLogprobs, CompletionLogprob, CompletionRequest,
     CompletionResponse, ErrorResponse, Usage,
@@ -1474,6 +1476,17 @@ pub async fn completions(
     // BEFORE doing any work. Mirror of chat.rs:
     // `validate_chat_request_fields`. Honest 400 > silent degradation.
     validate_completion_request_fields(&req)?;
+
+    // RIL ISS-152: never serve a request for a model that isn't loaded
+    // — a mismatched id previously ran the loaded model and echoed the
+    // wrong id back with 200 (silent wrong-model; the completions
+    // "echo verbatim" proxy convention was superseded by strict
+    // conformance — see DEC-059). `None` stays the legacy server-default
+    // path (fills the loaded model); strict only when the tokenizer can
+    // name the loaded model.
+    if let Some(model) = &req.model {
+        validate_model_conformance(model, state.tokenizer.model_name())?;
+    }
 
     // RIL ISS-139: whitespace-only input parity — embeddings (and, in this
     // batch, chat + batch) reject whitespace-only input; a blank prompt
