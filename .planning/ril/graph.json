@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 116,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T14:10:13+00:00",
+  "updated_at": "2026-09-13T14:46:19+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8250,6 +8250,28 @@
       "touched_round": 116,
       "commit": "2024a3c8",
       "title": "Strict model-name conformance across chat/completions/embeddings"
+    },
+    "ISS-153": {
+      "id": "ISS-153",
+      "type": "issue",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T14:46:19+00:00",
+      "updated_at": "2026-09-13T14:46:19+00:00",
+      "touched_round": 116,
+      "title": "vllm CLI subcommands render blank help descriptions (config/model and validate/list/info) — clap variant doc-comments missing",
+      "severity": 3
+    },
+    "CHG-162": {
+      "id": "CHG-162",
+      "type": "change",
+      "status": "resolved",
+      "version": 1,
+      "created_at": "2026-09-13T14:46:19+00:00",
+      "updated_at": "2026-09-13T14:46:19+00:00",
+      "touched_round": 116,
+      "commit": "3aa41323",
+      "title": "vllm subcommand help descriptions"
     }
   },
   "edges": [
@@ -12068,6 +12090,18 @@
       "to": "COMP-004",
       "type": "governs",
       "created_at": "2026-09-13T14:10:13+00:00"
+    },
+    {
+      "from": "CHG-162",
+      "to": "ISS-153",
+      "type": "resolves",
+      "created_at": "2026-09-13T14:46:19+00:00"
+    },
+    {
+      "from": "ISS-153",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T14:46:19+00:00"
     }
   ]
 }

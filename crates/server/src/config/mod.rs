@@ -45,8 +45,16 @@ pub enum ConfigValidationError {
     KvBlocksTooLarge,
     #[error("engine.max_batch_size must be > 0")]
     MaxBatchSizeZero,
+    #[error("engine.max_batch_size must be <= 8192")]
+    MaxBatchSizeTooLarge,
     #[error("engine.tensor_parallel_size must be > 0")]
     TensorParallelSizeZero,
+    #[error("engine.tensor_parallel_size must be <= 64")]
+    TensorParallelSizeTooLarge,
+    #[error("engine.max_waiting_batches must be in 1..=100")]
+    MaxWaitingBatchesOutOfRange,
+    #[error("engine.max_model_len must be <= 4000000")]
+    MaxModelLenTooLarge,
     #[error("engine.vram_budget_bytes must be > 0 when set")]
     VramBudgetZero,
     #[error("engine.draft_specs[].id must not be empty")]
@@ -276,9 +284,37 @@ impl AppConfig {
         if self.engine.max_batch_size == 0 {
             errors.push(ConfigValidationError::MaxBatchSizeZero);
         }
+        // RIL ISS-154: the CLI `--max-batch-size` parser caps at 8192
+        // (args.rs validate_max_batch_size); the YAML path previously
+        // accepted any > 0 value (e.g. 20000) and wired it straight into
+        // SchedulerConfig — a rate the CLI would refuse. Mirror the flag
+        // bounds so both config sources are equal.
+        if self.engine.max_batch_size > 8192 {
+            errors.push(ConfigValidationError::MaxBatchSizeTooLarge);
+        }
 
         if self.engine.tensor_parallel_size == 0 {
             errors.push(ConfigValidationError::TensorParallelSizeZero);
+        }
+        // RIL ISS-154: CLI `--tensor-parallel-size` caps at 64; the YAML
+        // path accepted any > 0 value and silently no-oped beyond the
+        // supported degree.
+        if self.engine.tensor_parallel_size > 64 {
+            errors.push(ConfigValidationError::TensorParallelSizeTooLarge);
+        }
+
+        // RIL ISS-154: CLI `--max-waiting-batches` restricts to 1..=100;
+        // the YAML path had NO check at all (0 or 1000 both slipped
+        // through).
+        if !(1..=100).contains(&self.engine.max_waiting_batches) {
+            errors.push(ConfigValidationError::MaxWaitingBatchesOutOfRange);
+        }
+
+        // RIL ISS-154: CLI `--max-model-len` caps at 4_000_000; the YAML
+        // path had no upper bound so a typo (an extra zero) produced an
+        // unbounded context-length allowance.
+        if self.engine.max_model_len.is_some_and(|m| m > 4_000_000) {
+            errors.push(ConfigValidationError::MaxModelLenTooLarge);
         }
 
         // v18.0 validation

@@ -112,6 +112,114 @@ fn test_kv_quantization_from_config() {
     assert!(config.engine.kv_quantization);
 }
 
+// ─────────────────── CLI-parity bounds (RIL ISS-154) ───────────────────
+// The CLI flag parsers (args.rs) enforce upper bounds the YAML path
+// previously bypassed; `validate()` must reject the same values so both
+// config sources agree. A YAML `engine.max_batch_size: 20000` (which no
+// `--max-batch-size` flag would accept) used to pass validation and get
+// wired straight into SchedulerConfig.
+
+#[test]
+fn test_validate_max_batch_size_too_large_fails() {
+    let mut config = AppConfig::default();
+    config.engine.max_batch_size = 20000;
+    let errors = config.validate().unwrap_err();
+    assert!(
+        errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::MaxBatchSizeTooLarge)),
+        "max_batch_size above the CLI cap (8192) must be rejected: {errors:?}"
+    );
+}
+
+#[test]
+fn test_validate_max_batch_size_at_cap_ok() {
+    let mut config = AppConfig::default();
+    config.engine.max_batch_size = 8192;
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_validate_tensor_parallel_size_too_large_fails() {
+    let mut config = AppConfig::default();
+    config.engine.tensor_parallel_size = 100;
+    let errors = config.validate().unwrap_err();
+    assert!(
+        errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::TensorParallelSizeTooLarge))
+    );
+}
+
+#[test]
+fn test_validate_tensor_parallel_size_at_cap_ok() {
+    let mut config = AppConfig::default();
+    config.engine.tensor_parallel_size = 64;
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_validate_max_waiting_batches_zero_fails() {
+    let mut config = AppConfig::default();
+    config.engine.max_waiting_batches = 0;
+    let errors = config.validate().unwrap_err();
+    assert!(
+        errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::MaxWaitingBatchesOutOfRange))
+    );
+}
+
+#[test]
+fn test_validate_max_waiting_batches_over_cap_fails() {
+    let mut config = AppConfig::default();
+    config.engine.max_waiting_batches = 101;
+    let errors = config.validate().unwrap_err();
+    assert!(
+        errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::MaxWaitingBatchesOutOfRange))
+    );
+}
+
+#[test]
+fn test_validate_max_waiting_batches_in_range_ok() {
+    let mut config = AppConfig::default();
+    config.engine.max_waiting_batches = 10;
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_validate_max_model_len_too_large_fails() {
+    let mut config = AppConfig::default();
+    config.engine.max_model_len = Some(4_000_001);
+    let errors = config.validate().unwrap_err();
+    assert!(
+        errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::MaxModelLenTooLarge))
+    );
+}
+
+#[test]
+fn test_validate_max_model_len_at_cap_ok() {
+    let mut config = AppConfig::default();
+    config.engine.max_model_len = Some(4_000_000);
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_validate_max_model_len_none_ok() {
+    // Not set → no bound to enforce (server derives from the checkpoint).
+    let config = AppConfig::default();
+    assert!(config.validate().is_ok());
+}
+
 // ─────────────────── v18.0 validation tests ───────────────────
 
 #[test]
