@@ -91,3 +91,50 @@ async fn known_route_still_dispatches_normally() {
         serde_json::from_slice(&body).expect("model list body must be valid JSON");
     assert_eq!(json["object"], "list");
 }
+
+// RIL ISS-145: a wrong HTTP verb on a known path (e.g. `POST /v1/models`,
+// `GET /v1/chat/completions`) previously reached axum's default
+// `405 Method Not Allowed` — a **plain-text** body like the pre-fix 404
+// (RIL ISS-125) — which breaks the `{error: {...}}` parsing every OpenAI
+// SDK performs on non-2xx responses. The envelope must be returned with
+// the `405` status just like the 404 fallback.
+#[tokio::test]
+async fn wrong_method_returns_openai_error_envelope() {
+    let state = api_state(Architecture::Qwen3);
+    let app = build_app(
+        state,
+        None,
+        std::sync::Arc::new(AuditLogger::new(100)),
+        &CorsConfig::default(),
+    );
+
+    let response = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/v1/models")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    assert!(
+        content_type.starts_with("application/json"),
+        "405 must answer JSON, not axum's plain-text default (got {content_type:?})"
+    );
+
+    let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("405 body must be valid JSON");
+    assert_eq!(json["error"]["message"], "Method Not Allowed");
+    assert_eq!(json["error"]["type"], "invalid_request_error");
+}

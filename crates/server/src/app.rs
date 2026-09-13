@@ -140,6 +140,13 @@ pub fn build_app(
         // typo'd route (e.g. `/v1/cheat/completions`) surfaces as a
         // JSON parse error instead of a usable `error.message`.
         .fallback(api_not_found)
+        // OpenAI-envelope 405 for wrong-verb requests on known paths
+        // (RIL ISS-145): without this, `POST /v1/models` or
+        // `GET /v1/chat/completions` reaches axum's default plain-text
+        // `Method Not Allowed` — the exact SDK-breaking shape the 404
+        // fallback above exists to prevent. `method_not_allowed_fallback`
+        // applies to the routes registered before it.
+        .method_not_allowed_fallback(api_method_not_allowed)
         .with_state(state);
 
     // auth (innermost of the security stack): reads the body to
@@ -183,6 +190,20 @@ async fn api_not_found() -> (StatusCode, Json<ErrorResponse>) {
     (
         StatusCode::NOT_FOUND,
         Json(ErrorResponse::new("Not Found", "invalid_request_error")),
+    )
+}
+
+/// Method-level fallback (RIL ISS-145): a known path with the wrong HTTP
+/// verb (e.g. `POST /v1/models`, `GET /v1/chat/completions`) answers
+/// `405` with the `OpenAI` envelope instead of axum's default plain-text
+/// `Method Not Allowed` — mirroring the 404 fallback's SDK contract.
+async fn api_method_not_allowed() -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::METHOD_NOT_ALLOWED,
+        Json(ErrorResponse::new(
+            "Method Not Allowed",
+            "invalid_request_error",
+        )),
     )
 }
 

@@ -168,3 +168,40 @@ async fn embeddings_reaches_engine_when_capabilities_real() {
         "without an engine receiver the request must surface as engine_unavailable"
     );
 }
+
+// RIL ISS-144: OpenAI's `input` accepts a single string
+// (`"input": "the quick brown fox"`) as well as an array; the single
+// string must deserialize into a one-element input list and reach the
+// engine like any array call — NOT a 400 deserialization failure.
+#[tokio::test]
+async fn embeddings_accepts_single_string_input() {
+    let state = build_state(Some(ArchCapabilities::PRODUCTION));
+    let app = router(state);
+
+    let req = HttpRequest::builder()
+        .method("POST")
+        .uri("/v1/embeddings")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "model": "qwen3",
+                "input": "the quick brown fox",
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let resp = app.oneshot(req).await.expect("response");
+
+    assert_ne!(
+        resp.status(),
+        StatusCode::BAD_REQUEST,
+        "single-string input must NOT 400 (OpenAI accepts string | array<string>)"
+    );
+    // Past the gate the channel is closed → 503 engine_unavailable,
+    // proving the single string was normalized and dispatched.
+    assert_eq!(
+        resp.status(),
+        StatusCode::SERVICE_UNAVAILABLE,
+        "single-string input must reach the engine, not be rejected at the boundary"
+    );
+}

@@ -1005,8 +1005,36 @@ impl CompletionResponse {
 pub struct EmbeddingsRequest {
     /// Model id of the embedding model.
     pub model: String,
-    /// Input texts to embed (batch endpoint accepts strings).
+    /// Input texts to embed. The OpenAI API accepts EITHER a single
+    /// string (`"input": "the quick brown fox"`) OR an array of strings
+    /// (`"input": ["a", "b"]`); the former is normalized to a
+    /// one-element list at the boundary. The `deserialize_with` keeps the
+    /// Rust field as `Vec<String>` (array semantics everywhere in the
+    /// handler) while accepting the wire-level single-string form
+    /// (RIL ISS-144).
+    #[serde(default, deserialize_with = "deserialize_embedding_input")]
     pub input: Vec<String>,
+}
+
+/// Accept OpenAI's `string | array<string>` `input` field, normalizing the
+/// single-string form into a one-element list (RIL ISS-144). Non-string
+/// array elements are rejected by serde's array path with the usual
+/// `Deserialize` error.
+pub(crate) fn deserialize_embedding_input<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum EmbeddingInput {
+        One(String),
+        Many(Vec<String>),
+    }
+
+    match EmbeddingInput::deserialize(deserializer)? {
+        EmbeddingInput::One(s) => Ok(vec![s]),
+        EmbeddingInput::Many(v) => Ok(v),
+    }
 }
 
 /// Embedding: single embedding item in an embeddings response.
@@ -1311,5 +1339,36 @@ mod tests {
         assert_eq!(req.input.len(), 2);
         assert_eq!(req.input[0], "hello world");
         assert_eq!(req.input[1], "second");
+    }
+
+    // RIL ISS-144: OpenAI's `input` field is `string | array<string>`; a
+    // single string (`"input": "the quick brown fox"` — one of the most
+    // common embeddings calls) must deserialize into a one-element input
+    // list instead of failing the whole request. Guards the
+    // `deserialize_with` on `EmbeddingsRequest.input`.
+    #[test]
+    fn embeddings_request_deserializes_single_string_input() {
+        let json = r#"{
+            "model": "text-embedding-ada-002",
+            "input": "the quick brown fox"
+        }"#;
+        let req: EmbeddingsRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.model, "text-embedding-ada-002");
+        assert_eq!(req.input.len(), 1);
+        assert_eq!(req.input[0], "the quick brown fox");
+    }
+
+    // RIL ISS-144: the array form still works and the string form is not
+    // accidentally accepted where an array of strings is meant (e.g. a
+    // JSON array keeps its element order verbatim).
+    #[test]
+    fn embeddings_request_deserializes_mixed_shapes() {
+        let array_json = r#"{"model": "m", "input": ["a"]}"#;
+        let req: EmbeddingsRequest = serde_json::from_str(array_json).unwrap();
+        assert_eq!(req.input, vec!["a".to_string()]);
+
+        let single_json = r#"{"model": "m", "input": "a"}"#;
+        let req: EmbeddingsRequest = serde_json::from_str(single_json).unwrap();
+        assert_eq!(req.input, vec!["a".to_string()]);
     }
 }
