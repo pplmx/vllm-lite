@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 115,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T04:15:23+00:00",
+  "updated_at": "2026-09-13T04:54:55+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -44,7 +44,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 108,
+      "touched_round": 115,
       "title": "vllm-server",
       "role": "OpenAI-compatible HTTP API, auth, rate limiting"
     },
@@ -7722,6 +7722,52 @@
       "touched_round": 115,
       "commit": "f67b9ee2",
       "title": "OpenAI wire parity batch: bare model object on GET /v1/models/{id} (ISS-129), ChatMessage.name skip_serializing_if omits the name:null lie (ISS-130), EmbeddingsResponse::new takes true prompt token count (ISS-131)"
+    },
+    "ISS-132": {
+      "id": "ISS-132",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T04:53:25+00:00",
+      "updated_at": "2026-09-13T04:54:27+00:00",
+      "touched_round": 115,
+      "severity": 3,
+      "title": "An explicitly-passed config source (--config or $VLLM_CONFIG_PATH) that is missing/unreadable/unparseable is silently ignored: load_config_file WARNs and falls back to AppConfig::default() (config/mod.rs) so the server boots healthy-looking on the WRONG settings (TASK-107 graceful-degradation leg)"
+    },
+    "TASK-147": {
+      "id": "TASK-147",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T04:53:25+00:00",
+      "updated_at": "2026-09-13T04:54:55+00:00",
+      "touched_round": 115,
+      "category": "correctness",
+      "severity": 3,
+      "title": "Make config loading fail-fast for explicit sources (ISS-132): AppConfig::load returns Result<_, ConfigLoadError>{Missing/Unreadable/Parse}, to_app_config propagates, main exits 78 with 'config error: path (reason)'; defaults still when no source requested; unknown-top-level-keys stay WARN (ISS-097)"
+    },
+    "DEC-057": {
+      "id": "DEC-057",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T04:53:25+00:00",
+      "updated_at": "2026-09-13T04:53:25+00:00",
+      "touched_round": 115,
+      "rationale": "An operator who explicitly points --config or VLLM_CONFIG_PATH at a file means for those settings to apply; degrading to built-in defaults on a typo'd path/parse boots a healthy-looking server on the wrong port/host/engine tuning, silently discarding deliberate configuration. TASK-107's 'degrade gracefully rather than panic' goal is preserved — a hard error exit is not a panic — while removing the silent wrong-behavior trap. Genuinely unconfigured servers (no --config, no env) still default cleanly.",
+      "alternatives_rejected": "[a] Keep permissive load + only log a louder ERROR: rejected because a running wrong-config server is materially worse than a refused start for supervisors/uphill config-drift debugging. [b] Only fail on missing, still fall back on parse errors: rejected because a typo'd YAML value (port: not-a-number) is the most common config mistake and equally deserves fail-fast. [c] Keep two load paths (permissive for 'unknown', strict for explicit): rejected as duplicated surface — with one caller the strict result type is simpler.",
+      "title": "DEC-057: explicitly-requested config sources are fail-fast (RIL ISS-132); unknown top-level keys remain WARN-only (keeps ISS-097); supersedes TASK-107's degrade-to-defaults leg"
+    },
+    "CHG-147": {
+      "id": "CHG-147",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T04:53:55+00:00",
+      "updated_at": "2026-09-13T04:53:55+00:00",
+      "touched_round": 115,
+      "commit": "9421d193",
+      "title": "Config fail-fast: AppConfig::load/to_app_config return Result<_, ConfigLoadError>; main prints config error + exit 78 (ISS-132/TASK-147)"
     }
   },
   "edges": [
@@ -11240,6 +11286,36 @@
       "to": "TASK-146",
       "type": "implements",
       "created_at": "2026-09-13T04:12:53+00:00"
+    },
+    {
+      "from": "TASK-147",
+      "to": "ISS-132",
+      "type": "addresses",
+      "created_at": "2026-09-13T04:53:55+00:00"
+    },
+    {
+      "from": "ISS-132",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T04:53:55+00:00"
+    },
+    {
+      "from": "DEC-057",
+      "to": "COMP-004",
+      "type": "governs",
+      "created_at": "2026-09-13T04:53:55+00:00"
+    },
+    {
+      "from": "CHG-147",
+      "to": "ISS-132",
+      "type": "resolves",
+      "created_at": "2026-09-13T04:53:55+00:00"
+    },
+    {
+      "from": "CHG-147",
+      "to": "TASK-147",
+      "type": "implements",
+      "created_at": "2026-09-13T04:53:55+00:00"
     }
   ]
 }
