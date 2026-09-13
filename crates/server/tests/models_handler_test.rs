@@ -32,10 +32,14 @@ async fn test_models_handler_returns_list() {
 }
 
 /// RIL ISS-106: `GET /v1/models/{id}` must resolve the id the list
-/// endpoint advertises (same single-element payload) and return a clean
-/// OpenAI `404 model_not_found` for unknown ids — the route was missing
-/// entirely, so SDKs that follow a model list with a per-model lookup hit
-/// axum's default empty 404.
+/// endpoint advertises and return a clean OpenAI `404 model_not_found`
+/// for unknown ids — the route was missing entirely, so SDKs that follow
+/// a model list with a per-model lookup hit axum's default empty 404.
+///
+/// RIL ISS-129: OpenAI's `GET /v1/models/{model}` returns the BARE model
+/// object (`object: "model"` with `id`/`owned_by` at top level), not the
+/// list envelope — `client.models.retrieve(id)` parses `object` against
+/// `"model"` and reads top-level `id`.
 #[tokio::test]
 async fn test_model_by_id_returns_served_model() {
     let state = api_state(Architecture::Qwen3);
@@ -65,13 +69,20 @@ async fn test_model_by_id_returns_served_model() {
         .await
         .unwrap();
     let json_str = String::from_utf8(bytes.to_vec()).unwrap();
-    assert!(
-        json_str.contains("\"object\":\"list\""),
-        "by-id payload must mirror the list endpoint: {json_str}"
+    let parsed: serde_json::Value =
+        serde_json::from_str(&json_str).expect("by-id payload must be valid JSON");
+    assert_eq!(
+        parsed["object"], "model",
+        "by-id payload must be the bare model object, got: {json_str}"
+    );
+    assert_eq!(
+        parsed["id"],
+        model_name.as_str(),
+        "must carry the requested model id at top level: {json_str}"
     );
     assert!(
-        json_str.contains(&format!("\"id\":\"{model_name}\"")),
-        "must return the requested model id: {json_str}"
+        parsed.get("data").is_none(),
+        "by-id payload must NOT be a list envelope (RIL ISS-129): {json_str}"
     );
 }
 

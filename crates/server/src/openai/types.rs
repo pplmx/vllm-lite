@@ -97,6 +97,12 @@ pub struct ChatMessage {
     /// Message text content.
     pub content: String,
     /// Optional author name (rare; supported for multi-user logs).
+    ///
+    /// RIL ISS-130: OpenAI's response `message` schema has no `name`
+    /// field, so `None` is OMITTED from the wire instead of emitting a
+    /// `"name": null` lie on every message. Requests legitimately carry
+    /// names, and serde still parses a present key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
 
@@ -1028,12 +1034,16 @@ pub struct EmbeddingsResponse {
 }
 
 impl EmbeddingsResponse {
-    /// Build an [`EmbeddingsResponse`] from raw dense vectors. The
-    /// `usage.prompt_tokens` field is set to the total dimension count
-    /// across all embeddings; `completion_tokens` is always `0` since
-    /// embeddings have no autoregressive output.
+    /// Build an [`EmbeddingsResponse`] from raw dense vectors.
+    ///
+    /// `prompt_tokens` MUST be the true input token count for the request
+    /// (Σ of the tokenizer-encoded lengths), which the caller computes
+    /// before sending the embed forward — the constructor can't derive it
+    /// from the vectors, whose length is the embedding DIMENSION (RIL
+    /// ISS-131). `completion_tokens` is always `0` since embeddings have
+    /// no autoregressive output.
     #[must_use]
-    pub fn new(embeddings: Vec<Vec<f32>>, model: String) -> Self {
+    pub fn new(embeddings: Vec<Vec<f32>>, model: String, prompt_tokens: usize) -> Self {
         let items: Vec<Embedding> = embeddings
             .into_iter()
             .enumerate()
@@ -1044,16 +1054,11 @@ impl EmbeddingsResponse {
             })
             .collect();
 
-        let total_tokens: i64 = items
-            .iter()
-            .map(|d| i64::try_from(d.embedding.len()).unwrap_or(0))
-            .sum();
-
         Self {
             object: "list".to_string(),
             data: items,
             model,
-            usage: Usage::new(usize::try_from(total_tokens).unwrap_or(0), 0),
+            usage: Usage::new(prompt_tokens, 0),
         }
     }
 }
@@ -1105,6 +1110,51 @@ mod tests {
         let rt: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(rt["error"]["type"], "invalid_request_error");
         assert_eq!(rt["error"]["code"], "model_not_found");
+    }
+
+    #[test]
+    fn chat_message_name_none_is_omitted_from_json() {
+        // RIL ISS-130: OpenAI's chat message schema has no `name` field —
+        // a response-side `name: None` must serialize to NO name key (the
+        // pre-fix JSON carried a `"name": null` lie on every message, both
+        // non-streaming choices and stream deltas). Requests legitimately
+        // carry names, so `Some` must still serialize.
+        let msg = ChatMessage {
+            role: "assistant".to_string(),
+            content: "hi".to_string(),
+            name: None,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(
+            !parsed.as_object().unwrap().contains_key("name"),
+            "name=None must be omitted from the wire, got: {json}"
+        );
+
+        let named = ChatMessage {
+            role: "user".to_string(),
+            content: "hi".to_string(),
+            name: Some("alice".to_string()),
+        };
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&named).unwrap()).unwrap();
+        assert_eq!(parsed["name"], "alice");
+    }
+
+    #[test]
+    fn embeddings_response_usage_reports_input_tokens() {
+        // RIL ISS-131: `usage.prompt_tokens` must be the REAL input token
+        // count, not the sum of embedding-vector dimensions (pre-fix the
+        // constructor derived usage from `embedding.len()`, so a 4-dim
+        // model reported 4× the true tokens to strict client accounting).
+        let response = EmbeddingsResponse::new(
+            vec![vec![0.25f32; 4], vec![0.5f32; 4]],
+            "text-embedding".to_string(),
+            3, // true input token count across the two prompts
+        );
+        assert_eq!(response.usage.prompt_tokens, 3);
+        assert_eq!(response.usage.completion_tokens, 0);
+        assert_eq!(response.usage.total_tokens, 3);
     }
 
     #[test]
@@ -1228,22 +1278,24 @@ mod tests {
     #[test]
     fn embeddings_response_new_constructs_correctly() {
         let embeddings = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
-        let resp = EmbeddingsResponse::new(embeddings, "test-model".to_string());
+        // RIL ISS-131: prompt_tokens is the real input token count, NOT
+        // the vector dimension sum (pre-fix this was 6 from two 3-dim
+        // vectors) — the caller passes it explicitly.
+        let resp = EmbeddingsResponse::new(embeddings, "test-model".to_string(), 4);
         assert_eq!(resp.model, "test-model");
         assert_eq!(resp.data.len(), 2);
         assert_eq!(resp.data[0].embedding, vec![1.0, 2.0, 3.0]);
         assert_eq!(resp.data[0].index, 0);
         assert_eq!(resp.data[1].index, 1);
         assert_eq!(resp.data[0].object, "embedding");
-        // 6 input values total
-        assert_eq!(resp.usage.prompt_tokens, 6);
+        assert_eq!(resp.usage.prompt_tokens, 4);
         assert_eq!(resp.usage.completion_tokens, 0);
-        assert_eq!(resp.usage.total_tokens, 6);
+        assert_eq!(resp.usage.total_tokens, 4);
     }
 
     #[test]
     fn embeddings_response_empty_input() {
-        let resp = EmbeddingsResponse::new(vec![], "test-model".to_string());
+        let resp = EmbeddingsResponse::new(vec![], "test-model".to_string(), 0);
         assert_eq!(resp.data.len(), 0);
         assert_eq!(resp.usage.total_tokens, 0);
     }

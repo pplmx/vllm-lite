@@ -25,6 +25,16 @@ fn models_response(payload: ModelsResponse) -> Response {
     response
 }
 
+/// Render a bare model object (RIL ISS-129 `GET /v1/models/{id}`) with
+/// the same `cache-control: no-cache` contract as the list.
+fn model_object_response(model: ModelObject) -> Response {
+    let mut response = Json(model).into_response();
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    response
+}
+
 #[derive(Serialize)]
 struct ModelObject {
     id: String,
@@ -112,15 +122,16 @@ pub async fn model_by_id_handler(
         return (StatusCode::NOT_FOUND, Json(body)).into_response();
     }
 
-    let response = ModelsResponse {
-        object: "list".to_string(),
-        data: vec![ModelObject {
-            id: model_name,
-            object: "model".to_string(),
-            created: crate::util::time::unix_now_secs(),
-            owned_by: "vllm-lite".to_string(),
-            max_model_len: state.max_model_len,
-        }],
+    // RIL ISS-129: OpenAI's `GET /v1/models/{model}` returns the BARE
+    // model object (`object: "model"`, `id`/`created`/`owned_by` at top
+    // level) — not the list envelope `{object: "list", data: [...]}` a
+    // pre-fix version used, which breaks `client.models.retrieve(id)`.
+    let model = ModelObject {
+        id: model_name,
+        object: "model".to_string(),
+        created: crate::util::time::unix_now_secs(),
+        owned_by: "vllm-lite".to_string(),
+        max_model_len: state.max_model_len,
     };
-    models_response(response)
+    model_object_response(model)
 }

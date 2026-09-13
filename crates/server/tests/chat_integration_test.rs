@@ -193,6 +193,15 @@ async fn test_chat_completions_non_streaming_with_mock_engine() {
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(json["object"], "chat.completion");
     assert!(json["choices"][0]["message"]["content"].is_string());
+    // RIL ISS-130: OpenAI's chat response `message` schema has no `name`
+    // field — a declared-but-unset `name` must be OMITTED, not serialized
+    // as a `"name": null` key that strict wire-diffing clients flag.
+    assert!(
+        !json["choices"][0]["message"]
+            .as_object()
+            .is_some_and(|m| m.contains_key("name")),
+        "non-streaming message must not carry a null name key (RIL ISS-130)"
+    );
 }
 
 #[tokio::test]

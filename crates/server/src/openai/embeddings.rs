@@ -143,6 +143,12 @@ pub async fn embeddings(
         }
     }
 
+    // RIL ISS-131: compute the TRUE input token count (Σ encoded lengths)
+    // BEFORE `input_tokens` is moved into the engine message. Reported in
+    // `usage.prompt_tokens` per OpenAI — the vector length returned by the
+    // engine is the embedding dimension, not a token count.
+    let prompt_tokens: usize = input_tokens.iter().map(Vec::len).sum();
+
     let (response_tx, mut rx) = mpsc::unbounded_channel::<Vec<Vec<f32>>>();
 
     state
@@ -164,7 +170,12 @@ pub async fn embeddings(
         )
     })?;
 
-    Ok(Json(EmbeddingsResponse::new(embeddings, req.model)).into_response())
+    Ok(Json(EmbeddingsResponse::new(
+        embeddings,
+        req.model,
+        prompt_tokens,
+    ))
+    .into_response())
 }
 
 // Unit tests are extracted to `tests.rs` (sibling) to keep this
