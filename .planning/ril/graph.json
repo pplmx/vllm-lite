@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 115,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T05:47:01+00:00",
+  "updated_at": "2026-09-13T06:05:24+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7896,6 +7896,42 @@
       "touched_round": 115,
       "severity": 2,
       "title": "A model dir missing tokenizer.json boots 'healthy' and serves garbage: bootstrap/tokenizer.rs load_tokenizer falls back to Tokenizer::new() (whitespace-splitting mock) with only a WARN, while main.rs HealthChecker starts ready=true — so /health/ready returns 200 and /v1/models reports the model while completions are meaningless. INTENTIONAL fallback (4 tests pin it; Tokenizer::new() is the test seam), so the fix is feature-shaped: gate readiness on a real tokenizer (e.g. HealthChecker ready=false + /health/details expose tokenizer_degraded) rather than a hard boot failure. Deferred pending design."
+    },
+    "ISS-138": {
+      "id": "ISS-138",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T05:55:52+00:00",
+      "updated_at": "2026-09-13T06:05:24+00:00",
+      "touched_round": 115,
+      "severity": 2,
+      "title": "SchedulerStats (scheduler/stats.rs, 90 lines, 9 fields + 4 const record_* methods) is fully disconnected: zero production instantiation anywhere in crates/; its doc claims 'Emitted every scheduler step into the metrics channel; used by the Prometheus exporter to render queue-depth and preemption-rate gauges' but nothing emits it and no preemption/eviction gauge exists on any wire surface - the real queue-depth/avg_batch_size gauges come from the lock_free collector. Dead code with a fabricated doc (ISS-063/127 class)"
+    },
+    "TASK-151": {
+      "id": "TASK-151",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-09-13T05:55:52+00:00",
+      "updated_at": "2026-09-13T06:05:24+00:00",
+      "touched_round": 115,
+      "category": "maintainability",
+      "severity": 2,
+      "title": "Remove the disconnected SchedulerStats type (ISS-138): delete scheduler/stats.rs, strip pub mod stats + pub use stats::SchedulerStats + both scheduler/mod.rs layout-doc lines; CHANGELOG public-api removal note; refresh core baseline (removal is allowed by the API check)",
+      "lock_owner": "graph-eng-session",
+      "lock_until": "2026-09-13T06:55:52+00:00"
+    },
+    "CHG-151": {
+      "id": "CHG-151",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T06:05:24+00:00",
+      "updated_at": "2026-09-13T06:05:24+00:00",
+      "touched_round": 115,
+      "commit": "4aaceaad",
+      "title": "Remove fully-disconnected SchedulerStats dead type + scheduler::stats module + re-export + stale layout doc (ISS-138)"
     }
   },
   "edges": [
@@ -11510,6 +11546,24 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-09-13T05:47:01+00:00"
+    },
+    {
+      "from": "TASK-151",
+      "to": "ISS-138",
+      "type": "addresses",
+      "created_at": "2026-09-13T05:55:52+00:00"
+    },
+    {
+      "from": "CHG-151",
+      "to": "ISS-138",
+      "type": "resolves",
+      "created_at": "2026-09-13T06:05:24+00:00"
+    },
+    {
+      "from": "CHG-151",
+      "to": "TASK-151",
+      "type": "implements",
+      "created_at": "2026-09-13T06:05:24+00:00"
     }
   ]
 }
