@@ -80,8 +80,6 @@
 //! - `observer` - Event observation system
 //!   - `SchedulerObserver` trait
 //!   - Events: request arrival, batch scheduling, decoding, completion, preemption
-//! - `stats` - Scheduling statistics
-//!   - `SchedulerStats` for metrics
 //!
 //! ## Data Flow
 //!
@@ -120,8 +118,6 @@ pub mod batch_composer;
 pub mod engine;
 /// Observer hooks for metrics and tracing integration.
 pub mod observer;
-/// Scheduler counters exported to metrics collectors.
-pub mod stats;
 
 // === Public Re-exports ===
 
@@ -134,4 +130,3 @@ pub use packing::{PackedBatch, SequencePacker};
 pub use phase_scheduler::{PhaseScheduler, PhaseSwitchPolicy, SchedulerState};
 pub use radix_cache::{PrefixMatchResult, RadixNode, RadixTree};
 pub use request_queue::RequestQueue;
-pub use stats::SchedulerStats;
