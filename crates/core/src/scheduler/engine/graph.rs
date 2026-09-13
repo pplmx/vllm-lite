@@ -164,6 +164,15 @@ impl SchedulerEngine {
         let admitted: HashSet<SeqId> = new_sequences.iter().map(|s| s.id).collect();
         self.running.extend(new_sequences);
 
+        // RIL ISS-136: mirror `build_batch`'s gauge publishing (state/
+        // batch.rs:66,140) — pre-fix this graph path never updated
+        // `active_sequences` / `request_queue_depth`, so with cuda_graph
+        // enabled the engine (which routes exclusively through here) left
+        // `active_sequences` pinned at init 0 and the queue depth stale.
+        self.metrics.set_active_sequences(self.running.len() as u64);
+        self.metrics
+            .set_queue_depth(self.request_queue.len() as u64);
+
         (sequences, admitted)
     }
 }

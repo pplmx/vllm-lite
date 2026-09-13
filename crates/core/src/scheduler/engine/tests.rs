@@ -95,6 +95,39 @@ fn test_engine_multiple_requests() {
     assert!(batch.seq_ids.contains(&id2));
 }
 
+/// RIL ISS-136: the CUDA-graph admission path
+/// (`select_sequences_for_phase`, graph.rs) drains `request_queue` into
+/// `running` but pre-fix never published the `active_sequences` /
+/// `request_queue_depth` gauges that `build_batch` (state/batch.rs:66,140)
+/// updates — so with `cuda_graph.enabled` the engine routes exclusively
+/// through the graph path and `active_sequences` stays pinned at its init
+/// 0 while sequences run. Regression: drive `add_request` +
+/// `build_batch_with_graph` (works without the `cuda-graph` feature; the
+/// scheduler method isn't gated) and assert both gauges are live after
+/// admission.
+#[test]
+fn test_graph_path_publishes_active_sequences_and_queue_depth() {
+    let metrics = Arc::new(EnhancedMetricsCollector::new());
+    let config = SchedulerConfig::default();
+    let mut engine = SchedulerEngine::new(config, 1024, metrics.clone());
+
+    engine.add_request(Request::new(0, vec![1, 2, 3], 5));
+    // Pre-admission: the request sits in the waiting queue.
+    assert_eq!(metrics.get_gauge("request_queue_depth"), 1);
+
+    let _batch = engine.build_batch_with_graph();
+    assert_eq!(
+        metrics.get_gauge("active_sequences"),
+        1,
+        "graph admission must publish the running count (pre-fix pinned at 0, RIL ISS-136)"
+    );
+    assert_eq!(
+        metrics.get_gauge("request_queue_depth"),
+        0,
+        "graph admission must publish the drained queue depth (pre-fix stayed at the pre-drain value)"
+    );
+}
+
 #[test]
 fn test_engine_memory_pressure() {
     let config = SchedulerConfig::default();
