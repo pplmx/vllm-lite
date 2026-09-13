@@ -25,10 +25,12 @@ use std::path::{Path, PathBuf};
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "vLLM-lite CLI tools", long_about = None)]
 enum Cli {
+    /// Validate server configuration files against the server's own rules.
     Config {
         #[command(subcommand)]
         command: ConfigCommand,
     },
+    /// Inspect local model checkpoints (list / metadata).
     Model {
         #[command(subcommand)]
         command: ModelCommand,
@@ -37,6 +39,7 @@ enum Cli {
 
 #[derive(Subcommand, Debug)]
 enum ConfigCommand {
+    /// Check a YAML config file against `vllm-server`'s `AppConfig` rules.
     Validate {
         /// Path to the YAML config file to validate against the server's
         /// own `AppConfig` rules.
@@ -46,10 +49,12 @@ enum ConfigCommand {
 
 #[derive(Subcommand, Debug)]
 enum ModelCommand {
+    /// List model directories under a root, with size and architecture.
     List {
         /// Directory to scan for model subdirectories.
         dir: PathBuf,
     },
+    /// Show a model directory's metadata (architecture, sizes, EOS id).
     Info {
         /// Path to a model directory containing config.json.
         path: PathBuf,
@@ -393,6 +398,31 @@ server:
     // was rejected because the args were `#[arg(long)]` flags. Guard the
     // positional form (and the `--<flag>` spelling docs never claimed) so the
     // tool's own usage comment stays true.
+    // RIL ISS-153: `vllm --help` / `vllm config --help` / `vllm model --help`
+    // previously rendered the subcommands (`config`, `model`, `validate`,
+    // `list`, `info`) with BLANK descriptions — a fresh operator reading
+    // help learned nothing about what each command does. clap renders enum
+    // variant doc-comments as the `about` text; this walks every
+    // subcommand and asserts a non-empty description so the help can't
+    // silently go blank again.
+    #[test]
+    fn subcommands_have_help_descriptions() {
+        fn assert_subcommands(cmd: &clap::Command) {
+            for sub in cmd.get_subcommands() {
+                let about_empty = sub
+                    .get_about()
+                    .map_or(true, |a| a.to_string().trim().is_empty());
+                assert!(
+                    !about_empty,
+                    "subcommand '{}' must have a help description",
+                    sub.get_name()
+                );
+                assert_subcommands(sub);
+            }
+        }
+        assert_subcommands(&Cli::command());
+    }
+
     #[test]
     fn version_flag_reports_cargo_version() {
         // RIL ISS-119: `--version` must track CARGO_PKG_VERSION (was a
