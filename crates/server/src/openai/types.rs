@@ -689,14 +689,18 @@ pub struct ChatChunk {
 
 impl ChatChunk {
     /// Construct a streaming [`ChatChunk`] for the given single choice.
-    /// Stamps `object = "chat.completion.chunk"` and `created` to the
-    /// current Unix second.
+    /// Stamps `object = "chat.completion.chunk"`.
+    ///
+    /// `created` MUST be the epoch captured once at the start of the
+    /// stream (see the field's doc) — the constructor no longer stamps a
+    /// per-chunk `unix_now_secs()` so every chunk on one stream reports
+    /// the same timestamp (RIL ISS-123).
     #[must_use]
-    pub fn new(id: String, model: String, choice: ChatChunkChoice) -> Self {
+    pub fn new(id: String, model: String, created: i64, choice: ChatChunkChoice) -> Self {
         Self {
             id,
             object: "chat.completion.chunk".to_string(),
-            created: unix_now_secs(),
+            created,
             model,
             choices: vec![choice],
             usage: None,
@@ -706,13 +710,14 @@ impl ChatChunk {
     /// Streaming token-usage chunk: `choices: []` + a real [`Usage`]
     /// (the `OpenAI` `stream_options.include_usage` contract, RIL
     /// ISS-111 follow-up). Emitted AFTER the `finish_reason` chunk and
-    /// BEFORE `[DONE]`.
+    /// BEFORE `[DONE]`. `created` follows the same stream-start rule as
+    /// [`ChatChunk::new`] (RIL ISS-123).
     #[must_use]
-    pub fn new_usage_chunk(id: String, model: String, usage: Usage) -> Self {
+    pub fn new_usage_chunk(id: String, model: String, created: i64, usage: Usage) -> Self {
         Self {
             id,
             object: "chat.completion.chunk".to_string(),
-            created: unix_now_secs(),
+            created,
             model,
             choices: Vec::new(),
             usage: Some(usage),

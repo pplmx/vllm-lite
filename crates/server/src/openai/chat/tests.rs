@@ -84,6 +84,7 @@ fn test_skipped_token_chunk_is_valid_json_with_empty_content() {
     let chunk = ChatChunk::new(
         "chatcmpl-stream".to_string(),
         "test-model".to_string(),
+        1_700_000_000,
         ChatChunkChoice {
             index: 0,
             delta: ChatMessage {
@@ -106,6 +107,50 @@ fn test_skipped_token_chunk_is_valid_json_with_empty_content() {
     assert_eq!(
         parsed["choices"][0]["delta"]["role"],
         serde_json::Value::String("assistant".to_string())
+    );
+}
+
+/// RIL ISS-123: `ChatChunk` constructors must carry the caller-supplied
+/// stream-epoch `created` verbatim. The struct's doc promises "Unix
+/// timestamp at the start of the stream" (types.rs:677), so stamping a
+/// fresh `unix_now_secs()` per chunk lets finish/usage chunks drift from
+/// the request start across a second boundary — the n > 1 path already
+/// captured one `created` for its consolidated chunk (ISS-122) while the
+/// per-token/usage chunks used their own now-times. Both constructors now
+/// REQUIRE the value so no call site can reintroduce per-chunk timestamps.
+#[test]
+fn test_chat_chunk_constructors_carry_supplied_created() {
+    let created: i64 = 1_750_000_000;
+
+    let chunk = ChatChunk::new(
+        "chatcmpl-stream".to_string(),
+        "test-model".to_string(),
+        created,
+        ChatChunkChoice {
+            index: 0,
+            delta: ChatMessage {
+                role: "assistant".to_string(),
+                content: "hi".to_string(),
+                name: None,
+            },
+            finish_reason: None,
+            logprobs: None,
+        },
+    );
+    assert_eq!(
+        chunk.created, created,
+        "new() must carry the supplied stream-epoch created, not a fresh now()"
+    );
+
+    let usage_chunk = ChatChunk::new_usage_chunk(
+        "chatcmpl-stream".to_string(),
+        "test-model".to_string(),
+        created,
+        Usage::new(12, 4),
+    );
+    assert_eq!(
+        usage_chunk.created, created,
+        "new_usage_chunk() must carry the supplied stream-epoch created, not a fresh now()"
     );
 }
 

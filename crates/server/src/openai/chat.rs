@@ -1567,6 +1567,7 @@ async fn stream_n_parallel_chat(
                         let usage_chunk = ChatChunk::new_usage_chunk(
                             "chatcmpl-stream".to_string(),
                             model.clone(),
+                            created,
                             Usage::new(prompt_tokens_len, state.completion_tokens),
                         );
                         let usage_payload = serde_json::to_string(&usage_chunk)
@@ -1634,6 +1635,7 @@ async fn stream_n_parallel_chat(
                             let chunk = ChatChunk::new(
                                 "chatcmpl-stream".to_string(),
                                 model.clone(),
+                                created,
                                 ChatChunkChoice {
                                     index: index as i32,
                                     delta,
@@ -1773,6 +1775,7 @@ async fn stream_n_parallel_chat(
                                 let chunk = ChatChunk::new(
                                     "chatcmpl-stream".to_string(),
                                     model.clone(),
+                                    created,
                                     ChatChunkChoice {
                                         index: index as i32,
                                         delta: ChatMessage {
@@ -1882,6 +1885,11 @@ async fn stream_chat_completion(
     }
 
     let start = std::time::Instant::now();
+    // RIL ISS-123: capture one stream-epoch `created` so EVERY chunk on
+    // this stream reports the same timestamp — `ChatChunk::new` /
+    // `new_usage_chunk` now require the value (they no longer stamp a
+    // per-chunk `unix_now_secs()`). Matches the n > 1 path (ISS-122).
+    let created = crate::util::time::unix_now_secs();
     let request_id = format!(
         "req_{}",
         uuid::Uuid::new_v4().to_string()[..8].to_uppercase()
@@ -2204,6 +2212,7 @@ async fn stream_chat_completion(
                         let usage_chunk = ChatChunk::new_usage_chunk(
                             "chatcmpl-stream".to_string(),
                             model.clone(),
+                            created,
                             Usage::new(prompt_tokens_len, completion_tokens),
                         );
                         let usage_payload = serde_json::to_string(&usage_chunk)
@@ -2269,6 +2278,7 @@ async fn stream_chat_completion(
                                 let chunk = ChatChunk::new(
                                     "chatcmpl-stream".to_string(),
                                     model.clone(),
+                                    created,
                                     ChatChunkChoice {
                                         index: 0,
                                         delta: ChatMessage {
@@ -2307,6 +2317,7 @@ async fn stream_chat_completion(
                             let chunk = ChatChunk::new(
                                 "chatcmpl-stream".to_string(),
                                 model.clone(),
+                                created,
                                 ChatChunkChoice {
                                     index: 0,
                                     delta: ChatMessage {
@@ -2380,6 +2391,7 @@ async fn stream_chat_completion(
                                 let tail_chunk = ChatChunk::new(
                                     "chatcmpl-stream".to_string(),
                                     model.clone(),
+                                    created,
                                     ChatChunkChoice {
                                         index: 0,
                                         delta: ChatMessage {
@@ -2411,6 +2423,7 @@ async fn stream_chat_completion(
                             let chunk = ChatChunk::new(
                                 "chatcmpl-stream".to_string(),
                                 model.clone(),
+                                created,
                                 ChatChunkChoice {
                                     index: 0,
                                     delta: ChatMessage {

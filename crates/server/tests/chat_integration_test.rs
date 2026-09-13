@@ -411,6 +411,75 @@ async fn test_chat_streaming_role_only_on_first_chunk() {
     }
 }
 
+/// RIL ISS-123: every chunk on one chat SSE stream must report the SAME
+/// stream-start `created`. The `ChatChunk` constructors previously stamped
+/// a fresh `unix_now_secs()` per chunk, contradicting their own
+/// stream-start doc — finish/usage chunks could drift from the canonical
+/// stream-epoch value across a second boundary (and diverged from the n >
+/// 1 consolidated chunk that already captured one `created`, ISS-122).
+/// They now REQUIRE the value, so no call site can reintroduce per-chunk
+/// timestamps. Regression: walk a real n = 1 stream and assert every JSON
+/// chunk's `created` is present and identical.
+#[tokio::test]
+async fn test_chat_streaming_created_constant_across_stream() {
+    let (engine_tx, _handle) = spawn_mock_engine(vec![7, 8, 9]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(chat_request_json("llama-test", true)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+
+    // Collect the `created` epoch from every JSON chunk, skipping `[DONE]`.
+    let mut created_values: Vec<i64> = Vec::new();
+    for event in body_str.split("\n\n").filter(|s| !s.is_empty()) {
+        if event.contains("[DONE]") {
+            continue;
+        }
+        let data = event.strip_prefix("data:").unwrap_or(event).trim();
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(data)
+            && let Some(created) = v["created"].as_i64()
+        {
+            created_values.push(created);
+        }
+    }
+    assert!(
+        created_values.len() >= 2,
+        "expected at least two JSON chunks each carrying created, got {}; body: {body_str}",
+        created_values.len()
+    );
+    let first = created_values[0];
+    assert!(
+        created_values.iter().all(|&c| c == first),
+        "every chunk must report the stream-start created {first}, got: {created_values:?}"
+    );
+}
+
 /// RIL ISS-126 (n > 1 follow-up): a candidate that finalizes with ZERO
 /// token chunks never emits a `role` marker — its finish delta is its
 /// first (and only) delta, and pre-fix the intermediate-finish chunk and
