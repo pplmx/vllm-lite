@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 113,
+  "round": 114,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T00:06:05+00:00",
+  "updated_at": "2026-09-13T00:26:22+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7580,7 +7580,7 @@
       "version": 2,
       "created_at": "2026-09-12T23:53:07+00:00",
       "updated_at": "2026-09-12T23:53:07+00:00",
-      "touched_round": 111,
+      "touched_round": 113,
       "severity": 2,
       "title": "Chat n=1 streaming stamps role: assistant on EVERY delta chunk (4 sites) while the n>1 path already emits role only on the first event per candidate via first_emitted - OpenAI spec emits role once per stream"
     },
@@ -7616,6 +7616,17 @@
       "touched_round": 112,
       "title": "remove write-only inference_latency_ns histogram end-to-end (method, field, call site, unit test, CHANGELOG public-api entry)",
       "commit": "00030299"
+    },
+    "CHG-144": {
+      "id": "CHG-144",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T00:26:22+00:00",
+      "updated_at": "2026-09-13T00:26:22+00:00",
+      "touched_round": 113,
+      "title": "complete ISS-126 for n>1: zero-token candidates carry the assistant role marker on their intermediate-finish or consolidated-final delta; flag flipped after the finish delta so the consolidated chunk does not repeat it; 1 regression test",
+      "commit": "6f98850d"
     }
   },
   "edges": [
@@ -11062,6 +11073,12 @@
       "to": "ISS-127",
       "type": "resolves",
       "created_at": "2026-09-13T00:06:05+00:00"
+    },
+    {
+      "from": "CHG-144",
+      "to": "ISS-126",
+      "type": "resolves",
+      "created_at": "2026-09-13T00:26:22+00:00"
     }
   ]
 }
