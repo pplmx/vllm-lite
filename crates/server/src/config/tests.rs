@@ -477,7 +477,7 @@ fn app_config_load_malformed_file_is_an_error() {
     std::fs::write(&file_path, "server:\n  port: not-a-number\n").expect("write file");
     remove_test_env("VLLM_CONFIG_PATH");
 
-    let err = AppConfig::load(Some(file_path.clone())).unwrap_err();
+    let err = AppConfig::load(Some(file_path)).unwrap_err();
     let msg = err.to_string();
     assert!(
         msg.contains("bad_config.yml"),
