@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 115,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T05:28:14+00:00",
+  "updated_at": "2026-09-13T05:47:01+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7849,6 +7849,53 @@
       "touched_round": 115,
       "commit": "be26bd26",
       "title": "Relabel latency gauges as engine-step latency across prometheus HELP / MetricsSnapshot docs / tutorial / Grafana panel (ISS-134)"
+    },
+    "ISS-136": {
+      "id": "ISS-136",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T05:39:29+00:00",
+      "updated_at": "2026-09-13T05:47:00+00:00",
+      "touched_round": 115,
+      "severity": 2,
+      "title": "active_sequences gauge is never updated on the CUDA-graph step path: select_sequences_for_phase (graph.rs:95-168) drains request_queue and extends running but never calls set_active_sequences/set_queue_depth (build_batch at state/batch.rs:66,140 does) - with cuda_graph enabled the engine routes exclusively through the graph path (run.rs), so active_sequences stays pinned at init 0 and request_queue_depth never reflects drains"
+    },
+    "TASK-150": {
+      "id": "TASK-150",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-09-13T05:39:29+00:00",
+      "updated_at": "2026-09-13T05:47:01+00:00",
+      "touched_round": 115,
+      "category": "correctness",
+      "severity": 2,
+      "title": "Publish active_sequences + request_queue_depth gauges on the CUDA-graph admission path (ISS-136): mirror build_batch's set_active_sequences(running.len()) and set_queue_depth(request_queue.len()) at the end of select_sequences_for_phase; regression test drives add_request + build_batch_with_graph and asserts both gauges",
+      "lock_owner": "graph-eng-session",
+      "lock_until": "2026-09-13T06:39:30+00:00"
+    },
+    "CHG-150": {
+      "id": "CHG-150",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T05:47:00+00:00",
+      "updated_at": "2026-09-13T05:47:00+00:00",
+      "touched_round": 115,
+      "commit": "e9519ad1",
+      "title": "Publish active_sequences/queue_depth on the CUDA-graph admission path, mirroring build_batch (ISS-136)"
+    },
+    "ISS-137": {
+      "id": "ISS-137",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T05:47:01+00:00",
+      "updated_at": "2026-09-13T05:47:01+00:00",
+      "touched_round": 115,
+      "severity": 2,
+      "title": "A model dir missing tokenizer.json boots 'healthy' and serves garbage: bootstrap/tokenizer.rs load_tokenizer falls back to Tokenizer::new() (whitespace-splitting mock) with only a WARN, while main.rs HealthChecker starts ready=true — so /health/ready returns 200 and /v1/models reports the model while completions are meaningless. INTENTIONAL fallback (4 tests pin it; Tokenizer::new() is the test seam), so the fix is feature-shaped: gate readiness on a real tokenizer (e.g. HealthChecker ready=false + /health/details expose tokenizer_degraded) rather than a hard boot failure. Deferred pending design."
     }
   },
   "edges": [
@@ -11439,6 +11486,30 @@
       "to": "TASK-149",
       "type": "implements",
       "created_at": "2026-09-13T05:28:14+00:00"
+    },
+    {
+      "from": "TASK-150",
+      "to": "ISS-136",
+      "type": "addresses",
+      "created_at": "2026-09-13T05:39:30+00:00"
+    },
+    {
+      "from": "CHG-150",
+      "to": "ISS-136",
+      "type": "resolves",
+      "created_at": "2026-09-13T05:47:00+00:00"
+    },
+    {
+      "from": "CHG-150",
+      "to": "TASK-150",
+      "type": "implements",
+      "created_at": "2026-09-13T05:47:00+00:00"
+    },
+    {
+      "from": "ISS-137",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T05:47:01+00:00"
     }
   ]
 }
