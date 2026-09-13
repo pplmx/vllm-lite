@@ -199,6 +199,15 @@ const SCHEMA_MAP: &[(&str, &str, InstrumentKind, &str, MetricSource)] = &[
         MetricSource::Atomic,
     ),
     (
+        // RIL ISS-133: engine step errors on the primary OTLP surface too
+        // (was /debug/metrics-admin-only).
+        "errors_total",
+        "engine.errors",
+        InstrumentKind::Counter,
+        "{error}",
+        MetricSource::Atomic,
+    ),
+    (
         "draft_resolutions_external_total",
         "draft.resolutions.external",
         InstrumentKind::Counter,
@@ -858,6 +867,37 @@ mod tests {
             "SCHEMA_MAP must match the PrometheusExporter surface exactly — no \
              missing headline metric (they live on /metrics), no fabricated \
              always-0 instrument, no stale name"
+        );
+    }
+
+    /// RIL ISS-133: engine step errors must surface on the PRIMARY
+    /// observability surface (`/metrics` Prometheus) with the real
+    /// counter value — pre-fix `errors_total` was written in production
+    /// (engine/run.rs) but only rendered on the admin-gated
+    /// `/debug/metrics`, so Prometheus/OTLP scrapes showed zero
+    /// step-error signal while the engine silently failed steps.
+    #[tokio::test]
+    async fn errors_total_exported_on_prometheus_with_live_value() {
+        let collector = crate::metrics::EnhancedMetricsCollector::new();
+        assert_eq!(collector.get_counter("errors_total"), 0);
+        collector.record_engine_error();
+        collector.record_engine_error();
+        assert_eq!(collector.get_counter("errors_total"), 2);
+
+        let exporter =
+            crate::metrics::PrometheusExporter::new(std::sync::Arc::new(collector), 9090);
+        let out = exporter.export_to_string().await;
+        assert!(
+            out.contains("# HELP errors_total "),
+            "/metrics must document errors_total, got:\n{out}"
+        );
+        let value_line = out
+            .lines()
+            .find(|l| l.starts_with("errors_total "))
+            .expect("errors_total must be exported to /metrics");
+        assert!(
+            value_line.ends_with("errors_total 2"),
+            "errors_total must carry the live counter value, got: {value_line}"
         );
     }
 

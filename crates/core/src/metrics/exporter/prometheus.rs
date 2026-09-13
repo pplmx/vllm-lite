@@ -79,6 +79,18 @@ impl PrometheusExporter {
             self.collector.get_counter("dropped_tokens_total")
         );
 
+        // RIL ISS-133: engine step errors must surface on the PRIMARY
+        // observability surface — pre-fix errors_total lived only on the
+        // admin-gated /debug/metrics, so /metrics scrapes showed zero
+        // step-error signal while the engine was silently failing steps.
+        output.push_str("# HELP errors_total Total engine step errors\n");
+        output.push_str("# TYPE errors_total counter\n");
+        let _ = write!(
+            output,
+            "errors_total {}\n",
+            self.collector.get_counter("errors_total")
+        );
+
         // v18.0 multi-model speculative decoding metrics
         let draft_snap = self.collector.draft_metrics_snapshot();
         output.push_str(
