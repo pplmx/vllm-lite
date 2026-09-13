@@ -267,6 +267,92 @@ async fn completions_rejects_empty_prompt_with_400() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
+/// RIL ISS-139: whitespace-only input parity — the sync completions
+/// contract must reject a whitespace-only prompt (embeddings already
+/// rejects whitespace-only elements while claiming every sibling does;
+/// chat + batch get the same trim in this batch).
+#[tokio::test]
+async fn completions_rejects_whitespace_only_prompt_with_400() {
+    use axum::{Extension, extract::State};
+    use vllm_server::openai::completions::completions;
+    use vllm_server::openai::types::CompletionRequest;
+    use vllm_server::security::correlation::CorrelationId;
+
+    let state = create_test_state();
+    let req = CompletionRequest {
+        model: None,
+        prompt: "   ".to_string(),
+        temperature: None,
+        top_p: None,
+        max_tokens: None,
+        stream: None,
+        n: None,
+        stop: None,
+        user: None,
+        seed: None,
+        frequency_penalty: None,
+        presence_penalty: None,
+        logit_bias: None,
+        logprobs: None,
+        echo: None,
+        suffix: None,
+        best_of: None,
+    };
+
+    let result = completions(
+        State(state),
+        Extension(CorrelationId("test-correlation-id".into())),
+        OpenaiJson(req),
+    )
+    .await;
+    let (status, body) = result.expect_err("whitespace-only prompt must 400");
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body.0.error.error_type, "invalid_request_error");
+}
+
+/// RIL ISS-140: empty model-id parity — chat + embeddings 400 on
+/// `model: ""`; completions previously echoed the blank id back instead.
+/// Model `None` stays allowed (legacy default); only `Some("")` is a
+/// malformed value.
+#[tokio::test]
+async fn completions_rejects_empty_model_id_with_400() {
+    use axum::{Extension, extract::State};
+    use vllm_server::openai::completions::completions;
+    use vllm_server::openai::types::CompletionRequest;
+    use vllm_server::security::correlation::CorrelationId;
+
+    let state = create_test_state();
+    let req = CompletionRequest {
+        model: Some(String::new()),
+        prompt: "hello".to_string(),
+        temperature: None,
+        top_p: None,
+        max_tokens: None,
+        stream: None,
+        n: None,
+        stop: None,
+        user: None,
+        seed: None,
+        frequency_penalty: None,
+        presence_penalty: None,
+        logit_bias: None,
+        logprobs: None,
+        echo: None,
+        suffix: None,
+        best_of: None,
+    };
+
+    let result = completions(
+        State(state),
+        Extension(CorrelationId("test-correlation-id".into())),
+        OpenaiJson(req),
+    )
+    .await;
+    let (status, body) = result.expect_err("empty model id must 400");
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body.0.error.error_type, "invalid_request_error");
+}
+
 #[tokio::test]
 async fn completions_returns_503_with_engine_unavailable_code_when_channel_closed() {
     use axum::{Extension, extract::State};

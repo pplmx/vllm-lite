@@ -239,11 +239,13 @@ pub(crate) fn validate_chat_request(
     // into the role position of the prompt shape). Whitespace-padded or
     // case-mangled variants of the four OpenAI roles are also rejected.
     for msg in &req.messages {
-        if msg.content.is_empty() {
+        // RIL ISS-139: whitespace-only parity with embeddings — a content
+        // of only spaces would render an all-blank turn onto the template.
+        if msg.content.trim().is_empty() {
             return Err((
                 axum::http::StatusCode::BAD_REQUEST,
                 Json(ErrorResponse::new(
-                    "message content must not be empty",
+                    "message content must not be empty or whitespace-only",
                     "invalid_request_error",
                 )),
             ));

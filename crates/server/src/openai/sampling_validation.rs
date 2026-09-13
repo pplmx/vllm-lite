@@ -868,6 +868,18 @@ pub fn validate_chat_request_fields(
 pub fn validate_completion_request_fields(
     req: &CompletionRequest,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    // RIL ISS-140: empty model-id parity — chat + embeddings reject
+    // `model: ""`; completions previously echoed the blank id back. `None`
+    // stays allowed (legacy default to the loaded model).
+    if req.model.as_deref().is_some_and(str::is_empty) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "model is required",
+                "invalid_request_error",
+            )),
+        ));
+    }
     // RIL ISS-033: same max_tokens >= 1 contract as the chat endpoint (see
     // `validate_chat_request_fields`).
     if let Some(max_tokens) = req.max_tokens

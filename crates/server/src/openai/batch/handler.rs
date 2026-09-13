@@ -75,11 +75,28 @@ pub async fn create_batch(
     // zero-token prefill the sync endpoint explicitly forbids, so reject
     // any empty string in the list before persisting (a single empty
     // prompt poisons the whole batch).
-    if req.prompts.iter().any(String::is_empty) {
+    //
+    // RIL ISS-139: whitespace-only prompts follow the same contract —
+    // embeddings rejects whitespace-only while its comment claims every
+    // sibling does; batch must mirror the trim.
+    if req.prompts.iter().any(|p| p.trim().is_empty()) {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(
-                "prompt is required (batch prompts cannot be empty strings)",
+                "prompt is required (batch prompts cannot be empty or whitespace-only strings)",
+                "invalid_request_error",
+            )),
+        ));
+    }
+
+    // RIL ISS-140: empty model-id parity — chat + embeddings reject
+    // `model: ""`; batch previously ignored it entirely. `None` stays the
+    // server default.
+    if req.model.as_deref().is_some_and(str::is_empty) {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "model is required",
                 "invalid_request_error",
             )),
         ));
@@ -454,6 +471,49 @@ mod tests {
         let result = create_batch(State(state), OpenaiJson(req)).await;
         let (status, _) = result.expect_err("a batch containing an empty prompt must be rejected");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    // RIL ISS-139: whitespace-only prompts follow the same contract —
+    // embeddings rejects whitespace-only elements while claiming every
+    // sibling does; batch must mirror the trim.
+    #[tokio::test]
+    async fn test_create_batch_rejects_whitespace_only_prompt() {
+        let state = create_test_state();
+        let manager = std::sync::Arc::clone(&state.batch_manager);
+        let req = SimpleBatchRequest {
+            prompts: vec!["   ".to_string()],
+            endpoint: BatchEndpoint::Completion,
+            model: Some("test-model".to_string()),
+            max_tokens: Some(10),
+            temperature: None,
+        };
+        let result = create_batch(State(state), OpenaiJson(req)).await;
+        let (status, body) = result.expect_err("a whitespace-only prompt must be rejected");
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        assert!(body.0.error.message.contains("prompt is required"));
+        assert!(
+            manager.get_all_jobs().await.is_empty(),
+            "rejected batch must not leave a pending job behind"
+        );
+    }
+
+    // RIL ISS-140: empty model-id parity — chat + embeddings 400 on
+    // `model: ""`; batch previously ignored it entirely. `None` stays the
+    // server default; only `Some("")` is rejected.
+    #[tokio::test]
+    async fn test_create_batch_rejects_empty_model_id() {
+        let state = create_test_state();
+        let req = SimpleBatchRequest {
+            prompts: vec!["hello".to_string()],
+            endpoint: BatchEndpoint::Chat,
+            model: Some(String::new()),
+            max_tokens: Some(10),
+            temperature: None,
+        };
+        let result = create_batch(State(state), OpenaiJson(req)).await;
+        let (status, body) = result.expect_err("an empty model id must be rejected");
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(body.0.error.error_type, "invalid_request_error");
     }
 
     #[tokio::test]

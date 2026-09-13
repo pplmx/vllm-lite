@@ -1475,7 +1475,10 @@ pub async fn completions(
     // `validate_chat_request_fields`. Honest 400 > silent degradation.
     validate_completion_request_fields(&req)?;
 
-    if req.prompt.is_empty() {
+    // RIL ISS-139: whitespace-only input parity — embeddings (and, in this
+    // batch, chat + batch) reject whitespace-only input; a blank prompt
+    // would otherwise encode to a degenerate zero-token prefill.
+    if req.prompt.trim().is_empty() {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(

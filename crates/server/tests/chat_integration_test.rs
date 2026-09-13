@@ -170,6 +170,37 @@ async fn test_chat_streaming_rejects_empty_message_content() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
+/// RIL ISS-139: whitespace-only message content must 400, matching the
+/// embeddings element contract (which rejects whitespace-only and claims
+/// every sibling does — chat previously accepted it), not render an
+/// all-whitespace prompt onto the chat template.
+#[tokio::test]
+async fn test_chat_streaming_rejects_whitespace_only_message_content() {
+    let state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "   "}],
+        "stream": true
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
 #[tokio::test]
 async fn test_chat_completions_non_streaming_with_mock_engine() {
     let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
