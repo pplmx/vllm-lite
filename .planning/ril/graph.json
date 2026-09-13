@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 115,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T06:05:24+00:00",
+  "updated_at": "2026-09-13T07:10:16+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7932,6 +7932,53 @@
       "touched_round": 115,
       "commit": "4aaceaad",
       "title": "Remove fully-disconnected SchedulerStats dead type + scheduler::stats module + re-export + stale layout doc (ISS-138)"
+    },
+    "ISS-139": {
+      "id": "ISS-139",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T06:54:19+00:00",
+      "updated_at": "2026-09-13T07:10:16+00:00",
+      "touched_round": 115,
+      "severity": 2,
+      "title": "Whitespace-only input parity: embeddings rejects whitespace-only elements (embeddings.rs:95, whose comment claims 'every sibling path explicitly forbids' it) but chat message content (chat.rs:242 is_empty only), completions prompt (completions.rs:1478 is_empty only) and batch prompts (handler.rs:78 String::is_empty only) all ACCEPT whitespace-only input - a '   ' prompt returns 200 and generates from degenerate input while embeddings 400s the identical value"
+    },
+    "ISS-140": {
+      "id": "ISS-140",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T06:54:20+00:00",
+      "updated_at": "2026-09-13T07:10:16+00:00",
+      "touched_round": 115,
+      "severity": 2,
+      "title": "Empty model-id parity: chat (chat.rs:209) and embeddings (embeddings.rs:69) 400 on model '', but completions (CompletionRequest.model is Option<String> unchecked; response_model echoes it) and batch (SimpleBatchRequest.model Option<String> unchecked) silently accept model:'' and echo it back - OpenAI contract is a 400 invalid_request_error for an empty model id"
+    },
+    "TASK-152": {
+      "id": "TASK-152",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-09-13T06:54:20+00:00",
+      "updated_at": "2026-09-13T07:10:16+00:00",
+      "touched_round": 115,
+      "category": "correctness",
+      "severity": 2,
+      "title": "Close sibling validation parity (ISS-139/140): reject whitespace-only input on chat message content / completions prompt / batch prompts (trim().is_empty() like embeddings) and reject model:'' on completions + batch; TDD at the handler boundary (error_contract/chat_integration/batch handler tests)",
+      "lock_owner": "graph-eng-session",
+      "lock_until": "2026-09-13T07:54:20+00:00"
+    },
+    "CHG-152": {
+      "id": "CHG-152",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T07:10:16+00:00",
+      "updated_at": "2026-09-13T07:10:16+00:00",
+      "touched_round": 115,
+      "commit": "c3e0d4aa",
+      "title": "Whitespace-only + empty-model validation parity: chat/completions/batch trim-check inputs; completions+batch 400 on model:'' (ISS-139/140)"
     }
   },
   "edges": [
@@ -11564,6 +11611,36 @@
       "to": "TASK-151",
       "type": "implements",
       "created_at": "2026-09-13T06:05:24+00:00"
+    },
+    {
+      "from": "TASK-152",
+      "to": "ISS-139",
+      "type": "addresses",
+      "created_at": "2026-09-13T06:54:20+00:00"
+    },
+    {
+      "from": "TASK-152",
+      "to": "ISS-140",
+      "type": "addresses",
+      "created_at": "2026-09-13T06:54:20+00:00"
+    },
+    {
+      "from": "CHG-152",
+      "to": "ISS-139",
+      "type": "resolves",
+      "created_at": "2026-09-13T07:10:16+00:00"
+    },
+    {
+      "from": "CHG-152",
+      "to": "ISS-140",
+      "type": "resolves",
+      "created_at": "2026-09-13T07:10:16+00:00"
+    },
+    {
+      "from": "CHG-152",
+      "to": "TASK-152",
+      "type": "implements",
+      "created_at": "2026-09-13T07:10:16+00:00"
     }
   ]
 }
