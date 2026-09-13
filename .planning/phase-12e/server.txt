@@ -106,6 +106,7 @@ impl core::default::Default for vllm_server::security::audit::AuditLogger
 impl core::default::Default for vllm_server::security::correlation::CorrelationIdMiddleware
 impl core::default::Default for vllm_server::security::cors::CorsConfig
 impl core::error::Error for vllm_server::cli::CliValidationError
+impl core::error::Error for vllm_server::config::ConfigLoadError
 impl core::error::Error for vllm_server::config::ConfigValidationError
 impl core::error::Error for vllm_server::config::ConfigValidationErrors
 impl core::error::Error for vllm_server::security::jwt::JwtError
@@ -120,6 +121,7 @@ impl core::fmt::Debug for vllm_server::cli::CliValidationError
 impl core::fmt::Debug for vllm_server::cli::LogLevel
 impl core::fmt::Debug for vllm_server::cli::ModelArgs
 impl core::fmt::Debug for vllm_server::config::AppConfig
+impl core::fmt::Debug for vllm_server::config::ConfigLoadError
 impl core::fmt::Debug for vllm_server::config::ConfigValidationError
 impl core::fmt::Debug for vllm_server::config::ConfigValidationErrors
 impl core::fmt::Debug for vllm_server::config::CorsConfigFile
@@ -190,6 +192,7 @@ impl core::fmt::Debug for vllm_server::security::tls::TlsConfig
 impl core::fmt::Debug for vllm_server::security::tls::TlsError
 impl core::fmt::Display for vllm_server::cli::CliValidationError
 impl core::fmt::Display for vllm_server::cli::LogLevel
+impl core::fmt::Display for vllm_server::config::ConfigLoadError
 impl core::fmt::Display for vllm_server::config::ConfigValidationError
 impl core::fmt::Display for vllm_server::config::ConfigValidationErrors
 impl core::fmt::Display for vllm_server::openai::batch::types::BatchEndpoint
@@ -215,6 +218,7 @@ impl core::marker::Freeze for vllm_server::cli::CliValidationError
 impl core::marker::Freeze for vllm_server::cli::LogLevel
 impl core::marker::Freeze for vllm_server::cli::ModelArgs
 impl core::marker::Freeze for vllm_server::config::AppConfig
+impl core::marker::Freeze for vllm_server::config::ConfigLoadError
 impl core::marker::Freeze for vllm_server::config::ConfigValidationError
 impl core::marker::Freeze for vllm_server::config::ConfigValidationErrors
 impl core::marker::Freeze for vllm_server::config::CorsConfigFile
@@ -293,6 +297,7 @@ impl core::marker::Send for vllm_server::cli::CliValidationError
 impl core::marker::Send for vllm_server::cli::LogLevel
 impl core::marker::Send for vllm_server::cli::ModelArgs
 impl core::marker::Send for vllm_server::config::AppConfig
+impl core::marker::Send for vllm_server::config::ConfigLoadError
 impl core::marker::Send for vllm_server::config::ConfigValidationError
 impl core::marker::Send for vllm_server::config::ConfigValidationErrors
 impl core::marker::Send for vllm_server::config::CorsConfigFile
@@ -385,6 +390,7 @@ impl core::marker::Sync for vllm_server::cli::CliValidationError
 impl core::marker::Sync for vllm_server::cli::LogLevel
 impl core::marker::Sync for vllm_server::cli::ModelArgs
 impl core::marker::Sync for vllm_server::config::AppConfig
+impl core::marker::Sync for vllm_server::config::ConfigLoadError
 impl core::marker::Sync for vllm_server::config::ConfigValidationError
 impl core::marker::Sync for vllm_server::config::ConfigValidationErrors
 impl core::marker::Sync for vllm_server::config::CorsConfigFile
@@ -463,6 +469,7 @@ impl core::marker::Unpin for vllm_server::cli::CliValidationError
 impl core::marker::Unpin for vllm_server::cli::LogLevel
 impl core::marker::Unpin for vllm_server::cli::ModelArgs
 impl core::marker::Unpin for vllm_server::config::AppConfig
+impl core::marker::Unpin for vllm_server::config::ConfigLoadError
 impl core::marker::Unpin for vllm_server::config::ConfigValidationError
 impl core::marker::Unpin for vllm_server::config::ConfigValidationErrors
 impl core::marker::Unpin for vllm_server::config::CorsConfigFile
@@ -541,6 +548,7 @@ impl core::marker::UnsafeUnpin for vllm_server::cli::CliValidationError
 impl core::marker::UnsafeUnpin for vllm_server::cli::LogLevel
 impl core::marker::UnsafeUnpin for vllm_server::cli::ModelArgs
 impl core::marker::UnsafeUnpin for vllm_server::config::AppConfig
+impl core::marker::UnsafeUnpin for vllm_server::config::ConfigLoadError
 impl core::marker::UnsafeUnpin for vllm_server::config::ConfigValidationError
 impl core::marker::UnsafeUnpin for vllm_server::config::ConfigValidationErrors
 impl core::marker::UnsafeUnpin for vllm_server::config::CorsConfigFile
@@ -619,6 +627,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::cli::CliValidation
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::cli::LogLevel
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::cli::ModelArgs
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::AppConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::ConfigLoadError
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::ConfigValidationError
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::ConfigValidationErrors
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::CorsConfigFile
@@ -697,6 +706,7 @@ impl core::panic::unwind_safe::UnwindSafe for vllm_server::cli::CliValidationErr
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::cli::LogLevel
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::cli::ModelArgs
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::AppConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::ConfigLoadError
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::ConfigValidationError
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::ConfigValidationErrors
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::CorsConfigFile
@@ -959,6 +969,7 @@ pub const vllm_server::security::size_limit::DEFAULT_BODY_LIMIT_BYTES: usize
 pub enum vllm_server::BatchEndpoint
 pub enum vllm_server::cli::CliValidationError
 pub enum vllm_server::cli::LogLevel
+pub enum vllm_server::config::ConfigLoadError
 pub enum vllm_server::config::ConfigValidationError
 pub enum vllm_server::health::HealthStatus
 pub enum vllm_server::HealthStatus
@@ -1001,7 +1012,7 @@ pub fn vllm_server::cli::CliArgs::fmt(&self, &mut core::fmt::Formatter<'_>) -> c
 pub fn vllm_server::cli::CliArgs::from_arg_matches(&clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<Self, clap_builder::Error>
 pub fn vllm_server::cli::CliArgs::from_arg_matches_mut(&mut clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<Self, clap_builder::Error>
 pub fn vllm_server::cli::CliArgs::group_id() -> core::option::Option<clap_builder::util::id::Id>
-pub fn vllm_server::cli::CliArgs::to_app_config(&self) -> vllm_server::config::AppConfig
+pub fn vllm_server::cli::CliArgs::to_app_config(&self) -> core::result::Result<vllm_server::config::AppConfig, vllm_server::config::ConfigLoadError>
 pub fn vllm_server::cli::CliArgs::update_from_arg_matches_mut(&mut self, &mut clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<(), clap_builder::Error>
 pub fn vllm_server::cli::CliArgs::update_from_arg_matches(&mut self, &clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<(), clap_builder::Error>
 pub fn vllm_server::cli::CliValidationError::clone(&self) -> vllm_server::cli::CliValidationError
@@ -1025,9 +1036,10 @@ pub fn vllm_server::config::AppConfig::clone(&self) -> vllm_server::config::AppC
 pub fn vllm_server::config::AppConfig::default() -> Self
 pub fn vllm_server::config::AppConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub fn vllm_server::config::AppConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_server::config::AppConfig::load(core::option::Option<std::path::PathBuf>) -> Self
+pub fn vllm_server::config::AppConfig::load(core::option::Option<std::path::PathBuf>) -> core::result::Result<Self, vllm_server::config::ConfigLoadError>
 pub fn vllm_server::config::AppConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_server::config::AppConfig::validate(&self) -> core::result::Result<(), vllm_server::config::ConfigValidationErrors>
+pub fn vllm_server::config::ConfigLoadError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::config::ConfigValidationError::clone(&self) -> vllm_server::config::ConfigValidationError
 pub fn vllm_server::config::ConfigValidationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::config::ConfigValidationErrors::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1496,6 +1508,9 @@ pub vllm_server::config::AuthConfig::api_keys_file: core::option::Option<alloc::
 pub vllm_server::config::AuthConfig::rate_limit_overrides: std::collections::hash::map::HashMap<alloc::string::String, vllm_server::config::auth::RateLimitOverride>
 pub vllm_server::config::AuthConfig::rate_limit_requests: usize
 pub vllm_server::config::AuthConfig::rate_limit_window_secs: u64
+pub vllm_server::config::ConfigLoadError::Missing(std::path::PathBuf)
+pub vllm_server::config::ConfigLoadError::Parse(std::path::PathBuf, alloc::string::String)
+pub vllm_server::config::ConfigLoadError::Unreadable(std::path::PathBuf, alloc::string::String)
 pub vllm_server::config::ConfigValidationError::DuplicateDraftId(alloc::string::String)
 pub vllm_server::config::ConfigValidationError::EmptyDraftId
 pub vllm_server::config::ConfigValidationError::InvalidLogLevel
