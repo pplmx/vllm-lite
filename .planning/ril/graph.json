@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 115,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T05:15:42+00:00",
+  "updated_at": "2026-09-13T05:28:14+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -7804,6 +7804,51 @@
       "touched_round": 115,
       "commit": "14c590af",
       "title": "Export errors_total on Prometheus /metrics + OTLP engine.errors; parity + live-value tests (ISS-133)"
+    },
+    "ISS-134": {
+      "id": "ISS-134",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T05:27:17+00:00",
+      "updated_at": "2026-09-13T05:28:14+00:00",
+      "touched_round": 115,
+      "severity": 2,
+      "title": "avg_latency_ms/latency_p50/90/99 measure ONE engine scheduler step (record_latency once per step at batch.rs/dispatch.rs/graph_step.rs) but were labeled inference/request latency in Prometheus HELP, MetricsSnapshot docs, tutorial 05 and the Grafana 'Request Latency' panel - operators read step time as request time"
+    },
+    "TASK-149": {
+      "id": "TASK-149",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T05:27:17+00:00",
+      "updated_at": "2026-09-13T05:28:14+00:00",
+      "touched_round": 115,
+      "category": "maintainability",
+      "severity": 2,
+      "title": "Relabel latency gauges honestly as engine-step latency (ISS-134): Prometheus HELP strings, lock_free MetricsSnapshot field docs, tutorial 05 metric list, Grafana panel title; regression guard pins the HELP text; metric names unchanged"
+    },
+    "ISS-135": {
+      "id": "ISS-135",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T05:27:17+00:00",
+      "updated_at": "2026-09-13T05:27:17+00:00",
+      "touched_round": 115,
+      "severity": 2,
+      "title": "The vllm CLI tool has no serve subcommand (vllm.rs defines only Config/Model), so upstream-vLLM-style 'vllm serve <model>' is a clap 'unrecognized subcommand' dead end; the server lives in the separate vllm-server binary. Feature-sized: would need cross-binary wiring (translate CLI args onto vllm-server, or extract the run bootstrap into a callable library fn). Tracked as deferral."
+    },
+    "CHG-149": {
+      "id": "CHG-149",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T05:28:13+00:00",
+      "updated_at": "2026-09-13T05:28:13+00:00",
+      "touched_round": 115,
+      "commit": "be26bd26",
+      "title": "Relabel latency gauges as engine-step latency across prometheus HELP / MetricsSnapshot docs / tutorial / Grafana panel (ISS-134)"
     }
   },
   "edges": [
@@ -11370,6 +11415,30 @@
       "to": "TASK-148",
       "type": "implements",
       "created_at": "2026-09-13T05:15:42+00:00"
+    },
+    {
+      "from": "TASK-149",
+      "to": "ISS-134",
+      "type": "addresses",
+      "created_at": "2026-09-13T05:27:17+00:00"
+    },
+    {
+      "from": "ISS-135",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-13T05:28:13+00:00"
+    },
+    {
+      "from": "CHG-149",
+      "to": "ISS-134",
+      "type": "resolves",
+      "created_at": "2026-09-13T05:28:14+00:00"
+    },
+    {
+      "from": "CHG-149",
+      "to": "TASK-149",
+      "type": "implements",
+      "created_at": "2026-09-13T05:28:14+00:00"
     }
   ]
 }
