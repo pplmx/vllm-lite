@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T23:15:05+00:00",
+  "updated_at": "2026-09-13T23:15:48+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -2562,7 +2562,7 @@
       "version": 1,
       "created_at": "2026-08-10T11:42:18+00:00",
       "updated_at": "2026-08-10T11:42:18+00:00",
-      "touched_round": 115,
+      "touched_round": 117,
       "title": "vllm-server openai streaming SSE",
       "role": "chat/completions SSE 流式响应"
     },
@@ -12222,6 +12222,12 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-09-13T23:13:49+00:00"
+    },
+    {
+      "from": "ISS-157",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-09-13T23:15:48+00:00"
     }
   ]
 }
