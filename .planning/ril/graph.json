@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 115,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T07:33:17+00:00",
+  "updated_at": "2026-09-13T07:45:31+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8015,6 +8015,42 @@
       "touched_round": 115,
       "commit": "8308d4fc",
       "title": "health/details derives status from HealthChecker readiness + exposes loaded model id (ISS-141)"
+    },
+    "ISS-142": {
+      "id": "ISS-142",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T07:35:21+00:00",
+      "updated_at": "2026-09-13T07:45:31+00:00",
+      "touched_round": 115,
+      "severity": 2,
+      "title": "vllm model info silently succeeds on a non-model directory: show_model_info (vllm.rs:132-196) only errors when the path is missing; a dir that exists without config.json prints 'Model: <dirname>' with size-only fields and exits 0 - the operator asked for model metadata and got nothing actionable (contrast model list unknown-dir / config validate bad-config, whose messages are good)"
+    },
+    "TASK-154": {
+      "id": "TASK-154",
+      "type": "task",
+      "status": "resolved",
+      "version": 3,
+      "created_at": "2026-09-13T07:35:21+00:00",
+      "updated_at": "2026-09-13T07:45:31+00:00",
+      "touched_round": 115,
+      "category": "dx",
+      "severity": 2,
+      "title": "vllm model info must bail with 'no config.json found in <dir>' when the target lacks config.json (ISS-142); RED unit test in bin tests, then bail",
+      "lock_owner": "graph-eng-session",
+      "lock_until": "2026-09-13T08:35:21+00:00"
+    },
+    "CHG-154": {
+      "id": "CHG-154",
+      "type": "change",
+      "status": "active",
+      "version": 2,
+      "created_at": "2026-09-13T07:42:43+00:00",
+      "updated_at": "2026-09-13T07:42:43+00:00",
+      "touched_round": 115,
+      "commit": "f97689a2",
+      "title": "vllm model info errors on a non-model dir (no config.json) — 'not a model directory?' bail (ISS-142)"
     }
   },
   "edges": [
@@ -11695,6 +11731,24 @@
       "to": "TASK-153",
       "type": "implements",
       "created_at": "2026-09-13T07:33:16+00:00"
+    },
+    {
+      "from": "TASK-154",
+      "to": "ISS-142",
+      "type": "addresses",
+      "created_at": "2026-09-13T07:35:21+00:00"
+    },
+    {
+      "from": "CHG-154",
+      "to": "ISS-142",
+      "type": "resolves",
+      "created_at": "2026-09-13T07:44:13+00:00"
+    },
+    {
+      "from": "CHG-154",
+      "to": "TASK-154",
+      "type": "implements",
+      "created_at": "2026-09-13T07:44:13+00:00"
     }
   ]
 }
