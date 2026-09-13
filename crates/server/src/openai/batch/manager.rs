@@ -15,6 +15,10 @@ use super::types::{BatchEndpoint, BatchJob, BatchResultItem, BatchStatus};
 /// Manager for Batch. Owns the underlying resource, coordinates concurrent access, and exposes a thread-safe public API.
 pub struct BatchManager {
     jobs: Arc<RwLock<HashMap<String, BatchJob>>>,
+    /// Monotonic creation counter (RIL ISS-146): assigns each job a
+    /// `created_seq` so newest-first iteration is deterministic even when
+    /// several batches land in the same `created_at` second.
+    next_seq: std::sync::atomic::AtomicU64,
 }
 
 impl BatchManager {
@@ -22,6 +26,7 @@ impl BatchManager {
     pub fn new() -> Self {
         Self {
             jobs: Arc::new(RwLock::new(HashMap::new())),
+            next_seq: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -48,7 +53,7 @@ impl BatchManager {
         temperature: Option<f32>,
     ) -> String {
         let id = format!("batch_{}", Uuid::new_v4());
-        let job = BatchJob::new(
+        let mut job = BatchJob::new(
             id.clone(),
             endpoint,
             prompts,
@@ -56,6 +61,13 @@ impl BatchManager {
             max_tokens,
             temperature,
         );
+        // RIL ISS-146: assign a monotonic creation sequence so newest-first
+        // iteration is deterministic even for same-second batches (`crate`
+        // field lives in `types`; the sequence is owned by the manager).
+        let seq = self
+            .next_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        job.created_seq = seq;
         let mut jobs = self.jobs.write().await;
         // Creation is the natural tick point — sweep before inserting so a
         // new batch also clears any terminal batches from the prior window.
@@ -71,9 +83,23 @@ impl BatchManager {
     }
 
     pub async fn get_all_jobs(&self) -> Vec<BatchJob> {
-        let mut jobs = self.jobs.write().await;
-        Self::sweep_expired(&mut jobs);
-        jobs.values().cloned().collect()
+        // RIL ISS-146: newest-first, deterministic. `created_at` is
+        // second-precision (same-second batches tie); `created_seq` (the
+        // manager's monotonic counter, assigned at creation) breaks the
+        // tie so iteration is fully ordered instead of HashMap-arbitrary.
+        // The write guard is scoped to the block so it drops before the
+        // sort (clippy significant_drop_temporary).
+        let mut all: Vec<BatchJob> = {
+            let mut jobs = self.jobs.write().await;
+            Self::sweep_expired(&mut jobs);
+            jobs.values().cloned().collect()
+        };
+        all.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.created_seq.cmp(&a.created_seq))
+        });
+        all
     }
 
     pub async fn update_job(&self, job: BatchJob) {
@@ -278,6 +304,38 @@ mod tests {
         assert_eq!(all.len(), 2);
         let ids: Vec<&str> = all.iter().map(|j| j.id.as_str()).collect();
         assert!(ids.contains(&id1.as_str()));
+        assert!(ids.contains(&id2.as_str()));
+    }
+
+    // RIL ISS-146: `get_all_jobs` must return jobs newest-first
+    // deterministically — the `BatchListResponse.data` doc promises
+    // "newest first", but the pre-fix implementation returned HashMap
+    // iteration order (arbitrary, and even varying across calls as the
+    // map is rebuilt). `created_at` is second-precision, so several
+    // batches created within the same wall-clock second (the normal
+    // rapid-submission case) all tie on `created_at`; a monotonic
+    // creation sequence breaks the tie so iteration is fully ordered.
+    #[test]
+    fn get_all_jobs_returns_newest_first() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id1 =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["a".into()], None, None, None));
+        let id2 = rt.block_on(mgr.create_job(
+            BatchEndpoint::Completion,
+            vec!["b".into()],
+            None,
+            None,
+            None,
+        ));
+        let id3 =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["c".into()], None, None, None));
+        let all = rt.block_on(mgr.get_all_jobs());
+        let ids: Vec<&str> = all.iter().map(|j| j.id.as_str()).collect();
+        // Newest (last created) first, oldest (first created) last.
+        assert_eq!(ids[0], id3, "newest job must be first");
+        assert_eq!(ids[2], id1, "oldest job must be last");
+        // The middle job can only be the remaining one.
         assert!(ids.contains(&id2.as_str()));
     }
 

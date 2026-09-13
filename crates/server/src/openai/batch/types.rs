@@ -199,6 +199,16 @@ pub struct BatchJob {
     pub results: Vec<BatchResultItem>,
     /// Unix timestamp at batch creation.
     pub created_at: i64,
+    /// Monotonic creation sequence assigned by [`super::manager::BatchManager`].
+    ///
+    /// `created_at` is second-precision, so batches created within the same
+    /// wall-clock second (the normal rapid-submission case) tie on
+    /// `created_at`; this counter breaks the tie so newest-first iteration
+    /// is fully deterministic instead of degrading to `HashMap` order (RIL
+    /// ISS-146). `pub(crate)` — wire types don't expose internal ordering
+    /// (the `BatchListResponse.data` doc promises "newest first" but the
+    /// ordering is an iteration contract, not an API field).
+    pub(crate) created_seq: u64,
     /// Unix timestamp at which the job's retrievability expires
     /// (`created_at + DEFAULT_BATCH_RETENTION_SECS`). Fixed at creation;
     /// [`super::manager::BatchManager`] evicts **terminal** jobs past this
@@ -242,6 +252,7 @@ impl BatchJob {
             status: BatchStatus::Pending,
             results: Vec::new(),
             created_at: now,
+            created_seq: 0,
             expires_at: now + DEFAULT_BATCH_RETENTION_SECS,
             completed_at: None,
             cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),

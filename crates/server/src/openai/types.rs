@@ -98,7 +98,7 @@ pub struct ChatMessage {
     pub content: String,
     /// Optional author name (rare; supported for multi-user logs).
     ///
-    /// RIL ISS-130: OpenAI's response `message` schema has no `name`
+    /// RIL ISS-130: `OpenAI`'s response `message` schema has no `name`
     /// field, so `None` is OMITTED from the wire instead of emitting a
     /// `"name": null` lie on every message. Requests legitimately carry
     /// names, and serde still parses a present key.
@@ -1005,7 +1005,7 @@ impl CompletionResponse {
 pub struct EmbeddingsRequest {
     /// Model id of the embedding model.
     pub model: String,
-    /// Input texts to embed. The OpenAI API accepts EITHER a single
+    /// Input texts to embed. The `OpenAI` API accepts EITHER a single
     /// string (`"input": "the quick brown fox"`) OR an array of strings
     /// (`"input": ["a", "b"]`); the former is normalized to a
     /// one-element list at the boundary. The `deserialize_with` keeps the
@@ -1016,7 +1016,7 @@ pub struct EmbeddingsRequest {
     pub input: Vec<String>,
 }
 
-/// Accept OpenAI's `string | array<string>` `input` field, normalizing the
+/// Accept `OpenAI`'s `string | array<string>` `input` field, normalizing the
 /// single-string form into a one-element list (RIL ISS-144). Non-string
 /// array elements are rejected by serde's array path with the usual
 /// `Deserialize` error.
