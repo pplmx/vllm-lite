@@ -524,12 +524,34 @@ pub(crate) fn check_context_length(
 ///
 /// Shared by all chat spawn paths to guarantee identical error
 /// mapping without duplicating the match closure at each call site.
+///
+/// RIL ISS-162: emits a `warn!` for every rejection (this is the single
+/// funnel all nine call sites flow through, so one log covers chat,
+/// completions, embeddings, and batch uniformly). Pre-fix these were
+/// fully silent — when the mailbox saturated, clients got 503s while the
+/// operator saw no log line and no metric, and the failure was invisible
+/// at the boundary (`/health/ready` only flips at ≥90% fill and never
+/// records rejections). The message distinguishes the two failure modes
+/// so an operator can tell "engine overloaded" (transient backpressure,
+/// retryable) from "engine unavailable" (engine shut down, likely fatal).
 pub(crate) fn map_engine_send_error(
     e: &tokio::sync::mpsc::error::TrySendError<vllm_core::types::EngineMessage>,
 ) -> (axum::http::StatusCode, Json<ErrorResponse>) {
     match e {
-        tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
-        tokio::sync::mpsc::error::TrySendError::Closed(_) => engine_unavailable_error(),
+        tokio::sync::mpsc::error::TrySendError::Full(_) => {
+            tracing::warn!(
+                "engine mailbox full: request rejected with 503 engine_overloaded \
+                 (client should retry with backoff)"
+            );
+            engine_overloaded_error()
+        }
+        tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+            tracing::warn!(
+                "engine mailbox closed: engine is shutting down or unavailable; \
+                 request rejected with 503 engine_unavailable"
+            );
+            engine_unavailable_error()
+        }
     }
 }
 

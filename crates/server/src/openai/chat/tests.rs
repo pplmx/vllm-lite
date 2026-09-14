@@ -600,3 +600,39 @@ fn test_chat_choice_logprobs_suppressed_when_speculative_placeholder_present() {
         "placeholder marker is a non-finite logprob with empty top_logprobs"
     );
 }
+
+// RIL ISS-162: `map_engine_send_error` — the single funnel all nine
+// engine-mailbox send sites flow through — must keep mapping `Full` →
+// `503 engine_overloaded` and `Closed` → `503 engine_unavailable` after
+// the observability change added `warn!` logs. Pinned so the response
+// contract stays stable while the logging side effect rests alongside it.
+#[test]
+fn test_map_engine_send_error_full_maps_to_engine_overloaded() {
+    let (tx, _rx) = tokio::sync::mpsc::channel::<vllm_core::types::EngineMessage>(1);
+    // Fill the channel so the next send returns `Full`.
+    let _ = tx.try_send(vllm_core::types::EngineMessage::GetMetrics {
+        response_tx: tokio::sync::mpsc::unbounded_channel().0,
+    });
+    let err = tx
+        .try_send(vllm_core::types::EngineMessage::GetMetrics {
+            response_tx: tokio::sync::mpsc::unbounded_channel().0,
+        })
+        .expect_err("a full channel must reject the send");
+    let (status, body) = map_engine_send_error(&err);
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body.0.error.code.as_deref(), Some("engine_overloaded"));
+}
+
+#[test]
+fn test_map_engine_send_error_closed_maps_to_engine_unavailable() {
+    let (tx, rx) = tokio::sync::mpsc::channel::<vllm_core::types::EngineMessage>(1);
+    drop(rx);
+    let err = tx
+        .try_send(vllm_core::types::EngineMessage::GetMetrics {
+            response_tx: tokio::sync::mpsc::unbounded_channel().0,
+        })
+        .expect_err("a dropped receiver must reject the send");
+    let (status, body) = map_engine_send_error(&err);
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body.0.error.code.as_deref(), Some("engine_unavailable"));
+}
