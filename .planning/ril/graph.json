@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T02:30:58+00:00",
+  "updated_at": "2026-09-14T03:09:55+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8399,10 +8399,10 @@
     "ISS-161": {
       "id": "ISS-161",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-13T23:31:45+00:00",
-      "updated_at": "2026-09-13T23:31:45+00:00",
+      "updated_at": "2026-09-14T03:09:55+00:00",
       "touched_round": 117,
       "severity": 4,
       "title": "embeddings silently drops OpenAI dimensions + encoding_format request fields (EmbeddingsRequest only has model+input, no deny_unknown_fields) — a base64 client decodes garbage, a reduced-dimension client gets full dims with 200, no server signal"
@@ -8715,6 +8715,39 @@
       "rationale": "ISS-172 (spec OOM→block-0 KV fallback) is a genuine residual defect but fixing requires coordinated engine-core hot-path changes (thread under-allocation signal out of ensure_verification_blocks, gate per-seq draft admission) plus a fragile KV-pool-exhaustion regression test. Existing defense-in-depth (ISS-026 pre-allocation + ISS-042 fully-allocated-prefill filter + batch composer) already prevents the common cases; the residual fires only when the KV pool is exhausted between compose and verify within a single step. After 6 fixes this round, a risky speculative-path refactor late in the cycle is disproportionate; record the precise fix design for a dedicated round instead.",
       "alternatives_rejected": "Immediate hot-path refactor (coordination cost + fragile OOM test; risk of destabilizing the hardened speculative path); no-op deferral without design (would lose the investigation — audit already confined the defect to dispatch.rs:320-333)",
       "title": "Defer ISS-172 fix with precise design: return under-allocated seq set from ensure_verification_blocks, gate those seqs' draft_outputs to empty (verify degrades to plain decode, never writing out-of-range draft KV); add a num_kv_blocks-minimal regression test; do in a dedicated speculative-core round"
+    },
+    "TASK-161": {
+      "id": "TASK-161",
+      "type": "task",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T02:38:36+00:00",
+      "updated_at": "2026-09-14T02:38:36+00:00",
+      "touched_round": 117,
+      "category": "correctness",
+      "title": "Generate a unique per-request completion id (chatcmpl-<uuid> / cmpl-<uuid>) in each streaming handler and thread it through every chunk construction, replacing the hardcoded 'chatcmpl-stream'/'cmpl-stream' (ISS-175) — OpenAI contract: id identifies ONE completion; two streams currently share a constant so client dedup/correlation collides"
+    },
+    "TASK-162": {
+      "id": "TASK-162",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-14T03:09:55+00:00",
+      "updated_at": "2026-09-14T03:09:55+00:00",
+      "touched_round": 117,
+      "category": "correctness",
+      "title": "Declare + reject unsupported embeddings encoding_format at boundary (400, name the value) instead of silently dropping"
+    },
+    "CHG-171": {
+      "id": "CHG-171",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T03:09:55+00:00",
+      "updated_at": "2026-09-14T03:09:55+00:00",
+      "touched_round": 117,
+      "commit": "3e9a9f9e",
+      "title": "embeddings rejects non-float encoding_format"
     }
   },
   "edges": [
@@ -12791,6 +12824,30 @@
       "to": "TASK-160",
       "type": "implements",
       "created_at": "2026-09-14T02:04:25+00:00"
+    },
+    {
+      "from": "TASK-161",
+      "to": "ISS-175",
+      "type": "addresses",
+      "created_at": "2026-09-14T02:38:36+00:00"
+    },
+    {
+      "from": "TASK-162",
+      "to": "ISS-161",
+      "type": "addresses",
+      "created_at": "2026-09-14T03:09:55+00:00"
+    },
+    {
+      "from": "CHG-171",
+      "to": "ISS-161",
+      "type": "resolves",
+      "created_at": "2026-09-14T03:09:55+00:00"
+    },
+    {
+      "from": "CHG-171",
+      "to": "TASK-162",
+      "type": "implements",
+      "created_at": "2026-09-14T03:09:55+00:00"
     }
   ]
 }
