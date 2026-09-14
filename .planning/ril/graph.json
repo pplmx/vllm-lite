@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T01:47:24+00:00",
+  "updated_at": "2026-09-14T02:04:25+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8421,10 +8421,10 @@
     "ISS-163": {
       "id": "ISS-163",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-13T23:31:45+00:00",
-      "updated_at": "2026-09-13T23:31:45+00:00",
+      "updated_at": "2026-09-14T02:04:25+00:00",
       "touched_round": 117,
       "severity": 4,
       "title": "speculative spec_dispatch records stale mid-chunk prefill predictor tokens as generated (dispatch.rs:234 pushes stale entries into results -> tokens_total) — contradicts the ISS-083 readonly rule (regular batch.rs + graph_step continue on stale); inflates /metrics tokens_total + OTLP tokens.generated under chunked prefill + spec"
@@ -8681,6 +8681,28 @@
       "touched_round": 117,
       "commit": "2980ae4a",
       "title": "config validate rejects max_model_len 0 (MaxModelLenZero)"
+    },
+    "TASK-160": {
+      "id": "TASK-160",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-14T02:04:25+00:00",
+      "updated_at": "2026-09-14T02:04:25+00:00",
+      "touched_round": 117,
+      "category": "correctness",
+      "title": "Count only non-stale results in speculative record_tokens so tokens_total agrees with client stream"
+    },
+    "CHG-170": {
+      "id": "CHG-170",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T02:04:25+00:00",
+      "updated_at": "2026-09-14T02:04:25+00:00",
+      "touched_round": 117,
+      "commit": "782b884b",
+      "title": "spec_dispatch record_tokens filters stale mid-chunk predictions"
     }
   },
   "edges": [
@@ -12739,6 +12761,24 @@
       "to": "TASK-159",
       "type": "implements",
       "created_at": "2026-09-14T01:47:24+00:00"
+    },
+    {
+      "from": "TASK-160",
+      "to": "ISS-163",
+      "type": "addresses",
+      "created_at": "2026-09-14T02:04:25+00:00"
+    },
+    {
+      "from": "CHG-170",
+      "to": "ISS-163",
+      "type": "resolves",
+      "created_at": "2026-09-14T02:04:25+00:00"
+    },
+    {
+      "from": "CHG-170",
+      "to": "TASK-160",
+      "type": "implements",
+      "created_at": "2026-09-14T02:04:25+00:00"
     }
   ]
 }
