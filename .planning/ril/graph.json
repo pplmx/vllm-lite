@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T01:29:40+00:00",
+  "updated_at": "2026-09-14T01:47:24+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8465,10 +8465,10 @@
     "ISS-167": {
       "id": "ISS-167",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-13T23:32:32+00:00",
-      "updated_at": "2026-09-13T23:32:32+00:00",
+      "updated_at": "2026-09-14T01:47:24+00:00",
       "touched_round": 117,
       "severity": 3,
       "title": "YAML max_model_len:0 passes AppConfig::validate (only upper bound checked) while CLI rejects it (range 1..=4M); Some(0) overrides a real checkpoint value and check_context_length then rejects every request with misleading context_length_exceeded — silent boot, total outage"
@@ -8659,6 +8659,28 @@
       "touched_round": 117,
       "commit": "5a7367fb",
       "title": "map_engine_send_error warns on Full (overloaded) and Closed (unavailable)"
+    },
+    "TASK-159": {
+      "id": "TASK-159",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-14T01:47:24+00:00",
+      "updated_at": "2026-09-14T01:47:24+00:00",
+      "touched_round": 117,
+      "category": "correctness",
+      "title": "Reject YAML engine.max_model_len:0 via new MaxModelLenZero variant (mirror CLI 1..=4M range)"
+    },
+    "CHG-169": {
+      "id": "CHG-169",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T01:47:24+00:00",
+      "updated_at": "2026-09-14T01:47:24+00:00",
+      "touched_round": 117,
+      "commit": "2980ae4a",
+      "title": "config validate rejects max_model_len 0 (MaxModelLenZero)"
     }
   },
   "edges": [
@@ -12699,6 +12721,24 @@
       "to": "TASK-158",
       "type": "implements",
       "created_at": "2026-09-14T01:29:40+00:00"
+    },
+    {
+      "from": "TASK-159",
+      "to": "ISS-167",
+      "type": "addresses",
+      "created_at": "2026-09-14T01:47:24+00:00"
+    },
+    {
+      "from": "CHG-169",
+      "to": "ISS-167",
+      "type": "resolves",
+      "created_at": "2026-09-14T01:47:24+00:00"
+    },
+    {
+      "from": "CHG-169",
+      "to": "TASK-159",
+      "type": "implements",
+      "created_at": "2026-09-14T01:47:24+00:00"
     }
   ]
 }
