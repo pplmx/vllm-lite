@@ -5680,10 +5680,14 @@ async fn test_completions_best_of_above_twenty_returns_400() {
 }
 
 #[tokio::test]
-async fn test_completions_best_of_with_stream_silently_falls_back_to_json() {
-    // stream = true + best_of > 1 must silently fall back to a
-    // non-streaming JSON response (no SSE event stream). The Content-Type
-    // header is application/json instead of text/event-stream.
+async fn test_completions_best_of_with_stream_rejected() {
+    // RIL ISS-158: stream = true + best_of > 1 must be REJECTED with 400,
+    // not silently downgraded to a non-streaming JSON document. best_of
+    // requires ranking N candidates before returning ONE, which cannot
+    // stream — the pre-fix behavior returned a single JSON object while a
+    // client that requested SSE waited for `data:` lines / `[DONE]` and
+    // hung until timeout. The validator now rejects the combination up
+    // front so the caller learns before paying any inference cost.
     use vllm_server::openai::completions::completions;
     let (state, _captured, _handle) = state_with_best_of_mock_engine();
     let app = Router::new()
@@ -5712,17 +5716,62 @@ async fn test_completions_best_of_with_stream_silently_falls_back_to_json() {
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "stream + best_of > 1 must 400 (irreconcilable with SSE), not silently downgrade"
+    );
 
-    let content_type = response
-        .headers()
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_string();
+    // The body must be an OpenAI error envelope (not text).
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value =
+        serde_json::from_slice(&bytes).expect("400 body must be valid JSON");
+    assert_eq!(json["error"]["type"], "invalid_request_error");
     assert!(
-        content_type.starts_with("application/json"),
-        "best_of + stream=true must return JSON (not SSE); got Content-Type: {content_type}"
+        json["error"]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("best_of") && m.contains("stream")),
+        "error must name both offending fields; got: {json}"
+    );
+}
+
+#[tokio::test]
+async fn test_completions_stream_with_best_of_one_still_streams() {
+    // best_of = 1 (the default) with stream:true remains valid — a single
+    // candidate is genuinely streamable. Regression guard for the ISS-158
+    // cross-field reject: it must only fire for best_of > 1.
+    use vllm_server::openai::completions::completions;
+    let (state, _captured, _handle) = state_with_best_of_mock_engine();
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "best_of": 1,
+        "stream": true,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_ne!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "stream + best_of = 1 must not be rejected"
     );
 }
 
