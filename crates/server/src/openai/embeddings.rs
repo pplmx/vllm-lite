@@ -90,6 +90,27 @@ pub async fn embeddings(
         ));
     }
 
+    // RIL ISS-161: explicitly reject unsupported `encoding_format` values
+    // instead of silently ignoring them. The endpoint emits plain floats;
+    // a client that asked for `encoding_format: "base64"` (per OpenAI's
+    // contract) would receive un-encoded floats with a 200 and decode
+    // garbage — the exact silent-contract-drift this handler rejects on
+    // every other unsupported field. `float` (the default) and `null`
+    // pass; anything else is named in the 400.
+    if let Some(fmt) = req.encoding_format.as_deref()
+        && fmt != "float"
+    {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                &format!(
+                    "encoding_format '{fmt}' is not supported; only 'float' is available (base64 encoding is not implemented)"
+                ),
+                "invalid_request_error",
+            )),
+        ));
+    }
+
     // RIL ISS-068 / TASK-081: per-element + count + context validation,
     // mirroring the sibling boundary checks on chat/completions.
     //

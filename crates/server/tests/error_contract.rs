@@ -200,6 +200,7 @@ async fn embeddings_rejects_empty_model_with_400() {
     let req = EmbeddingsRequest {
         model: String::new(),
         input: vec!["hi".into()],
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;
@@ -217,6 +218,7 @@ async fn embeddings_returns_503_with_engine_unavailable_code_when_channel_closed
     let req = EmbeddingsRequest {
         model: "qwen3".into(),
         input: vec!["hi".into()],
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;

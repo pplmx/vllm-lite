@@ -37,6 +37,7 @@ async fn test_embeddings_empty_model() {
     let req = EmbeddingsRequest {
         model: String::new(),
         input: vec!["test input".to_string()],
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;
@@ -51,6 +52,7 @@ async fn test_embeddings_empty_input() {
     let req = EmbeddingsRequest {
         model: "test-model".to_string(),
         input: vec![],
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;
@@ -71,6 +73,7 @@ async fn test_embeddings_rejects_empty_string_element() {
     let req = EmbeddingsRequest {
         model: "test-model".to_string(),
         input: vec![String::new()],
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;
@@ -85,6 +88,7 @@ async fn test_embeddings_rejects_whitespace_only_element() {
     let req = EmbeddingsRequest {
         model: "test-model".to_string(),
         input: vec!["   ".to_string()],
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;
@@ -103,6 +107,7 @@ async fn test_embeddings_rejects_any_empty_element_in_list() {
             String::new(),
             "valid two".to_string(),
         ],
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;
@@ -121,6 +126,7 @@ async fn test_embeddings_rejects_whitespace_element_in_list() {
             "\t\n".to_string(),
             "valid two".to_string(),
         ],
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;
@@ -144,6 +150,7 @@ async fn test_embeddings_rejects_over_max_inputs() {
     let req = EmbeddingsRequest {
         model: "test-model".to_string(),
         input: too_many,
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;
@@ -161,6 +168,7 @@ async fn test_embeddings_accepts_up_to_max_inputs() {
     let req = EmbeddingsRequest {
         model: "test-model".to_string(),
         input: inputs,
+        encoding_format: None,
     };
 
     // Exactly MAX_EMBEDDINGS_INPUTS passes the per-request cap; the closed
@@ -188,6 +196,7 @@ async fn test_embeddings_rejects_input_exceeding_context_length() {
     let req = EmbeddingsRequest {
         model: "test-model".to_string(),
         input: vec!["this is a very long input string that certainly exceeds eight".to_string()],
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;
@@ -205,6 +214,7 @@ async fn test_embeddings_accepts_input_within_context_length() {
         model: "test-model".to_string(),
         // "ab" tokenises to 2 tokens, within the 8-token context.
         input: vec!["ab".to_string()],
+        encoding_format: None,
     };
 
     // Passes the context gate; the closed engine channel then 503s.
@@ -220,6 +230,7 @@ async fn test_embeddings_multiple_inputs() {
     let req = EmbeddingsRequest {
         model: "test-model".to_string(),
         input: vec!["input1".to_string(), "input2".to_string()],
+        encoding_format: None,
     };
 
     let result = embeddings(State(state), OpenaiJson(req)).await;
@@ -234,4 +245,60 @@ async fn test_embeddings_multiple_inputs() {
         Some("engine_unavailable"),
         "error code must be machine-readable"
     );
+}
+
+// RIL ISS-161: unsupported `encoding_format` values must be explicitly
+// rejected, not silently ignored. The endpoint emits plain floats; a
+// client that asks for base64 (per OpenAI's contract) would otherwise get
+// un-encoded floats with a 200 and decode garbage — a silent
+// contract-drift the handler rejects on every other unsupported field.
+#[tokio::test]
+async fn test_embeddings_rejects_base64_encoding_format() {
+    let state = create_test_state();
+    let req = EmbeddingsRequest {
+        model: "test-model".to_string(),
+        input: vec!["hello".to_string()],
+        encoding_format: Some("base64".to_string()),
+    };
+    let result = embeddings(State(state), OpenaiJson(req)).await;
+    let (status, body) = result.expect_err("base64 encoding must be rejected (not implemented)");
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body.error.error_type, "invalid_request_error");
+    assert!(
+        body.error.message.contains("base64"),
+        "error must name the offending value; got: {}",
+        body.error.message
+    );
+}
+
+#[tokio::test]
+async fn test_embeddings_accepts_encoding_format_float() {
+    // `encoding_format: "float"` (the OpenAI default) passes — only the
+    // unimplemented `base64` form is rejected. Reaches the engine channel
+    // (closed fixture → 503), proving the gate did not reject the request.
+    let state = create_test_state();
+    let req = EmbeddingsRequest {
+        model: "test-model".to_string(),
+        input: vec!["hello".to_string()],
+        encoding_format: Some("float".to_string()),
+    };
+    let result = embeddings(State(state), OpenaiJson(req)).await;
+    let (status, body) = result.expect_err("float encoding must pass to the engine channel");
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body.error.code.as_deref(), Some("engine_unavailable"));
+}
+
+#[tokio::test]
+async fn test_embeddings_default_encoding_format_is_float() {
+    // Omitted `encoding_format` = float (OpenAI default); no gate fires.
+    let state = create_test_state();
+    let req = EmbeddingsRequest {
+        model: "test-model".to_string(),
+        input: vec!["hello".to_string()],
+        encoding_format: None,
+    };
+    let result = embeddings(State(state), OpenaiJson(req)).await;
+    let (status, body) = result.expect_err("default (omitted) encoding_format must pass");
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body.error.code.as_deref(), Some("engine_unavailable"));
 }

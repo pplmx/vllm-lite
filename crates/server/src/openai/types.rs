@@ -1014,6 +1014,13 @@ pub struct EmbeddingsRequest {
     /// (RIL ISS-144).
     #[serde(default, deserialize_with = "deserialize_embedding_input")]
     pub input: Vec<String>,
+    /// `OpenAI` `encoding_format` field: `"float"` (default) or
+    /// `"base64"`. Declared at the boundary so the handler can explicitly
+    /// reject the unsupported `"base64"` form with a 400 rather than
+    /// silently returning plain floats (RIL ISS-161) — a base64 client
+    /// would otherwise decode garbage with a 200.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoding_format: Option<String>,
 }
 
 /// Accept `OpenAI`'s `string | array<string>` `input` field, normalizing the
