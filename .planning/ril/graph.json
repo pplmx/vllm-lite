@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T01:11:30+00:00",
+  "updated_at": "2026-09-14T01:29:40+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8410,10 +8410,10 @@
     "ISS-162": {
       "id": "ISS-162",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-13T23:31:45+00:00",
-      "updated_at": "2026-09-13T23:31:45+00:00",
+      "updated_at": "2026-09-14T01:29:40+00:00",
       "touched_round": 117,
       "severity": 4,
       "title": "mailbox-saturation 503s are fully silent: map_engine_send_error (chat.rs:527) returns 503 engine_overloaded/unavailable at 9 call sites with no log and no counter, so saturated-mailbox client failures leave zero operator trace while /health/ready only flips at 90% fill"
@@ -8637,6 +8637,28 @@
       "touched_round": 117,
       "commit": "9e3cf02c",
       "title": "requests_in_flight decrement gated on first finalization (lifecycle.rs finalize_finished)"
+    },
+    "TASK-158": {
+      "id": "TASK-158",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-14T01:28:30+00:00",
+      "updated_at": "2026-09-14T01:29:40+00:00",
+      "touched_round": 117,
+      "category": "observability",
+      "title": "Emit a warn! log inside map_engine_send_error so saturated/closed mailboxes leave an operator trace"
+    },
+    "CHG-168": {
+      "id": "CHG-168",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T01:28:30+00:00",
+      "updated_at": "2026-09-14T01:28:30+00:00",
+      "touched_round": 117,
+      "commit": "5a7367fb",
+      "title": "map_engine_send_error warns on Full (overloaded) and Closed (unavailable)"
     }
   },
   "edges": [
@@ -12659,6 +12681,24 @@
       "to": "TASK-157",
       "type": "implements",
       "created_at": "2026-09-14T01:11:30+00:00"
+    },
+    {
+      "from": "TASK-158",
+      "to": "ISS-162",
+      "type": "addresses",
+      "created_at": "2026-09-14T01:29:40+00:00"
+    },
+    {
+      "from": "CHG-168",
+      "to": "ISS-162",
+      "type": "resolves",
+      "created_at": "2026-09-14T01:29:40+00:00"
+    },
+    {
+      "from": "CHG-168",
+      "to": "TASK-158",
+      "type": "implements",
+      "created_at": "2026-09-14T01:29:40+00:00"
     }
   ]
 }
