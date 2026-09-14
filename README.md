@@ -223,6 +223,8 @@ vLLM-lite 提供 5 级结构化日志，支持控制台美化输出和 JSON 文�
 {"timestamp":"2026-04-19T22:30:06.123Z","level":"INFO","target":"vllm_server::openai","message":"Request completed","request_id":"req_ABC123","output_tokens":42,"duration_ms":1234}
 ```
 
+> **优先级说明（RIL ISS-171）**：`RUST_LOG` 环境变量**覆盖** `--log-level` / `VLLM_LOG_LEVEL` / YAML `server.log_level`——它是 `tracing` 的全局过滤器,凡是设置了它就生效。上面"启用 debug 日志"其实是"用 `RUST_LOG` 强制开启 debug 日志";要按配置控制级别,不要导出 `RUST_LOG`,改用 `--log-level debug`(或 `VLLM_LOG_LEVEL` / YAML)。`/debug/trace` 端点报告当前实际生效的级别。
+
 **启用不同日志级别**：
 
 ```bash
