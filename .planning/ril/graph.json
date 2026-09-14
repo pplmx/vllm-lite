@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 118,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T05:27:36+00:00",
+  "updated_at": "2026-09-14T05:48:23+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -77,7 +77,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 117,
+      "touched_round": 118,
       "title": "core/scheduler",
       "role": "queue, preemption, eviction, batch composition"
     },
@@ -8608,11 +8608,11 @@
     "ISS-176": {
       "id": "ISS-176",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-14T00:33:17+00:00",
-      "updated_at": "2026-09-14T00:33:17+00:00",
-      "touched_round": 117,
+      "updated_at": "2026-09-14T05:48:01+00:00",
+      "touched_round": 118,
       "severity": 5,
       "title": "CUDA-graph capture produces EMPTY graphs (cuda_graph.rs:161-164 capture only sets cached=true, records no kernels/node; executor.rs:171-186 replay iterates empty nodes vec) yet process_output feeds execute()'s placeholder next_tokens (token 0) straight to the client + seq.tokens (graph_step.rs:59-64,210-222) — if any embedder wired the feature per its docs, generation would be all-zeros garbage with no sampling; latent (no production capture caller)"
     },
@@ -8859,6 +8859,28 @@
       "touched_round": 117,
       "commit": "ef00bdac",
       "title": "execute_preemption phase 2 continues from phase-1 freed total (RIL ISS-174): hoist blocks_freed to function scope, RED-first over-preemption regression"
+    },
+    "CHG-177": {
+      "id": "CHG-177",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T05:48:01+00:00",
+      "updated_at": "2026-09-14T05:48:01+00:00",
+      "touched_round": 118,
+      "commit": "1fa450bd",
+      "title": "CudaGraph::execute refuses to replay empty captured graph (RIL ISS-176): empty capture errors -> eager fallback, no token-0 fabrication; 2 RED-first tests"
+    },
+    "DEC-063": {
+      "id": "DEC-063",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T05:48:23+00:00",
+      "updated_at": "2026-09-14T05:48:23+00:00",
+      "touched_round": 118,
+      "rationale": "Real CUDA-graph capture (recording actual model-forward kernels per batch size via stream capture) is a feature, not a bug fix: CudaGraph::capture is a CPU-only stub by design, tests explicitly avoid real CUDA launches, and there is no production caller of capture_cuda_graphs() today. What WAS in scope for the bug loop is the safety landmine under that stub: an empty capture replayed as a silent Ok and BatchCudaGraphExecutor then fabricated token-0 output into process_output. That is now hardened (CHG-177, ISS-176 resolved) so the moment someone wires capture, empty graphs error loudly and step_with_graph falls back to eager. Real kernel capture remains deferred until there is an actual accelerator integration requesting it.",
+      "alternatives_rejected": "implementing real stream capture now (needs a CUDA device path and model-forward recording - feature-sized, no active consumer); leaving execute() as silent-Ok (keeps the token-0 fabrication landmine armed)"
     }
   },
   "edges": [
@@ -13037,6 +13059,18 @@
       "to": "ISS-174",
       "type": "resolves",
       "created_at": "2026-09-14T05:26:28+00:00"
+    },
+    {
+      "from": "CHG-177",
+      "to": "ISS-176",
+      "type": "resolves",
+      "created_at": "2026-09-14T05:48:01+00:00"
+    },
+    {
+      "from": "DEC-063",
+      "to": "COMP-007",
+      "type": "governs",
+      "created_at": "2026-09-14T05:48:23+00:00"
     }
   ]
 }
