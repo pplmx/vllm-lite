@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-13T23:15:48+00:00",
+  "updated_at": "2026-09-14T00:28:04+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1821,7 +1821,7 @@
       "version": 1,
       "created_at": "2026-08-10T10:39:57+00:00",
       "updated_at": "2026-08-10T10:39:57+00:00",
-      "touched_round": 94,
+      "touched_round": 117,
       "title": "vllm-core engine/speculative dispatch + scheduler update",
       "role": "speculative decoding step orchestration and scheduler state fold"
     },
@@ -2375,7 +2375,7 @@
       "version": 1,
       "created_at": "2026-08-10T11:26:38+00:00",
       "updated_at": "2026-08-10T11:26:38+00:00",
-      "touched_round": 27,
+      "touched_round": 117,
       "title": "vllm-server openai sampling validation",
       "role": "HTTP 层采样参数校验"
     },
@@ -8362,6 +8362,204 @@
       "touched_round": 117,
       "severity": "low",
       "title": "abandoned placeholder (mistakenly created during graph wiring; superseded by textual deferral in ISS-156 title)"
+    },
+    "ISS-158": {
+      "id": "ISS-158",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T23:27:57+00:00",
+      "updated_at": "2026-09-14T00:23:57+00:00",
+      "touched_round": 117,
+      "severity": 6,
+      "title": "completions stream:true + best_of>1 silently downgrades to a non-streaming JSON document (200 text/json), so an OpenAI SSE-stream client hangs/errors instead of receiving a stream: run_best_of dispatch (completions.rs:1557) runs before the streaming branch and returns Json(response) with no data: lines or [DONE]; validator never rejects the combination (validate_completion_meta is silent on stream x best_of)"
+    },
+    "ISS-159": {
+      "id": "ISS-159",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-13T23:27:57+00:00",
+      "updated_at": "2026-09-14T00:23:57+00:00",
+      "touched_round": 117,
+      "severity": 5,
+      "title": "batch /v1/batches ignores requested model conformance entirely while chat/completions/embeddings 404 model_not_found (ISS-152): handler.rs:95-103 only rejects empty model, never validate_model_conformance; worker runs the loaded model for model=whatever — asymmetric wrong-model bug class ISS-152 closed on siblings"
+    },
+    "ISS-160": {
+      "id": "ISS-160",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:31:45+00:00",
+      "updated_at": "2026-09-13T23:31:45+00:00",
+      "touched_round": 117,
+      "severity": 4,
+      "title": "chat/completions: response_format json_object + tools/tool_choice are accepted and validated but never honored (types.rs declares them; sampling_validation validates; handlers only log) — a JSON-mode / function-calling client receives free-form text or a plain string with 200 and no error signal; silent semantic lie that should be either implemented or 4xx'd as unsupported"
+    },
+    "ISS-161": {
+      "id": "ISS-161",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:31:45+00:00",
+      "updated_at": "2026-09-13T23:31:45+00:00",
+      "touched_round": 117,
+      "severity": 4,
+      "title": "embeddings silently drops OpenAI dimensions + encoding_format request fields (EmbeddingsRequest only has model+input, no deny_unknown_fields) — a base64 client decodes garbage, a reduced-dimension client gets full dims with 200, no server signal"
+    },
+    "ISS-162": {
+      "id": "ISS-162",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:31:45+00:00",
+      "updated_at": "2026-09-13T23:31:45+00:00",
+      "touched_round": 117,
+      "severity": 4,
+      "title": "mailbox-saturation 503s are fully silent: map_engine_send_error (chat.rs:527) returns 503 engine_overloaded/unavailable at 9 call sites with no log and no counter, so saturated-mailbox client failures leave zero operator trace while /health/ready only flips at 90% fill"
+    },
+    "ISS-163": {
+      "id": "ISS-163",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:31:45+00:00",
+      "updated_at": "2026-09-13T23:31:45+00:00",
+      "touched_round": 117,
+      "severity": 4,
+      "title": "speculative spec_dispatch records stale mid-chunk prefill predictor tokens as generated (dispatch.rs:234 pushes stale entries into results -> tokens_total) — contradicts the ISS-083 readonly rule (regular batch.rs + graph_step continue on stale); inflates /metrics tokens_total + OTLP tokens.generated under chunked prefill + spec"
+    },
+    "ISS-164": {
+      "id": "ISS-164",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:32:32+00:00",
+      "updated_at": "2026-09-13T23:32:32+00:00",
+      "touched_round": 117,
+      "severity": 3,
+      "title": "stop-sequence validation asymmetry: chat 400s 'stop sequences tokenize to zero tokens' (chat.rs:445) while completions silently warns+succeeds (completions.rs:386) for the identical stop list; sampling_validation.rs only treats space/tab as whitespace so an all-newline stop like '\\n' dodges the validator"
+    },
+    "ISS-165": {
+      "id": "ISS-165",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:32:32+00:00",
+      "updated_at": "2026-09-13T23:32:32+00:00",
+      "touched_round": 117,
+      "severity": 3,
+      "title": "streaming chunks hardcode completion id 'chatcmpl-stream'/'cmpl-stream' for every response (chat.rs:1650, completions.rs:1124...) — API contract says unique per-completion; two streams cannot be told apart by id, client dedup/correlation collides"
+    },
+    "ISS-166": {
+      "id": "ISS-166",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:32:32+00:00",
+      "updated_at": "2026-09-13T23:32:32+00:00",
+      "touched_round": 117,
+      "severity": 3,
+      "title": "docker-compose.yml + k8s/deployment.yaml advertise VLLM_MAX_NUM_SEQS/VLLM_MAX_BATCHED_TOKENS/VLLM_NUM_KV_BLOCKS/VLLM_ENGINE_MAILBOX_CAPACITY env vars the server never reads (real knobs are VLLM_KV_BLOCKS/VLLM_MAX_BATCH_SIZE; mailbox is YAML-only) — operator tuning these in .env gets zero effect silently"
+    },
+    "ISS-167": {
+      "id": "ISS-167",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:32:32+00:00",
+      "updated_at": "2026-09-13T23:32:32+00:00",
+      "touched_round": 117,
+      "severity": 3,
+      "title": "YAML max_model_len:0 passes AppConfig::validate (only upper bound checked) while CLI rejects it (range 1..=4M); Some(0) overrides a real checkpoint value and check_context_length then rejects every request with misleading context_length_exceeded — silent boot, total outage"
+    },
+    "ISS-168": {
+      "id": "ISS-168",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:33:21+00:00",
+      "updated_at": "2026-09-13T23:33:21+00:00",
+      "touched_round": 117,
+      "severity": 3,
+      "title": "nested (non-top-level) config key typos silently ignored with no warning and vllm config validate reports them as valid — unknown_top_level_keys only detects top-level; engine:{num_kv_blcks:...} dropped by serde with zero log while server runs on default"
+    },
+    "ISS-169": {
+      "id": "ISS-169",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:33:21+00:00",
+      "updated_at": "2026-09-13T23:33:21+00:00",
+      "touched_round": 117,
+      "severity": 2,
+      "title": "VLLM_CONFIG_PATH env silently overrides an explicit --config flag (config/mod.rs load: env.wins.or(path)) contradicting the documented CLI>env>YAML precedence in OPERATIONS.md:125"
+    },
+    "ISS-170": {
+      "id": "ISS-170",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:33:21+00:00",
+      "updated_at": "2026-09-13T23:33:21+00:00",
+      "touched_round": 117,
+      "severity": 2,
+      "title": "vllm model list box-drawing misaligned (64-char border vs 65-char rows) and rows unsorted (read_dir order) — cosmetic but it is the tool's only visualization surface"
+    },
+    "ISS-171": {
+      "id": "ISS-171",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-13T23:33:21+00:00",
+      "updated_at": "2026-09-13T23:33:21+00:00",
+      "touched_round": 117,
+      "severity": 2,
+      "title": "config precedence: RUST_LOG env silently overrides --log-level / YAML server.log_level (logging.rs:47 EnvFilter::try_from_default_env wins) — undocumented at the CLI surface, only mitigated by /debug/trace reporting effective level"
+    },
+    "TASK-155": {
+      "id": "TASK-155",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-09-13T23:37:33+00:00",
+      "updated_at": "2026-09-14T00:24:46+00:00",
+      "touched_round": 117,
+      "category": "correctness",
+      "title": "Reject stream:true + best_of>1 in validate_completion_meta with a 400 (best_of cannot stream; currently silently downgrades to non-streaming Json, hanging SSE clients) — mirrors the existing stream x n cross-field reject style"
+    },
+    "TASK-156": {
+      "id": "TASK-156",
+      "type": "task",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-09-13T23:37:33+00:00",
+      "updated_at": "2026-09-14T00:24:46+00:00",
+      "touched_round": 117,
+      "category": "correctness",
+      "title": "Enforce model conformance in POST /v1/batches via validate_model_conformance (the ISS-152 sibling check), so batch model=wrong-id 400s/404s instead of silently serving the loaded model"
+    },
+    "CHG-165": {
+      "id": "CHG-165",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T00:22:07+00:00",
+      "updated_at": "2026-09-14T00:22:07+00:00",
+      "touched_round": 117,
+      "commit": "029db71d",
+      "title": "validator rejects stream:true + best_of>1 with 400 (completions graph) — removes the silent SSE downgrade"
+    },
+    "CHG-166": {
+      "id": "CHG-166",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T00:22:07+00:00",
+      "updated_at": "2026-09-14T00:22:07+00:00",
+      "touched_round": 117,
+      "commit": "53e2a16f",
+      "title": "batch create_batch enforces validate_model_conformance (404 model_not_found on mismatch)"
     }
   },
   "edges": [
@@ -12228,6 +12426,114 @@
       "to": "COMP-014",
       "type": "located_in",
       "created_at": "2026-09-13T23:15:48+00:00"
+    },
+    {
+      "from": "TASK-155",
+      "to": "ISS-158",
+      "type": "addresses",
+      "created_at": "2026-09-13T23:38:26+00:00"
+    },
+    {
+      "from": "TASK-156",
+      "to": "ISS-159",
+      "type": "addresses",
+      "created_at": "2026-09-13T23:38:26+00:00"
+    },
+    {
+      "from": "CHG-165",
+      "to": "ISS-158",
+      "type": "resolves",
+      "created_at": "2026-09-14T00:23:10+00:00"
+    },
+    {
+      "from": "CHG-166",
+      "to": "ISS-159",
+      "type": "resolves",
+      "created_at": "2026-09-14T00:23:10+00:00"
+    },
+    {
+      "from": "CHG-165",
+      "to": "TASK-155",
+      "type": "implements",
+      "created_at": "2026-09-14T00:23:10+00:00"
+    },
+    {
+      "from": "CHG-166",
+      "to": "TASK-156",
+      "type": "implements",
+      "created_at": "2026-09-14T00:23:10+00:00"
+    },
+    {
+      "from": "ISS-160",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:03+00:00"
+    },
+    {
+      "from": "ISS-161",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:03+00:00"
+    },
+    {
+      "from": "ISS-162",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:03+00:00"
+    },
+    {
+      "from": "ISS-163",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:03+00:00"
+    },
+    {
+      "from": "ISS-164",
+      "to": "COMP-012",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:04+00:00"
+    },
+    {
+      "from": "ISS-165",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:04+00:00"
+    },
+    {
+      "from": "ISS-166",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:04+00:00"
+    },
+    {
+      "from": "ISS-167",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:04+00:00"
+    },
+    {
+      "from": "ISS-168",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:04+00:00"
+    },
+    {
+      "from": "ISS-169",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:04+00:00"
+    },
+    {
+      "from": "ISS-170",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:04+00:00"
+    },
+    {
+      "from": "ISS-171",
+      "to": "COMP-004",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:28:04+00:00"
     }
   ]
 }
