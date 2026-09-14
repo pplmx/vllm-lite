@@ -220,6 +220,28 @@ fn test_validate_max_model_len_none_ok() {
     assert!(config.validate().is_ok());
 }
 
+#[test]
+fn test_validate_max_model_len_zero_fails() {
+    // RIL ISS-167: YAML `engine.max_model_len: 0` must be rejected just
+    // like the CLI path (`--max-model-len` uses range 1..=4_000_000). The
+    // config validator previously only checked the upper bound, so a `0`
+    // passed validation, overrode a real checkpoint value in `main.rs`
+    // (Some(0) beats the checkpoint's max_position_embeddings), and
+    // `check_context_length` then rejected EVERY request
+    // (prompt_tokens + max_tokens > 0) with a misleading
+    // `context_length_exceeded` — a silent boot, total outage.
+    let mut config = AppConfig::default();
+    config.engine.max_model_len = Some(0);
+    let errors = config.validate().unwrap_err();
+    assert!(
+        errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::MaxModelLenZero)),
+        "max_model_len = 0 must be rejected (mirrors the CLI 1..=4M range); got: {errors:?}"
+    );
+}
+
 // ─────────────────── v18.0 validation tests ───────────────────
 
 #[test]

@@ -53,6 +53,8 @@ pub enum ConfigValidationError {
     TensorParallelSizeTooLarge,
     #[error("engine.max_waiting_batches must be in 1..=100")]
     MaxWaitingBatchesOutOfRange,
+    #[error("engine.max_model_len must be > 0 (a zero context length rejects every request)")]
+    MaxModelLenZero,
     #[error("engine.max_model_len must be <= 4000000")]
     MaxModelLenTooLarge,
     #[error("engine.vram_budget_bytes must be > 0 when set")]
@@ -315,6 +317,17 @@ impl AppConfig {
         // unbounded context-length allowance.
         if self.engine.max_model_len.is_some_and(|m| m > 4_000_000) {
             errors.push(ConfigValidationError::MaxModelLenTooLarge);
+        }
+        // RIL ISS-167: CLI `--max-model-len` range is 1..=4_000_000 (0 is
+        // rejected); the YAML path only checked the upper bound, so a
+        // `max_model_len: 0` passed validation, overrode the checkpoint's
+        // real `max_position_embeddings` in `main.rs`, and
+        // `check_context_length` then rejected EVERY request as
+        // `context_length_exceeded` — a silent boot with a total outage,
+        // every request failing with a misleading error. Mirror the CLI
+        // lower bound so both config sources reject the same invalid value.
+        if self.engine.max_model_len.is_some_and(|m| m < 1) {
+            errors.push(ConfigValidationError::MaxModelLenZero);
         }
 
         // v18.0 validation
