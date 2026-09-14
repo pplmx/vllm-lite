@@ -10,6 +10,7 @@ use super::types::{
 };
 use crate::ApiState;
 use crate::openai::json::OpenaiJson;
+use crate::openai::sampling_validation::validate_model_conformance;
 use crate::openai::sampling_validation::validate_temperature;
 use crate::openai::types::ErrorResponse;
 
@@ -101,6 +102,17 @@ pub async fn create_batch(
             )),
         ));
     }
+
+    // RIL ISS-159: model-conformance parity — chat, completions, and
+    // embeddings reject a requested `model` that isn't the one actually
+    // serving (`404 model_not_found`, RIL ISS-152); batch previously
+    // accepted ANY non-empty id and silently ran the loaded model, so a
+    // `model: "gpt-4o"` batch against a Qwen deployment served Qwen
+    // output with a 202 — the exact wrong-model class ISS-152 closed on
+    // the sibling endpoints. Enforce the same conformance check here.
+    // Mirrors the sibling endpoints' leniency for fallback/stub
+    // tokenizers (no name to conform against) and `None`.
+    validate_model_conformance(req.model.as_deref(), state.tokenizer.model_name())?;
 
     // RIL ISS-070 / TASK-083: bound the batch size. Each prompt is a full
     // engine generation; without a cap a single request packs unbounded
@@ -813,5 +825,96 @@ mod tests {
         assert_eq!(data.len(), 1, "one created batch must be listed");
         assert_eq!(data[0].object, "batch");
         assert_eq!(data[0].endpoint, BatchEndpoint::Completion);
+    }
+
+    // RIL ISS-159: batch model-conformance parity — chat/completions/
+    // embeddings 404 `model_not_found` for a requested model that isn't
+    // the loaded one (RIL ISS-152); batch previously accepted ANY
+    // non-empty id and ran the loaded model with a 202. Uses a real
+    // on-disk tokenizer (deriving its model id from the dir name, RIL
+    // ISS-147) so the conformance check fires. Skipped when the model
+    // cache is absent (fresh CI).
+    #[tokio::test]
+    async fn test_create_batch_rejects_model_that_is_not_loaded() {
+        let model_dir = std::path::Path::new("/models/Qwen3-0.6B");
+        let tokenizer_path = model_dir.join("tokenizer.json");
+        if !tokenizer_path.exists() {
+            eprintln!("skipping: /models/Qwen3-0.6B tokenizer not present");
+            return;
+        }
+
+        let mut state = create_test_state();
+        state.tokenizer = std::sync::Arc::new(
+            vllm_model::tokenizer::Tokenizer::from_file(tokenizer_path.to_str().unwrap())
+                .expect("load on-disk tokenizer"),
+        );
+        assert_eq!(
+            state.tokenizer.model_name().as_deref(),
+            Some("Qwen3-0.6B"),
+            "on-disk tokenizer must report the dir name as its model id (RIL ISS-147)"
+        );
+
+        let req = SimpleBatchRequest {
+            prompts: vec!["Hello".to_string()],
+            endpoint: BatchEndpoint::Chat,
+            model: Some("gpt-4o".to_string()),
+            max_tokens: Some(10),
+            temperature: None,
+        };
+        let result = create_batch(State(state), OpenaiJson(req)).await;
+        let (status, body) = result.expect_err("a mismatched model id must be rejected");
+        assert_eq!(status, axum::http::StatusCode::NOT_FOUND);
+        assert_eq!(body.0.error.error_type, "invalid_request_error");
+        assert_eq!(
+            body.0.error.code.as_deref(),
+            Some("model_not_found"),
+            "mismatch must carry the model_not_found code"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_accepts_loaded_model_id() {
+        let mut state = create_test_state();
+        // A server that cannot name its model (fallback tokenizer) stays
+        // lenient — the ISS-152 test seam. A request for the loaded
+        // model (when one is nameable) must be accepted.
+        let model_dir = std::path::Path::new("/models/Qwen3-0.6B");
+        let tokenizer_path = model_dir.join("tokenizer.json");
+        if tokenizer_path.exists() {
+            state.tokenizer = std::sync::Arc::new(
+                vllm_model::tokenizer::Tokenizer::from_file(tokenizer_path.to_str().unwrap())
+                    .expect("load on-disk tokenizer"),
+            );
+            let req = SimpleBatchRequest {
+                prompts: vec!["Hello".to_string()],
+                endpoint: BatchEndpoint::Chat,
+                model: Some("Qwen3-0.6B".to_string()),
+                max_tokens: Some(10),
+                temperature: None,
+            };
+            let result = create_batch(State(state), OpenaiJson(req)).await;
+            assert_eq!(
+                result
+                    .expect("a batch for the loaded model must be accepted")
+                    .0,
+                axum::http::StatusCode::ACCEPTED
+            );
+        } else {
+            // Fallback-tokenizer seam: any non-empty id passes.
+            let req = SimpleBatchRequest {
+                prompts: vec!["Hello".to_string()],
+                endpoint: BatchEndpoint::Chat,
+                model: Some("anything".to_string()),
+                max_tokens: Some(10),
+                temperature: None,
+            };
+            let result = create_batch(State(state), OpenaiJson(req)).await;
+            assert_eq!(
+                result
+                    .expect("non-empty id must pass with a fallback tokenizer (ISS-152 seam)")
+                    .0,
+                axum::http::StatusCode::ACCEPTED
+            );
+        }
     }
 }
