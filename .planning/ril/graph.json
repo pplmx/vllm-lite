@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T03:09:55+00:00",
+  "updated_at": "2026-09-14T03:21:27+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8388,10 +8388,10 @@
     "ISS-160": {
       "id": "ISS-160",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "stale",
+      "version": 2,
       "created_at": "2026-09-13T23:31:45+00:00",
-      "updated_at": "2026-09-13T23:31:45+00:00",
+      "updated_at": "2026-09-14T03:21:27+00:00",
       "touched_round": 117,
       "severity": 4,
       "title": "chat/completions: response_format json_object + tools/tool_choice are accepted and validated but never honored (types.rs declares them; sampling_validation validates; handlers only log) — a JSON-mode / function-calling client receives free-form text or a plain string with 200 and no error signal; silent semantic lie that should be either implemented or 4xx'd as unsupported"
@@ -8748,6 +8748,18 @@
       "touched_round": 117,
       "commit": "3e9a9f9e",
       "title": "embeddings rejects non-float encoding_format"
+    },
+    "DEC-062": {
+      "id": "DEC-062",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T03:20:38+00:00",
+      "updated_at": "2026-09-14T03:20:38+00:00",
+      "touched_round": 117,
+      "rationale": "ISS-160 (accept-but-ignore response_format json_object + tools/tool_choice) is genuinely feature-shaped, not a boundary bug: honoring json_object requires constrained/gradient-free JSON decoding, and tool_choice:'required' requires a full function-calling pipeline (tool parsing, dispatch, tool-call message schema). Unlike the encoding_format fix (a hard base64-vs-float format contract where returning floats is garbage), json_object is a soft 'best effort' hint OpenAI clients tolerate, and tools are opt-in. A partial fix (e.g. 400ing tools entirely) would break every client that merely echoes a tools list while keeping the workaround, and a 400 is wrong for OpenAI-legitimate requests. Defer until constrained-decoding / function-calling lands; the handlers already log response_format per request (tracing) so the behavior is not fully silent.",
+      "alternatives_rejected": "400-reject tools/response_format (breaks legitimate OpenAI requests that use the field opportunistically; OpenAI standard is soft for json_object); implement constrained decoding now (feature-sized, out of scope for a hardening round)",
+      "title": "Defer ISS-160: json_object + tools acceptance is soft-contract feature work (constrained decoding / function calling), not a boundary bug; handlers log the fields already"
     }
   },
   "edges": [
