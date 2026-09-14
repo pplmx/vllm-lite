@@ -34,10 +34,12 @@ spec:
             # (the directory containing tokenizer.json + safetensors).
             - name: VLLM_MODEL
               value: /models/default
-            # Bounded engine mailbox; raise under sustained load (default
-            # 256, see crates/server/src/config/engine.rs).
-            - name: VLLM_ENGINE_MAILBOX_CAPACITY
-              value: "256"
+            # Bounded engine mailbox (default 256) is a YAML-only knob
+            # (engine.engine_mailbox_capacity in config/engine.rs) with NO
+            # env var — the previously-advertised VLLM_ENGINE_MAILBOX_CAPACITY
+            # was never read by the server, so tuning it here had zero
+            # effect silently. Set it via the mounted ConfigMap's YAML
+            # (RIL ISS-166).
           volumeMounts:
             - name: config
               mountPath: /app/config
