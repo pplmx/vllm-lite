@@ -509,3 +509,32 @@ fn test_response_model_echoes_client_model_when_provided() {
 
     assert_eq!(response_model(&req, &state), "gpt-3.5-turbo");
 }
+
+/// Regression (RIL ISS-164): the legacy completions endpoint must
+/// REFUSE a stop set that tokenizes to zero tokens, exactly like the
+/// chat twin (`tokenize_chat_stop_sequences`) — not silently warn and
+/// skip stop-sequence matching. Same invalid input, same 400: OpenAI
+/// treats `stop` identically on both endpoints, and silently disabling
+/// the user's stop strings can emit output they explicitly asked to
+/// halt. The default ASCII-fallback tokenizer encodes any
+/// whitespace-only string to zero tokens, which triggers the branch
+/// (production reaches it only via an HF tokenizer encoding a
+/// non-whitespace string to nothing, after `validate_stop_sequences`
+/// has cleared the obvious empties).
+#[test]
+fn test_tokenize_stop_sequences_all_zero_returns_error() {
+    let tokenizer = vllm_model::tokenizer::Tokenizer::new();
+    let stop = Some(vec!["   ".to_string()]);
+    let result = tokenize_stop_sequences(stop.as_deref(), &tokenizer);
+    let err = result.expect_err("an all-zero-token stop set must be a 400, not a silent warn");
+    assert_eq!(
+        err.0,
+        axum::http::StatusCode::BAD_REQUEST,
+        "completions must reject zero-token stop sets (chat parity, RIL ISS-164)"
+    );
+    assert!(
+        err.1.0.error.message.contains("stop"),
+        "the 400 must name the stop field, got: {:?}",
+        err.1.0.error.message
+    );
+}

@@ -419,10 +419,11 @@ pub(crate) type TokenizedStopResult =
 
 /// Tokenize `req.stop` sequences for the chat path.
 ///
-/// Unlike the completions-path helper (`completions::tokenize_stop_sequences`),
-/// the chat path **rejects** the request with `400 Bad Request` when *all*
-/// stop sequences tokenize to zero tokens, rather than silently skipping the
-/// stop wire-through. This surfaces the user error explicitly.
+/// Rejects the request with `400 Bad Request` when *all* stop sequences
+/// tokenize to zero tokens, surfacing the user error explicitly. The
+/// completions twin (`completions::tokenize_stop_sequences`) rejects the
+/// same input identically (RIL ISS-164 parity), so the two endpoints no
+/// longer diverge on a degenerate stop set.
 ///
 /// Shared by `handle_chat`, `spawn_chat_n_candidate`, and
 /// `spawn_chat_n_streaming_candidate` to guarantee identical stop-sequence

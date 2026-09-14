@@ -301,7 +301,7 @@ async fn spawn_n_candidate(
     // `SamplingParams::stop_token_sequences`. The populator stays a
     // pure function (no `ApiState` dependency), so the caller
     // tokenizes first and passes the pre-tokenized result in.
-    let stop_token_sequences = tokenize_stop_sequences(req.stop.as_deref(), &state.tokenizer);
+    let stop_token_sequences = tokenize_stop_sequences(req.stop.as_deref(), &state.tokenizer)?;
 
     // P39: forward `candidate_index` so the populator derives the
     // per-candidate seed. For `best_of` callers this is `i in 0..best_of`;
@@ -363,20 +363,28 @@ pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> O
 
 /// Tokenize user-supplied `stop` strings into `Vec<Vec<TokenId>>`.
 ///
-/// `None` / empty stop strings → `None` (engine skips stop-sequence
-/// matching entirely). Non-empty stop strings are tokenized, filtered
-/// for zero-length encodings, and warned if they all collapse to
-/// nothing (best-effort degradation — matches the P38 wire-through
-/// contract, spec §4.3). Shared by all three completion spawn paths
-/// (single-shot, `best_of`, and `n > 1`) to guarantee identical
-/// stop-sequence handling end-to-end.
+/// `None` / empty stop strings → `Ok(None)` (engine skips stop-sequence
+/// matching entirely). Non-empty stop strings are tokenized and filtered
+/// for zero-length encodings.
+///
+/// # Errors
+///
+/// Returns `400 invalid_request_error` when EVERY stop string tokenizes
+/// to zero tokens (RIL ISS-164): the chat twin
+/// (`tokenize_chat_stop_sequences`) refuses the same input, and silently
+/// disabling a user's stop strings can emit output they explicitly asked
+/// to halt. Shared by all three completion spawn paths (single-shot,
+/// `best_of`, and `n > 1`) to guarantee identical stop-sequence handling
+/// end-to-end.
 fn tokenize_stop_sequences(
     stop: Option<&[String]>,
     tokenizer: &vllm_model::tokenizer::Tokenizer,
-) -> Option<Vec<Vec<vllm_traits::TokenId>>> {
-    let stop_seqs = stop?;
+) -> Result<Option<Vec<Vec<vllm_traits::TokenId>>>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let Some(stop_seqs) = stop else {
+        return Ok(None);
+    };
     if stop_seqs.is_empty() {
-        return None;
+        return Ok(None);
     }
     let token_ids: Vec<Vec<vllm_traits::TokenId>> = stop_seqs
         .iter()
@@ -384,14 +392,15 @@ fn tokenize_stop_sequences(
         .filter(|toks| !toks.is_empty())
         .collect();
     if token_ids.is_empty() {
-        tracing::warn!(
-            stop_count = stop_seqs.len(),
-            "All stop sequences tokenized to zero tokens; skipping stop wire-through"
-        );
-        None
-    } else {
-        Some(token_ids)
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "stop sequences tokenize to zero tokens (no tokenizable content)",
+                "invalid_request_error",
+            )),
+        ));
     }
+    Ok(Some(token_ids))
 }
 
 /// Run the `n > 1` path on the legacy `/v1/completions` endpoint
@@ -726,7 +735,7 @@ async fn spawn_n_streaming_candidate(
     // `SamplingParams::stop_token_sequences`. Identical to
     // `spawn_n_candidate`'s setup so every candidate honors the
     // user's stop set end-to-end.
-    let stop_token_sequences = tokenize_stop_sequences(req.stop.as_deref(), &state.tokenizer);
+    let stop_token_sequences = tokenize_stop_sequences(req.stop.as_deref(), &state.tokenizer)?;
 
     // P39: per-candidate seed derivation (identical to
     // `spawn_n_candidate`).
@@ -1641,7 +1650,7 @@ pub async fn completions(
     // pattern as `spawn_n_candidate` above so every candidate
     // (and every streaming/non-streaming path) honors the user's
     // stop set end-to-end.
-    let stop_token_sequences = tokenize_stop_sequences(req.stop.as_deref(), &state.tokenizer);
+    let stop_token_sequences = tokenize_stop_sequences(req.stop.as_deref(), &state.tokenizer)?;
 
     // Forward all sampling fields (P27/P28/P29/P30/P34/P36/P38 wire-through).
     // The `populate_completion_sampling_params` helper is the single
