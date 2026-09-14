@@ -174,6 +174,18 @@ impl CudaGraph {
                 "Graph not captured".to_string(),
             ));
         }
+        // RIL ISS-176: a cached graph with ZERO nodes recorded nothing —
+        // `capture()` is a CPU-side stub that only sets `cached`, so every
+        // `BatchCudaGraphExecutor` capture is empty. Replaying it must fail
+        // loudly (the engine then falls back to the eager forward) rather
+        // than succeed as a silent no-op — otherwise callers would feed
+        // placeholder token-0 output to `process_output` for every
+        // sequence in the batch.
+        if self.nodes.is_empty() {
+            return Err(CudaGraphError::CaptureFailed(
+                "captured graph contains no nodes (capture recorded no kernels)".to_string(),
+            ));
+        }
 
         for (node_idx, node) in self.nodes.iter().enumerate() {
             let input_indices = &self.node_inputs[node_idx];

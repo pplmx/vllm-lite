@@ -184,6 +184,27 @@ fn test_cuda_graph_not_captured_error() {
     assert!(result.is_err());
 }
 
+/// Regression (RIL ISS-176): a `cached` graph that captured ZERO nodes
+/// is a stub, not an acceleration — `capture()` (the CPU-side mock) sets
+/// `cached=true` without recording any kernel launches, and
+/// `BatchCudaGraphExecutor::capture_all_graphs` builds exactly such empty
+/// graphs. Executing it must fail loudly (so `Engine::step_with_graph`
+/// falls back to the eager path) instead of succeeding and letting the
+/// caller's placeholder token-0 output reach `process_output` — silent
+/// garbage for every sequence in the batch.
+#[test]
+fn test_cuda_graph_execute_empty_graph_errors() {
+    let mut graph = CudaGraph::new();
+    graph.capture().unwrap();
+    assert!(graph.cached);
+
+    let result = graph.execute(&mut []);
+    assert!(
+        result.is_err(),
+        "a captured graph with no nodes must not replay as a silent no-op"
+    );
+}
+
 #[test]
 fn cuda_graph_tensor_default_arc_is_null() {
     let tensor: Arc<dyn CudaGraphTensor> = <dyn CudaGraphTensor>::default_arc();

@@ -87,6 +87,35 @@ fn test_capture_graph_increases_graph_count() {
     assert!(executor.has_graph(1));
 }
 
+/// Regression (RIL ISS-176): `execute` on a graph the executor captured
+/// must NEVER return the fabricated `TokenId::default()` (0) placeholder
+/// output. `CudaGraph::capture` is a CPU-side stub that marks a graph
+/// cached without recording any kernels, so every graph
+/// `capture_all_graphs` builds is EMPTY — replaying it must surface
+/// `GraphExecutionFailed` so `Engine::step_with_graph` falls back to the
+/// eager forward (graph_step.rs) instead of silently feeding token-0 to
+/// `process_output`.
+#[test]
+fn test_execute_captured_empty_graph_errors_not_placeholder() {
+    let config = CudaGraphConfig {
+        enabled: true,
+        batch_sizes: vec![2],
+        ..Default::default()
+    };
+    let mut executor = BatchCudaGraphExecutor::new(config).unwrap();
+    executor.capture_graph_for_batch_size(2).unwrap();
+
+    let batch = create_mock_batch(2);
+    let err = executor
+        .execute(&batch)
+        .expect_err("an empty captured graph must not replay");
+
+    assert!(
+        matches!(err, GraphExecutionError::GraphExecutionFailed(_)),
+        "empty-graph replay must map to GraphExecutionFailed for the eager fallback, got {err:?}"
+    );
+}
+
 #[test]
 fn test_execute_returns_error_for_unknown_batch_size() {
     // Create config with enabled=true so we can test graph not found
