@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 117,
+  "round": 118,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T04:40:55+00:00",
+  "updated_at": "2026-09-14T05:27:36+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8586,10 +8586,10 @@
     "ISS-174": {
       "id": "ISS-174",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-14T00:32:37+00:00",
-      "updated_at": "2026-09-14T00:32:37+00:00",
+      "updated_at": "2026-09-14T05:23:02+00:00",
       "touched_round": 117,
       "severity": 5,
       "title": "execute_preemption phase 2 re-seeds blocks_freed = victim_set.len() discarding phase-1's actual frees (memory.rs:137 after phase-1 frees full tables at :98-120) — undercounts freed blocks and preempts additional healthy decode sequences (full teardown + re-prefill) amplifying recompute under pressure; ISS-052 fixed phase-0 only"
@@ -8848,6 +8848,17 @@
       "touched_round": 117,
       "commit": "c0297a94",
       "title": "README precedence note for RUST_LOG"
+    },
+    "CHG-176": {
+      "id": "CHG-176",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T05:26:28+00:00",
+      "updated_at": "2026-09-14T05:26:28+00:00",
+      "touched_round": 117,
+      "commit": "ef00bdac",
+      "title": "execute_preemption phase 2 continues from phase-1 freed total (RIL ISS-174): hoist blocks_freed to function scope, RED-first over-preemption regression"
     }
   },
   "edges": [
@@ -13020,6 +13031,12 @@
       "to": "TASK-166",
       "type": "implements",
       "created_at": "2026-09-14T04:40:55+00:00"
+    },
+    {
+      "from": "CHG-176",
+      "to": "ISS-174",
+      "type": "resolves",
+      "created_at": "2026-09-14T05:26:28+00:00"
     }
   ]
 }
