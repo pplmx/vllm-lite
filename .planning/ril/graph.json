@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 118,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T05:48:23+00:00",
+  "updated_at": "2026-09-14T06:47:44+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8443,13 +8443,13 @@
     "ISS-165": {
       "id": "ISS-165",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 3,
       "created_at": "2026-09-13T23:32:32+00:00",
-      "updated_at": "2026-09-13T23:32:32+00:00",
-      "touched_round": 117,
+      "updated_at": "2026-09-14T06:47:44+00:00",
+      "touched_round": 118,
       "severity": 3,
-      "title": "streaming chunks hardcode completion id 'chatcmpl-stream'/'cmpl-stream' for every response (chat.rs:1650, completions.rs:1124...) — API contract says unique per-completion; two streams cannot be told apart by id, client dedup/correlation collides"
+      "title": "streaming chunks hardcode completion id 'chatcmpl-stream'/'cmpl-stream' for every response (chat.rs:1650, completions.rs:1124...) - API contract says unique per-completion; two streams cannot be told apart by id, client dedup/correlation collides [duplicate of ISS-175, resolved by the same change CHG-178]"
     },
     "ISS-166": {
       "id": "ISS-166",
@@ -8597,11 +8597,11 @@
     "ISS-175": {
       "id": "ISS-175",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-14T00:32:37+00:00",
-      "updated_at": "2026-09-14T00:32:37+00:00",
-      "touched_round": 117,
+      "updated_at": "2026-09-14T06:39:28+00:00",
+      "touched_round": 118,
       "severity": 4,
       "title": "streaming chunks hardcode the completion id 'chatcmpl-stream'/'cmpl-stream' for every response (chat.rs:1650, completions.rs:1124...) — API contract says unique per-completion id; two streams cannot be told apart, client dedup/correlation collides"
     },
@@ -8719,11 +8719,11 @@
     "TASK-161": {
       "id": "TASK-161",
       "type": "task",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-14T02:38:36+00:00",
-      "updated_at": "2026-09-14T02:38:36+00:00",
-      "touched_round": 117,
+      "updated_at": "2026-09-14T06:39:28+00:00",
+      "touched_round": 118,
       "category": "correctness",
       "title": "Generate a unique per-request completion id (chatcmpl-<uuid> / cmpl-<uuid>) in each streaming handler and thread it through every chunk construction, replacing the hardcoded 'chatcmpl-stream'/'cmpl-stream' (ISS-175) — OpenAI contract: id identifies ONE completion; two streams currently share a constant so client dedup/correlation collides"
     },
@@ -8881,6 +8881,17 @@
       "touched_round": 118,
       "rationale": "Real CUDA-graph capture (recording actual model-forward kernels per batch size via stream capture) is a feature, not a bug fix: CudaGraph::capture is a CPU-only stub by design, tests explicitly avoid real CUDA launches, and there is no production caller of capture_cuda_graphs() today. What WAS in scope for the bug loop is the safety landmine under that stub: an empty capture replayed as a silent Ok and BatchCudaGraphExecutor then fabricated token-0 output into process_output. That is now hardened (CHG-177, ISS-176 resolved) so the moment someone wires capture, empty graphs error loudly and step_with_graph falls back to eager. Real kernel capture remains deferred until there is an actual accelerator integration requesting it.",
       "alternatives_rejected": "implementing real stream capture now (needs a CUDA device path and model-forward recording - feature-sized, no active consumer); leaving execute() as silent-Ok (keeps the token-0 fabrication landmine armed)"
+    },
+    "CHG-178": {
+      "id": "CHG-178",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T06:39:28+00:00",
+      "updated_at": "2026-09-14T06:39:28+00:00",
+      "touched_round": 118,
+      "commit": "fc049a0c",
+      "title": "per-request unique SSE chunk id for streaming chat/completions (RIL ISS-175): cmpl-<uuid> per stream stamped once, threaded through chat n=1/n>1 + completions n=1/n>1; RED-first integration tests both endpoints"
     }
   },
   "edges": [
@@ -13071,6 +13082,24 @@
       "to": "COMP-007",
       "type": "governs",
       "created_at": "2026-09-14T05:48:23+00:00"
+    },
+    {
+      "from": "CHG-178",
+      "to": "ISS-175",
+      "type": "resolves",
+      "created_at": "2026-09-14T06:39:28+00:00"
+    },
+    {
+      "from": "CHG-178",
+      "to": "TASK-161",
+      "type": "implements",
+      "created_at": "2026-09-14T06:39:28+00:00"
+    },
+    {
+      "from": "CHG-178",
+      "to": "ISS-165",
+      "type": "resolves",
+      "created_at": "2026-09-14T06:45:36+00:00"
     }
   ]
 }
