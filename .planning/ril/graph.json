@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T03:21:27+00:00",
+  "updated_at": "2026-09-14T03:37:46+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8454,10 +8454,10 @@
     "ISS-166": {
       "id": "ISS-166",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-13T23:32:32+00:00",
-      "updated_at": "2026-09-13T23:32:32+00:00",
+      "updated_at": "2026-09-14T03:37:46+00:00",
       "touched_round": 117,
       "severity": 3,
       "title": "docker-compose.yml + k8s/deployment.yaml advertise VLLM_MAX_NUM_SEQS/VLLM_MAX_BATCHED_TOKENS/VLLM_NUM_KV_BLOCKS/VLLM_ENGINE_MAILBOX_CAPACITY env vars the server never reads (real knobs are VLLM_KV_BLOCKS/VLLM_MAX_BATCH_SIZE; mailbox is YAML-only) — operator tuning these in .env gets zero effect silently"
@@ -8760,6 +8760,28 @@
       "rationale": "ISS-160 (accept-but-ignore response_format json_object + tools/tool_choice) is genuinely feature-shaped, not a boundary bug: honoring json_object requires constrained/gradient-free JSON decoding, and tool_choice:'required' requires a full function-calling pipeline (tool parsing, dispatch, tool-call message schema). Unlike the encoding_format fix (a hard base64-vs-float format contract where returning floats is garbage), json_object is a soft 'best effort' hint OpenAI clients tolerate, and tools are opt-in. A partial fix (e.g. 400ing tools entirely) would break every client that merely echoes a tools list while keeping the workaround, and a 400 is wrong for OpenAI-legitimate requests. Defer until constrained-decoding / function-calling lands; the handlers already log response_format per request (tracing) so the behavior is not fully silent.",
       "alternatives_rejected": "400-reject tools/response_format (breaks legitimate OpenAI requests that use the field opportunistically; OpenAI standard is soft for json_object); implement constrained decoding now (feature-sized, out of scope for a hardening round)",
       "title": "Defer ISS-160: json_object + tools acceptance is soft-contract feature work (constrained decoding / function calling), not a boundary bug; handlers log the fields already"
+    },
+    "TASK-163": {
+      "id": "TASK-163",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-14T03:37:46+00:00",
+      "updated_at": "2026-09-14T03:37:46+00:00",
+      "touched_round": 117,
+      "category": "correctness",
+      "title": "Replace never-read tuning env vars in docker-compose/k8s with real CLI env names; drop YAML-only knobs with comments"
+    },
+    "CHG-172": {
+      "id": "CHG-172",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T03:37:46+00:00",
+      "updated_at": "2026-09-14T03:37:46+00:00",
+      "touched_round": 117,
+      "commit": "5be8be38",
+      "title": "compose/k8s use VLLM_KV_BLOCKS/VLLM_MAX_BATCH_SIZE; drop mailbox/maxseq env"
     }
   },
   "edges": [
@@ -12860,6 +12882,24 @@
       "to": "TASK-162",
       "type": "implements",
       "created_at": "2026-09-14T03:09:55+00:00"
+    },
+    {
+      "from": "TASK-163",
+      "to": "ISS-166",
+      "type": "addresses",
+      "created_at": "2026-09-14T03:37:46+00:00"
+    },
+    {
+      "from": "CHG-172",
+      "to": "ISS-166",
+      "type": "resolves",
+      "created_at": "2026-09-14T03:37:46+00:00"
+    },
+    {
+      "from": "CHG-172",
+      "to": "TASK-163",
+      "type": "implements",
+      "created_at": "2026-09-14T03:37:46+00:00"
     }
   ]
 }
