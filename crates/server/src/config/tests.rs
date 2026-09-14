@@ -694,6 +694,49 @@ fn test_unknown_top_level_keys_flags_fabricated_metrics_section() {
     assert_eq!(keys, vec!["metrics".to_string()]);
 }
 
+// RIL ISS-168: nested (non-top-level) unknown keys must also be
+// detectable — `unknown_top_level_keys` only catches typo'd SECTION
+// names, so `engine: { num_kv_blcks: 4096 }` slid through the lenient
+// parse and ran the server on the default 1024 with zero warning.
+
+#[test]
+fn test_unknown_nested_keys_detects_typo_inside_engine() {
+    let keys = unknown_nested_keys(
+        "engine:\n  num_kv_blcks: 4096\n  max_batch_size: 128\nserver:\n  port: 8000\n",
+    );
+    assert_eq!(
+        keys,
+        vec![("engine".to_string(), "num_kv_blcks".to_string())],
+        "a typo inside engine must be flagged; valid keys must not"
+    );
+}
+
+#[test]
+fn test_unknown_nested_keys_empty_for_valid_section_fields() {
+    let keys = unknown_nested_keys(
+        "engine:\n  num_kv_blocks: 1000\n  max_batch_size: 100\n  max_draft_tokens: 4\n\
+         server:\n  host: 0.0.0.0\n  port: 8000\n  log_level: info\n\nauth:\n  api_keys: [sk-1]\n\
+         cors:\n  allow_origins: [\"*\"]\n",
+    );
+    assert!(
+        keys.is_empty(),
+        "all-named fields must be recognised; got {keys:?}"
+    );
+}
+
+#[test]
+fn test_unknown_nested_keys_ignores_non_object_sections() {
+    // List-valued fields (cors.allow_origins) and sub-objects
+    // (engine.draft_specs) are shape-dependent and skipped.
+    let keys = unknown_nested_keys(
+        "engine:\n  draft_specs:\n    - id: x\n      path: y\ncors:\n  allow_origins: [\"*\"]\n",
+    );
+    assert!(
+        keys.is_empty(),
+        "list-valued and sub-object fields must not be flagged; got {keys:?}"
+    );
+}
+
 #[test]
 fn test_unknown_top_level_keys_empty_for_recognised_sections() {
     let keys = unknown_top_level_keys(
@@ -731,10 +774,21 @@ fn example_yaml_stays_valid() {
         .join("../../config/example.yaml")
         .canonicalize()
         .expect("example.yaml must exist next to the repo config/ dir");
-    let config = AppConfig::load(Some(path)).unwrap();
+    let config = AppConfig::load(Some(path.clone())).unwrap();
     assert!(
         config.validate().is_ok(),
         "config/example.yaml must satisfy AppConfig::validate()"
+    );
+    // RIL ISS-168: `SECTION_FIELDS` (the nested-typo detector's field
+    // lists) must stay in sync with the real config structs. The shipped
+    // example is the reference for the on-disk schema, so parsing it must
+    // produce ZERO nested unknowns — a field we renamed / removed in the
+    // struct but forgot to update in SECTION_FIELDS breaks CI here.
+    let contents = std::fs::read_to_string(&path).expect("example.yaml must be readable");
+    assert!(
+        unknown_nested_keys(&contents).is_empty(),
+        "config/example.yaml must reference only recognised nested fields; got {:?}",
+        unknown_nested_keys(&contents)
     );
     // Spot-check that the hardest-to-guess sections actually parsed
     // (a typo'd `cors` section would silently default to closed).

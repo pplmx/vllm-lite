@@ -160,6 +160,96 @@ fn unknown_top_level_keys(contents: &str) -> Vec<String> {
         .collect()
 }
 
+/// Recognised field names per top-level section (RIL ISS-168).
+///
+/// `unknown_top_level_keys` only detects top-level typos; a nested typo
+/// like `engine: { num_kv_blcks: 4096 }` was silently dropped by the
+/// lenient serde parse with zero warning while the server ran on
+/// defaults — the exact config-honesty failure ISS-097 exists to surface.
+/// Mirrors the field lists of the config structs
+/// (`server.rs` / `engine.rs` / `auth.rs` / `cors.rs` /
+/// `observability.rs`). Maintained by hand like `KNOWN_SECTIONS`; the
+/// `example.yaml` round-trip test guards against drift (parsing the
+/// shipped full example must produce zero nested unknowns).
+const SECTION_FIELDS: &[(&str, &[&str])] = &[
+    (
+        "server",
+        &[
+            "host",
+            "port",
+            "log_level",
+            "log_dir",
+            "shutdown_drain_grace_secs",
+            "multi_node",
+        ],
+    ),
+    (
+        "engine",
+        &[
+            "max_model_len",
+            "max_draft_tokens",
+            "num_kv_blocks",
+            "max_batch_size",
+            "max_waiting_batches",
+            "tensor_parallel_size",
+            "kv_quantization",
+            "enable_adaptive_speculative",
+            "vram_budget_bytes",
+            "draft_specs",
+            "engine_mailbox_capacity",
+        ],
+    ),
+    (
+        "auth",
+        &[
+            "api_keys",
+            "api_keys_env",
+            "api_keys_file",
+            "rate_limit_requests",
+            "rate_limit_window_secs",
+            "rate_limit_overrides",
+        ],
+    ),
+    (
+        "cors",
+        &[
+            "allow_origins",
+            "allow_methods",
+            "allow_headers",
+            "allow_credentials",
+        ],
+    ),
+    ("observability", &["otlp", "metrics_export_interval_secs"]),
+];
+
+/// Best-effort detection of unknown keys *nested* inside known sections
+/// (RIL ISS-168). Returns `(section, key)` pairs for every key in a
+/// recognised section's object that is not in that section's field list.
+/// Skips non-object sections (e.g. `cors.allow_origins` is a list) and
+/// non-scalar known sub-objects (e.g. `engine.draft_specs`,
+/// `observability.otlp`) whose inner keys are shape-dependent — a typo
+/// inside `otlp` is far less likely than one in the top-level engine knob
+/// names an operator types daily. Best-effort like the top-level check:
+/// an unparseable doc returns nothing and the lenient parse stays
+/// authoritative.
+fn unknown_nested_keys(contents: &str) -> Vec<(String, String)> {
+    let Ok(serde_json::Value::Object(top)) = serde_saphyr::from_str::<serde_json::Value>(contents)
+    else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for &(section, fields) in SECTION_FIELDS {
+        if let Some(serde_json::Value::Object(obj)) = top.get(section) {
+            for key in obj.keys() {
+                if !fields.contains(&key.as_str()) {
+                    out.push((section.to_string(), key.clone()));
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Error when an EXPLICITLY-requested config source (`--config` or
 /// `$VLLM_CONFIG_PATH`) cannot be honored. Pre-fix (RIL TASK-107) a
 /// missing or unparseable config degraded silently to built-in defaults,
@@ -197,6 +287,17 @@ fn load_config_file(path: &Path) -> Result<AppConfig, ConfigLoadError> {
             sections = ?KNOWN_SECTIONS,
             "config load: unknown top-level key is ignored (likely a typo); \
              recognised sections are listed in 'sections'"
+        );
+    }
+    for (section, key) in unknown_nested_keys(&contents) {
+        tracing::warn!(
+            path = %path.display(),
+            section = %section,
+            key = %key,
+            "config load: unknown key {} is ignored inside section {} (likely a typo); \
+             the server runs on defaults for it",
+            key,
+            section
         );
     }
     serde_saphyr::from_str::<AppConfig>(&contents)
