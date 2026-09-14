@@ -558,10 +558,11 @@ auth:
 /// Serializes tests that touch process-wide environment variables
 /// (`VLLM_CONFIG_PATH`) or call `AppConfig::load` (which reads that
 /// env var). Without this, parallel test execution causes a race:
-/// `app_config_load_from_file_with_env_override` sets `VLLM_CONFIG_PATH`
-/// to a temp file, and `app_config_load_nonexistent_file_uses_defaults`
-/// can observe the env var before it's removed, loading the wrong port
-/// and failing its assertion.
+/// `app_config_load_flag_takes_precedence_over_env` sets
+/// `VLLM_CONFIG_PATH` to a temp file, and
+/// `app_config_load_nonexistent_file_uses_defaults` can observe the env
+/// var before it's removed, loading the wrong port and failing its
+/// assertion.
 ///
 /// RIL ISS-109: uses the crate-wide `test_fixtures::ENV_TEST_LOCK` so the
 /// `cli::args` tests that parse `env = "VLLM_*"` args (and expect the env
@@ -619,8 +620,15 @@ fn app_config_load_malformed_file_is_an_error() {
     );
 }
 
+/// RIL ISS-169: with BOTH sources set, the EXPLICIT `--config` flag wins —
+/// matching the documented precedence (`CLI flags > env > YAML`,
+/// OPERATIONS.md:125). Pre-fix the env var silently overrode an explicit
+/// flag, so `vllm-server --config /tmp/test.yaml` inside a deployment that
+/// exports `VLLM_CONFIG_PATH` ran the deployment config with zero signal —
+/// the operator's single-run intent was a silent no-op. Env-only
+/// deployments (no `--config`) are unaffected: the env path is still used.
 #[test]
-fn app_config_load_from_file_with_env_override() {
+fn app_config_load_flag_takes_precedence_over_env() {
     let _guard = crate::test_fixtures::ENV_TEST_LOCK.lock().unwrap();
     let dir = tempfile::tempdir().expect("temp dir");
     let file_path = dir.path().join("config.yml");
@@ -629,14 +637,18 @@ fn app_config_load_from_file_with_env_override() {
     let env_path = dir.path().join("env_config.yml");
     std::fs::write(&env_path, "server:\n  port: 7777\n").expect("write env file");
 
-    // 1. File loading without env var set: the file argument is used.
+    // 1. No env var set: the file argument is used.
     remove_test_env("VLLM_CONFIG_PATH");
     let config = AppConfig::load(Some(file_path.clone())).unwrap();
     assert_eq!(config.server.port, 9999);
 
-    // 2. Env path takes precedence over the file argument.
+    // 2. Both set: the explicit --config flag must win (RIL ISS-169).
     set_test_env("VLLM_CONFIG_PATH", env_path.to_string_lossy().as_ref());
     let config = AppConfig::load(Some(file_path)).unwrap();
+    assert_eq!(config.server.port, 9999);
+
+    // 3. Env only (no --config): the env path is used.
+    let config = AppConfig::load(None).unwrap();
     assert_eq!(config.server.port, 7777);
 
     // Cleanup so this doesn't leak into other tests.

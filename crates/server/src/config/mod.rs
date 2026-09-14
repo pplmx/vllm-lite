@@ -307,9 +307,10 @@ fn load_config_file(path: &Path) -> Result<AppConfig, ConfigLoadError> {
 impl AppConfig {
     /// Load an [`AppConfig`] starting from `Self::default()` and layering
     /// optional overrides from an explicitly-requested source:
-    ///   1. YAML file at `$VLLM_CONFIG_PATH` (if the env var is set; takes
-    ///      precedence over `path`).
-    ///   2. YAML file at `path` (the `--config` flag, if given).
+    ///   1. YAML file at `--config` `path` (if given; takes precedence
+    ///      over the env var — RIL ISS-169, matches the documented
+    ///      `CLI flags > env > YAML` order, OPERATIONS.md:125).
+    ///   2. YAML file at `$VLLM_CONFIG_PATH` (if the env var is set).
     ///
     /// When NO source is requested (`None` / env unset), `Ok(defaults)`.
     /// A source that IS requested but cannot be honored — missing,
@@ -325,12 +326,21 @@ impl AppConfig {
     /// exists but cannot be read, and [`ConfigLoadError::Parse`] when it
     /// cannot be parsed as a typed [`AppConfig`].
     pub fn load(path: Option<PathBuf>) -> Result<Self, ConfigLoadError> {
-        // `$VLLM_CONFIG_PATH` takes precedence over `--config` (both are
-        // deliberate; only the effective source needs strict validation).
-        let source = std::env::var("VLLM_CONFIG_PATH")
-            .ok()
-            .map(PathBuf::from)
-            .or(path);
+        // `--config` (the most explicit, single-run intent) takes
+        // precedence over the `$VLLM_CONFIG_PATH` deployment default, so
+        // an operator typing `--config X` is never silently overridden by
+        // a service-layer env var (RIL ISS-169). Both are documented
+        // deliberate sources; warn so the ambiguity is surfaced.
+        let env = std::env::var("VLLM_CONFIG_PATH").ok().map(PathBuf::from);
+        if path.is_some() && env.is_some() {
+            tracing::warn!(
+                flag = ?path.as_deref().map(std::path::Path::display),
+                env = ?env.as_deref().map(std::path::Path::display),
+                "both --config and VLLM_CONFIG_PATH are set; --config takes precedence \
+                 (CLI > env > YAML, OPERATIONS.md)"
+            );
+        }
+        let source = path.or(env);
 
         source.map_or_else(|| Ok(Self::default()), |source| load_config_file(&source))
     }

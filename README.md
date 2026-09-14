@@ -346,7 +346,7 @@ export VLLM_API_KEY=your-secret-key
 | `VLLM_API_KEY`                       | API 密钥           | -         | 可重复指定；认证必填                                                                                  |
 | `VLLM_API_KEYS_FILE`                 | API 密钥文件       | -         | 从文件加载密钥（与 `VLLM_API_KEY` 并用）                                                              |
 | `VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH` | 允许无认证公开访问 | `false`   | 仅限可信内网；否则启动时给出安全警告                                                                  |
-| `VLLM_CONFIG_PATH`                   | YAML 配置路径      | -         | 覆盖 `--config`；加载优先级最高                                                                       |
+| `VLLM_CONFIG_PATH`                   | YAML 配置路径      | -         | 未传 `--config` 时使用；两者都设置时 `--config` 优先并告警（RIL ISS-169，CLI > env > YAML）           |
 | `VLLM_OTLP_ENDPOINT`                 | OTLP 收集器端点    | -         | 需 `opentelemetry` feature（如 `http://localhost:4317`）                                              |
 
 </div>
