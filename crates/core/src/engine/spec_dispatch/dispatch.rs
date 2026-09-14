@@ -175,9 +175,26 @@ impl crate::engine::Engine {
             // verified results — not the input token sum. `tokens_total`
             // ("Total tokens generated") must agree with the regular and
             // CUDA-graph step paths, which both count emitted results.
+            //
+            // RIL ISS-163: exclude stale mid-chunk prefill predictions.
+            // `record_tokens` counts REAL generated output only; the
+            // pre-fix `results.len()` counted every verified entry
+            // including stale ones (a mid-chunk prefill's draft + bonus
+            // tokens that are just the verifier's guess at the next
+            // prompt token, never real output), inflating `tokens_total`
+            // by one ghost token per mid-chunk prefill step. The regular
+            // path (`send_and_collect_results`) and the CUDA-graph path
+            // already `continue` on stale so their `results` carry only
+            // real output — this filter restores parity here. `results`
+            // itself must stay complete (the fold below consumes every
+            // entry to advance frontiers), so we only filter the COUNT.
+            let generated = results
+                .iter()
+                .filter(|(seq_id, _)| !stale_by_seq.get(seq_id).copied().unwrap_or(false))
+                .count();
             self.scheduler
                 .metrics
-                .record_tokens(u64::try_from(results.len()).unwrap_or(0));
+                .record_tokens(u64::try_from(generated).unwrap_or(0));
             // RIL ISS-095: prefill/decode phase split so the throughput
             // gauges are live on the speculative path too.
             self.scheduler.metrics.record_batch_phase_tokens(&batch);

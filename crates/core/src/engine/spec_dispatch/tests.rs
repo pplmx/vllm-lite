@@ -1308,6 +1308,22 @@ fn speculative_chunked_prefill_never_streams_stale_midchunk_predictions() {
         "the speculative client stream must contain exactly max_tokens real output tokens, \
          no stale mid-chunk prefill predictions (got {received})"
     );
+
+    // RIL ISS-163: `tokens_total` must agree with the client stream — count
+    // only REAL generated output, not stale mid-chunk prefill predictions.
+    // The regular path (`send_and_collect_results`, batch.rs) `continue`s
+    // on stale so its `results.len()` excludes them, and the CUDA-graph
+    // path does the same; the speculative path pre-fix pushed every
+    // verified entry (including stale) into `results` and fed
+    // `results.len()` to `record_tokens` — so a chunked long prompt in
+    // speculative mode inflated `/metrics` `tokens_total` and OTLP
+    // `tokens.generated` by one ghost token per mid-chunk prefill step.
+    let tokens_total = engine.scheduler.metrics.runtime_snapshot().tokens_total;
+    assert_eq!(
+        tokens_total, 8,
+        "tokens_total must count only real generated tokens, no stale mid-chunk \
+         predictions (got {tokens_total})"
+    );
 }
 
 /// A [`ModelBackend`] that behaves like [`FakeModel`] (fixed token) but
