@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T02:04:25+00:00",
+  "updated_at": "2026-09-14T02:30:58+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8564,10 +8564,10 @@
     "ISS-172": {
       "id": "ISS-172",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "stale",
+      "version": 2,
       "created_at": "2026-09-14T00:32:05+00:00",
-      "updated_at": "2026-09-14T00:32:05+00:00",
+      "updated_at": "2026-09-14T02:30:58+00:00",
       "touched_round": 117,
       "severity": 8,
       "title": "speculative ensure_verification_blocks ignores short KV allocation under OOM (dispatch.rs:320-333 discards ensure_blocks_for_tokens result; memory.rs:207-249 breaks on alloc failure) then writes draft KV at block_idx beyond the table resolving to physical block 0 (paged_gqa.rs:51) — silent cross-request KV corruption, repeated every step while pressure persists; regular path hardened (ISS-042/052) but this spec OOM path has no deferral"
@@ -8703,6 +8703,18 @@
       "touched_round": 117,
       "commit": "782b884b",
       "title": "spec_dispatch record_tokens filters stale mid-chunk predictions"
+    },
+    "DEC-061": {
+      "id": "DEC-061",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T02:27:28+00:00",
+      "updated_at": "2026-09-14T02:27:28+00:00",
+      "touched_round": 117,
+      "rationale": "ISS-172 (spec OOM→block-0 KV fallback) is a genuine residual defect but fixing requires coordinated engine-core hot-path changes (thread under-allocation signal out of ensure_verification_blocks, gate per-seq draft admission) plus a fragile KV-pool-exhaustion regression test. Existing defense-in-depth (ISS-026 pre-allocation + ISS-042 fully-allocated-prefill filter + batch composer) already prevents the common cases; the residual fires only when the KV pool is exhausted between compose and verify within a single step. After 6 fixes this round, a risky speculative-path refactor late in the cycle is disproportionate; record the precise fix design for a dedicated round instead.",
+      "alternatives_rejected": "Immediate hot-path refactor (coordination cost + fragile OOM test; risk of destabilizing the hardened speculative path); no-op deferral without design (would lose the investigation — audit already confined the defect to dispatch.rs:320-333)",
+      "title": "Defer ISS-172 fix with precise design: return under-allocated seq set from ensure_verification_blocks, gate those seqs' draft_outputs to empty (verify degrades to plain decode, never writing out-of-range draft KV); add a num_kv_blocks-minimal regression test; do in a dedicated speculative-core round"
     }
   },
   "edges": [
