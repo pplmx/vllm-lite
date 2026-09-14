@@ -440,6 +440,83 @@ fn test_requests_in_flight_live_and_balanced() {
 }
 
 #[test]
+fn test_requests_in_flight_stop_completion_decrements_once() {
+    // RIL ISS-173: a stop-sequence (or EOS) completion must decrement
+    // `requests_in_flight` exactly ONCE. Pre-fix the Length pass
+    // re-finalized every stop-completed sequence: `finalize_stop_sequences`
+    // already called `finalize_finished(Stop)` (removing the response_tx
+    // and decrementing), but the seq was moved into `finished` and the
+    // second `finished_sequences()` pass called `finalize_finished(Length)`
+    // again — decrementing the gauge a second time. With two requests in
+    // flight where one finishes by stop, the correct in-flight value is 1
+    // (the other request is still running); the double-decrement printed 0.
+    let stub = StubModel::returning(42);
+    let config = SchedulerConfig {
+        enable_pd_separation: false,
+        enable_dynamic_batching: false,
+        ..SchedulerConfig::default()
+    };
+    let mut engine = Engine::with_config(stub, None, config, 4, 1024);
+
+    // Request A (id 1): generates 42 on the first decode step, which
+    // matches the stop sequence [42] — completes by stop after one step.
+    let stop_params = vllm_traits::SamplingParams::builder()
+        .with_stop_token_sequences(vec![vec![42]])
+        .build();
+    let req_a = Request {
+        id: 1,
+        prompt: vec![10],
+        max_tokens: 100,
+        sampling_params: stop_params,
+        priority: crate::types::Priority::default(),
+        draft_model_id: None,
+    };
+    // Request B (id 2): no stop sequence, long budget — stays in flight.
+    let req_b = Request {
+        id: 2,
+        prompt: vec![10],
+        max_tokens: 100,
+        sampling_params: vllm_traits::SamplingParams::default(),
+        priority: crate::types::Priority::default(),
+        draft_model_id: None,
+    };
+    let (tx_a, _rx_a) = mpsc::channel(64);
+    let (tx_b, _rx_b) = mpsc::channel(64);
+    engine.add_request(req_a, tx_a);
+    engine.add_request(req_b, tx_b);
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .runtime_snapshot()
+            .requests_in_flight,
+        2,
+        "two admitted requests must be in flight"
+    );
+
+    // One step: A prefills, generates 42, stop-matches, finishes. B also
+    // generates 42 (no stop) and stays running.
+    let out = engine.step().unwrap();
+    assert!(!out.is_empty());
+
+    // A is done; B is still pending.
+    assert!(
+        engine.has_pending(),
+        "B must still be pending after A's stop completion"
+    );
+    assert_eq!(engine.scheduler.running_count(), 1, "only B should remain");
+    assert_eq!(
+        engine
+            .scheduler
+            .metrics
+            .runtime_snapshot()
+            .requests_in_flight,
+        1,
+        "stop completion must decrement in-flight exactly once (the other request is still running)"
+    );
+}
+
+#[test]
 fn test_requests_in_flight_skips_rejected_admission() {
     // RIL ISS-082: a rejected admission (empty prompt → seq_id 0) must NOT
     // increment the in-flight counter — it never reaches finalize_finished,

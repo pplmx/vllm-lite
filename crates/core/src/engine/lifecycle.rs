@@ -128,15 +128,33 @@ impl Engine {
     pub(crate) fn finalize_finished(&mut self, seq_id: SeqId, reason: FinishReason) {
         // RIL ISS-082: balance the `record_request_start` from
         // `add_request` so the `requests_in_flight` gauge is live.
-        // `finalize_finished` is the single finalization point for every
-        // Stop / Length / Cancelled completion, so one decrement per
-        // admitted request. The counter saturates at 0, so an unbalanced
-        // call cannot wrap to u64::MAX.
-        self.scheduler.metrics.record_request_end();
+        //
+        // RIL ISS-173: decrement only on the FIRST finalization. The
+        // step paths call `finalize_stop_sequences` (→ `finalize_finished`
+        // Stop) for a stop/EOS match, then a second `finished_sequences()`
+        // pass re-finalizes the same seq as Length — so
+        // `finalize_finished` can be invoked twice for one request. The
+        // `finish_reason_txs.remove` is idempotent (returns `None` on the
+        // second call) and silently tolerated, but the pre-fix
+        // `record_request_end` ran unconditionally, decrementing the
+        // gauge twice per stop-completed request and driving
+        // `requests_in_flight` to ~0 under any stop-heavy load.
+        //
+        // Gate the decrement on `response_txs.remove` returning `Some`:
+        // every admitted request inserted a response_tx in `add_request`,
+        // and nothing else removes it, so the FIRST finalization removes
+        // it (Some → decrement) and any repeated pass finds it gone
+        // (None → no-op). This keeps one decrement per `add_request`
+        // regardless of how many later finalization passes fire, and
+        // covers callers without a `finish_reason_tx` (batch worker).
+        // The counter saturates at 0, so an unbalanced call cannot wrap
+        // to u64::MAX.
+        if self.response_txs.remove(&seq_id).is_some() {
+            self.scheduler.metrics.record_request_end();
+        }
         if let Some(tx) = self.finish_reason_txs.remove(&seq_id) {
             let _ = tx.send(reason);
         }
-        self.response_txs.remove(&seq_id);
         // RIL ISS-034: tell the target model the sequence is done so it can
         // drop per-sequence state (e.g. the Qwen3.5 hybrid GDN recurrent
         // map). Best-effort: a poisoned lock just skips the cleanup.
