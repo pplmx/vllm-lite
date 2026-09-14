@@ -111,26 +111,39 @@ fn list_models(dir: &PathBuf) -> Result<()> {
     }
 
     println!("Available models in {}:", dir.display());
-    println!("╔══════════════════════════════════════════════════════════════╗");
+    // RIL ISS-170: the table's width must match its border lines exactly.
+    // A row is `║ ` + {name:<29} + ` │ ` + {size:>9} + ` │ ` + {type:<17} +
+    // ` ║` = 65 chars; the previous border used 60 `═` (= 62 total), so the
+    // table's right edge was off by one and the border didn't close. Rows
+    // are also sorted by name so the listing is deterministic regardless of
+    // `read_dir` order (which is OS/filesystem-dependent).
+    println!("╔═══════════════════════════════════════════════════════════════╗");
     println!("║ Name                          │ Size      │ Type              ║");
-    println!("╠══════════════════════════════════════════════════════════════╣");
+    println!("╠═══════════════════════════════════════════════════════════════╣");
 
-    for entry in std::fs::read_dir(dir).with_context(|| format!("reading dir {}", dir.display()))? {
-        let entry = entry.context("reading directory entry")?;
-        let path = entry.path();
+    let mut entries: Vec<(String, u64, String)> = std::fs::read_dir(dir)
+        .with_context(|| format!("reading dir {}", dir.display()))?
+        .filter_map(std::result::Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .filter_map(|entry| {
+            let path = entry.path();
+            // `to_str` can fail for non-UTF-8 dir names; skip those.
+            let name = path.file_name().and_then(|n| n.to_str())?.to_string();
+            Some((
+                name,
+                calculate_dir_size(&path),
+                detect_model_type(&path).to_string(),
+            ))
+        })
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
 
-        if path.is_dir()
-            && let Some(name) = path.file_name().and_then(|n| n.to_str())
-        {
-            let size = calculate_dir_size(&path);
-            let size_str = format_size(size);
-            let model_type = detect_model_type(&path);
-
-            println!("║ {name:<29} │ {size_str:>9} │ {model_type:<17} ║");
-        }
+    for (name, size, model_type) in &entries {
+        let size_str = format_size(*size);
+        println!("║ {name:<29} │ {size_str:>9} │ {model_type:<17} ║");
     }
 
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("╚═══════════════════════════════════════════════════════════════╝");
     Ok(())
 }
 
