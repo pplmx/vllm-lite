@@ -82,7 +82,7 @@ fn test_should_skip_token_text_normal() {
 #[test]
 fn test_skipped_token_chunk_is_valid_json_with_empty_content() {
     let chunk = ChatChunk::new(
-        "chatcmpl-stream".to_string(),
+        "chatcmpl-9b2c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e".to_string(),
         "test-model".to_string(),
         1_700_000_000,
         ChatChunkChoice {
@@ -123,7 +123,7 @@ fn test_chat_chunk_constructors_carry_supplied_created() {
     let created: i64 = 1_750_000_000;
 
     let chunk = ChatChunk::new(
-        "chatcmpl-stream".to_string(),
+        "chatcmpl-9b2c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e".to_string(),
         "test-model".to_string(),
         created,
         ChatChunkChoice {
@@ -143,7 +143,7 @@ fn test_chat_chunk_constructors_carry_supplied_created() {
     );
 
     let usage_chunk = ChatChunk::new_usage_chunk(
-        "chatcmpl-stream".to_string(),
+        "chatcmpl-9b2c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e".to_string(),
         "test-model".to_string(),
         created,
         Usage::new(12, 4),

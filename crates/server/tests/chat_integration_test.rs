@@ -486,6 +486,76 @@ async fn test_chat_streaming_done_is_separate_event() {
     );
 }
 
+/// Regression (RIL ISS-175): OpenAI's SSE contract treats the chunk `id`
+/// as the identifier of ONE completion — a client correlates/dedupes a
+/// stream by it. The n = 1 streaming handler hardcoded `"chatcmpl-stream"`,
+/// so every streamed completion in the process shared the identical id and
+/// two concurrent clients' streams collided on dedup. Walk the stream and
+/// assert every chunk carries the SAME per-request id (unique uuid suffix,
+/// not the shared constant).
+#[tokio::test]
+async fn test_chat_streaming_chunks_carry_unique_id() {
+    let (engine_tx, _handle) = spawn_mock_engine(vec![7, 8]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(chat_request_json("llama-test", true)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+
+    let ids: Vec<String> = body_str
+        .split("\n\n")
+        .filter(|s| !s.is_empty())
+        .filter_map(|event| event.strip_prefix("data: "))
+        .filter(|data| !data.starts_with('[')) // skip [DONE]
+        .filter_map(|data| serde_json::from_str::<serde_json::Value>(data).ok())
+        .filter_map(|chunk| chunk["id"].as_str().map(String::from))
+        .collect();
+
+    assert!(
+        !ids.is_empty(),
+        "SSE stream must emit at least one chunk with an id, body was: {body_str}"
+    );
+    assert_ne!(
+        ids[0], "chatcmpl-stream",
+        "chunk id must be unique per request, not the shared constant"
+    );
+    assert!(
+        ids[0].starts_with("chatcmpl-"),
+        "chat chunk id must carry the OpenAI chatcmpl- prefix, got: {}",
+        ids[0]
+    );
+    assert!(
+        ids.iter().all(|id| id == &ids[0]),
+        "all chunks of one completion must carry the SAME id, got: {ids:?}"
+    );
+}
+
 /// RIL ISS-126: OpenAI emits `role: "assistant"` only on the stream's
 /// FIRST delta chunk; subsequent chunks carry an empty role. The n > 1
 /// path already applied this via `first_emitted`, but the n = 1 path

@@ -1575,6 +1575,11 @@ async fn stream_n_parallel_chat(
     // chunk on this n > 1 stream reports the same timestamp (the raw
     // `json!` consolidated chunk previously omitted `created` entirely).
     let created = crate::util::time::unix_now_secs();
+    // RIL ISS-175: one completion id per streamed response (the n > 1
+    // candidates MERGE into a single response, so one id identifies the
+    // whole stream); the old hardcoded `"chatcmpl-stream"` constant hit
+    // every stream. Cloned inside the closure so all chunks agree.
+    let completion_id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
     let stream = stream::unfold(
         ChatNParallelStreamingState {
             rx: sse_rx,
@@ -1591,6 +1596,7 @@ async fn stream_n_parallel_chat(
         move |mut state| {
             let model = model.clone();
             let request_id = request_id.clone();
+            let completion_id = completion_id.clone();
             async move {
                 match state.terminal {
                     ChatNParallelTerminal::Done => None,
@@ -1601,7 +1607,7 @@ async fn stream_n_parallel_chat(
                         // aggregated across all N candidates), after the
                         // consolidated final chunk and before `[DONE]`.
                         let usage_chunk = ChatChunk::new_usage_chunk(
-                            "chatcmpl-stream".to_string(),
+                            completion_id.clone(),
                             model.clone(),
                             created,
                             Usage::new(prompt_tokens_len, state.completion_tokens),
@@ -1669,7 +1675,7 @@ async fn stream_n_parallel_chat(
                                 }
                             };
                             let chunk = ChatChunk::new(
-                                "chatcmpl-stream".to_string(),
+                                completion_id.clone(),
                                 model.clone(),
                                 created,
                                 ChatChunkChoice {
@@ -1779,7 +1785,7 @@ async fn stream_n_parallel_chat(
                                     })
                                     .collect();
                                 let chunk = serde_json::json!({
-                                    "id": "chatcmpl-stream",
+                                    "id": completion_id.clone(),
                                     "object": "chat.completion.chunk",
                                     // RIL ISS-122: `created` was missing on the
                                     // raw-json n > 1 consolidated chunk (schema
@@ -1809,7 +1815,7 @@ async fn stream_n_parallel_chat(
                                 // candidates finish at different
                                 // rates).
                                 let chunk = ChatChunk::new(
-                                    "chatcmpl-stream".to_string(),
+                                    completion_id.clone(),
                                     model.clone(),
                                     created,
                                     ChatChunkChoice {
@@ -1926,6 +1932,15 @@ async fn stream_chat_completion(
     // `new_usage_chunk` now require the value (they no longer stamp a
     // per-chunk `unix_now_secs()`). Matches the n > 1 path (ISS-122).
     let created = crate::util::time::unix_now_secs();
+    // RIL ISS-175: OpenAI's SSE chunk `id` identifies ONE completion, so
+    // every chunk on this stream must carry the same per-request unique
+    // value, not the old hardcoded `"chatcmpl-stream"` constant (which
+    // every concurrent stream shared — a client deduping/correlating by
+    // `id` collided). Mirrors the non-streaming `chatcmpl-<uuid>`
+    // convention. Captured immutably like `model` — the unfold closure
+    // clones it, so all chunks agree without threading it through the
+    // state tuple.
+    let completion_id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
     let request_id = format!(
         "req_{}",
         uuid::Uuid::new_v4().to_string()[..8].to_uppercase()
@@ -2232,6 +2247,7 @@ async fn stream_chat_completion(
             let tokenizer = tokenizer.clone();
             let model = model.clone();
             let request_id = request_id.clone();
+            let completion_id = completion_id.clone();
             let start = start;
             async move {
                 match terminal {
@@ -2246,7 +2262,7 @@ async fn stream_chat_completion(
                         // the real usage, emitted AFTER the finish_reason
                         // chunk and BEFORE `[DONE]`.
                         let usage_chunk = ChatChunk::new_usage_chunk(
-                            "chatcmpl-stream".to_string(),
+                            completion_id.clone(),
                             model.clone(),
                             created,
                             Usage::new(prompt_tokens_len, completion_tokens),
@@ -2312,7 +2328,7 @@ async fn stream_chat_completion(
                                 // empty data line is not valid OpenAI JSON
                                 // streaming and strict clients reject it.
                                 let chunk = ChatChunk::new(
-                                    "chatcmpl-stream".to_string(),
+                                    completion_id.clone(),
                                     model.clone(),
                                     created,
                                     ChatChunkChoice {
@@ -2351,7 +2367,7 @@ async fn stream_chat_completion(
                             // the client side by concatenating every
                             // chunk's `content[]` arrays.
                             let chunk = ChatChunk::new(
-                                "chatcmpl-stream".to_string(),
+                                completion_id.clone(),
                                 model.clone(),
                                 created,
                                 ChatChunkChoice {
@@ -2425,7 +2441,7 @@ async fn stream_chat_completion(
                                 // unfold call takes this same branch and
                                 // emits the finish chunk.
                                 let tail_chunk = ChatChunk::new(
-                                    "chatcmpl-stream".to_string(),
+                                    completion_id.clone(),
                                     model.clone(),
                                     created,
                                     ChatChunkChoice {
@@ -2457,7 +2473,7 @@ async fn stream_chat_completion(
                             }
                             cancel_guard.disarm();
                             let chunk = ChatChunk::new(
-                                "chatcmpl-stream".to_string(),
+                                completion_id.clone(),
                                 model.clone(),
                                 created,
                                 ChatChunkChoice {

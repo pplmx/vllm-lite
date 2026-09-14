@@ -356,7 +356,8 @@ fn test_populate_completion_sampling_params_applies_per_candidate_seed() {
 #[test]
 fn test_skipped_token_chunk_is_valid_json_with_empty_text() {
     let chunk = serde_json::json!({
-        "id": "cmpl-stream",
+        // RIL ISS-175: per-request id (was the shared "cmpl-stream").
+        "id": "cmpl-7f3a9c21-d0b2-4e11-8a3c-8f4c1e5a7b9d",
         "object": "text_completion",
         "model": "test-model",
         "created": 0,
