@@ -356,6 +356,79 @@ fn test_preemption_never_leaves_partial_block_holes() {
     assert_eq!(engine.memory.available_blocks(), 13);
 }
 
+/// Regression (RIL ISS-174): phase-2 fallback preemption must continue
+/// from the blocks phase 1 actually released, not from the victim-block
+/// count. `select_victims` returns only evictable (refcount ≤ 1) blocks,
+/// but phase 1 preempts victim-owning sequences WHOLESALE — releasing
+/// their full tables, including shared (refcount > 1) blocks that were
+/// never victims. Reseeding `blocks_freed` to `victim_set.len()` (a
+/// strict subset of the released tables) made phase 2 think it was
+/// nearer to `blocks_needed` than it was, so it preempted extra healthy
+/// decode sequences — a full re-prefill for every survivor.
+///
+/// Scenario: A owns victims {b1, b2} plus a shared block b0 (with C);
+/// phase 1 preempts A and books 3 freed blocks (5 needed → falls to
+/// phase 2). C (3 shared blocks... 2) is more decodable than D. The
+/// buggy seed `victim_set.len() == 2` preempts C AND D to reach 5; the
+/// correct continuation from A's real `blocks_freed == 3` stops after C
+/// and leaves D decoding.
+#[test]
+fn test_phase2_preemption_continues_from_phase1_freed_count() {
+    use crate::types::{Priority, SamplingParams, Sequence, Status};
+
+    let config = SchedulerConfig::default();
+    let mut engine = create_test_engine(config, 8);
+
+    let make_seq = |id: u64, blocks: Vec<usize>, rounds: u32| Sequence {
+        id,
+        tokens: vec![0; 16],
+        kv_blocks: Arc::new(blocks),
+        num_computed_tokens: 16,
+        prompt_len: 4,
+        status: Status::Decoding,
+        max_tokens: 100,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: rounds,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    // Allocate 4 distinct blocks; wire shared refcounts so only A's
+    // {b1, b2} are evictable (refcount 1). b0 and b5 are shared
+    // (refcount 2 → never victims, per `select_victims`).
+    let blocks = engine.memory.allocate(4).expect("pool has 8");
+    let (b0, b1, b2, b5) = (blocks[0], blocks[1], blocks[2], blocks[3]);
+    engine.memory.record_blocks(&[b0, b1, b2]); // A owns all three (b0 shared w/ C)
+    engine.memory.record_blocks(&[b0, b5]); // C owns b0 (shared w/ A) + b5 (shared w/ D)
+    engine.memory.record_blocks(&[b5]); // D owns b5 (shared w/ C)
+
+    engine.running.push(make_seq(1, vec![b0, b1, b2], 0)); // A: victim owner, 3-block table
+    engine.running.push(make_seq(2, vec![b0, b5], 3)); // C: more decodable
+    engine.running.push(make_seq(3, vec![b5], 1)); // D: healthy decode, must survive
+
+    // 5 blocks needed: phase 1 frees A's whole 3-block table (victims
+    // {b1, b2} ⊂ it), which is < 5, so phase 2 runs. Starting from 3
+    // (the real freed total) preempts C (3 + 2 = 5) and stops; starting
+    // from 2 (victim_set.len()) preempts C then D to climb to 5.
+    engine.execute_preemption(5);
+
+    assert_eq!(
+        engine.running.len(),
+        1,
+        "phase 2 must preempt only as many tables as needed to reach blocks_needed"
+    );
+    assert_eq!(
+        engine.running[0].id,
+        3,
+        "healthy decode sequence D must survive; over-preempted it was: {:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert_eq!(engine.waiting_count(), 2, "A and C re-queued, not D");
+    // b5 stays held by D (its only live refcount after A/C released).
+    assert_eq!(engine.memory.get_block_ref_count(b5), 1);
+}
+
 /// Regression (RIL TASK-003 / ISS-003): completing the same prompt
 /// twice must not inflate the cache's refcount on the prompt's block.
 /// The finish path re-inserts the prefix entry; before the fix the

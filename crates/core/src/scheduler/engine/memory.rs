@@ -81,6 +81,15 @@ impl SchedulerEngine {
         // sequence granularity (see the function docs: a positional
         // block table cannot tolerate interior holes, so any sequence
         // owning a victim block is preempted wholesale).
+        //
+        // `blocks_freed` lives at function scope: phase 1 preempts
+        // victim-owning sequences WHOLESALE, releasing their full tables
+        // — including shared (refcount > 1) blocks that `select_victims`
+        // never returned as victims. Phase 2 must continue from that real
+        // total; reseeding to `victim_set.len()` (RIL ISS-174) made phase
+        // 2 think it was closer to `blocks_needed` than it was, so it
+        // preempted extra healthy decode sequences.
+        let mut blocks_freed = 0usize;
         let victims = self.memory.select_victims(&self.running, blocks_needed);
         let victim_set: HashSet<_> = victims.iter().copied().collect();
 
@@ -95,7 +104,6 @@ impl SchedulerEngine {
                 .map(|s| s.id)
                 .collect();
 
-            let mut blocks_freed = 0usize;
             for seq_id in preempted {
                 if let Some(pos) = self.running.iter().position(|s| s.id == seq_id) {
                     let mut seq = self.running.remove(pos);
@@ -134,7 +142,6 @@ impl SchedulerEngine {
                 .cmp(&a.consecutive_decode_rounds)
         });
 
-        let mut blocks_freed = victim_set.len();
         for mut seq in preemptable {
             if blocks_freed >= blocks_needed {
                 break;
