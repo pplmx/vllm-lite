@@ -411,7 +411,7 @@ server:
             for sub in cmd.get_subcommands() {
                 let about_empty = sub
                     .get_about()
-                    .map_or(true, |a| a.to_string().trim().is_empty());
+                    .is_none_or(|a| a.to_string().trim().is_empty());
                 assert!(
                     !about_empty,
                     "subcommand '{}' must have a help description",
