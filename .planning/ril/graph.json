@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T03:37:46+00:00",
+  "updated_at": "2026-09-14T04:09:39+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -8476,10 +8476,10 @@
     "ISS-168": {
       "id": "ISS-168",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-09-13T23:33:21+00:00",
-      "updated_at": "2026-09-13T23:33:21+00:00",
+      "updated_at": "2026-09-14T04:09:39+00:00",
       "touched_round": 117,
       "severity": 3,
       "title": "nested (non-top-level) config key typos silently ignored with no warning and vllm config validate reports them as valid — unknown_top_level_keys only detects top-level; engine:{num_kv_blcks:...} dropped by serde with zero log while server runs on default"
@@ -8782,6 +8782,28 @@
       "touched_round": 117,
       "commit": "5be8be38",
       "title": "compose/k8s use VLLM_KV_BLOCKS/VLLM_MAX_BATCH_SIZE; drop mailbox/maxseq env"
+    },
+    "TASK-164": {
+      "id": "TASK-164",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-14T04:09:39+00:00",
+      "updated_at": "2026-09-14T04:09:39+00:00",
+      "touched_round": 117,
+      "category": "correctness",
+      "title": "Detect unknown keys nested inside config sections (WARN, ISS-097 semantics) + section-field drift guard via example.yaml"
+    },
+    "CHG-173": {
+      "id": "CHG-173",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T04:09:39+00:00",
+      "updated_at": "2026-09-14T04:09:39+00:00",
+      "touched_round": 117,
+      "commit": "73ed1b38",
+      "title": "config load warns on nested unknown keys (SECTION_FIELDS + unknown_nested_keys)"
     }
   },
   "edges": [
@@ -12900,6 +12922,24 @@
       "to": "TASK-163",
       "type": "implements",
       "created_at": "2026-09-14T03:37:46+00:00"
+    },
+    {
+      "from": "TASK-164",
+      "to": "ISS-168",
+      "type": "addresses",
+      "created_at": "2026-09-14T04:09:39+00:00"
+    },
+    {
+      "from": "CHG-173",
+      "to": "ISS-168",
+      "type": "resolves",
+      "created_at": "2026-09-14T04:09:39+00:00"
+    },
+    {
+      "from": "CHG-173",
+      "to": "TASK-164",
+      "type": "implements",
+      "created_at": "2026-09-14T04:09:39+00:00"
     }
   ]
 }
