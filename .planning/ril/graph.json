@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 117,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-09-14T00:28:04+00:00",
+  "updated_at": "2026-09-14T01:11:30+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -77,7 +77,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 81,
+      "touched_round": 117,
       "title": "core/scheduler",
       "role": "queue, preemption, eviction, batch composition"
     },
@@ -8560,6 +8560,83 @@
       "touched_round": 117,
       "commit": "53e2a16f",
       "title": "batch create_batch enforces validate_model_conformance (404 model_not_found on mismatch)"
+    },
+    "ISS-172": {
+      "id": "ISS-172",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T00:32:05+00:00",
+      "updated_at": "2026-09-14T00:32:05+00:00",
+      "touched_round": 117,
+      "severity": 8,
+      "title": "speculative ensure_verification_blocks ignores short KV allocation under OOM (dispatch.rs:320-333 discards ensure_blocks_for_tokens result; memory.rs:207-249 breaks on alloc failure) then writes draft KV at block_idx beyond the table resolving to physical block 0 (paged_gqa.rs:51) — silent cross-request KV corruption, repeated every step while pressure persists; regular path hardened (ISS-042/052) but this spec OOM path has no deferral"
+    },
+    "ISS-173": {
+      "id": "ISS-173",
+      "type": "issue",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-14T00:32:05+00:00",
+      "updated_at": "2026-09-14T01:11:30+00:00",
+      "touched_round": 117,
+      "severity": 6,
+      "title": "requests_in_flight gauge double-decrements on every stop/EOS completion: lifecycle.rs:135 record_request_end() runs unconditionally then finalize_finished Length pass re-finalizes the same seq (batch.rs:274, dispatch.rs:127, graph_step.rs:233) — saturating gauge pins at ~0 while requests are genuinely in flight (ISS-082 wiring regression)"
+    },
+    "ISS-174": {
+      "id": "ISS-174",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T00:32:37+00:00",
+      "updated_at": "2026-09-14T00:32:37+00:00",
+      "touched_round": 117,
+      "severity": 5,
+      "title": "execute_preemption phase 2 re-seeds blocks_freed = victim_set.len() discarding phase-1's actual frees (memory.rs:137 after phase-1 frees full tables at :98-120) — undercounts freed blocks and preempts additional healthy decode sequences (full teardown + re-prefill) amplifying recompute under pressure; ISS-052 fixed phase-0 only"
+    },
+    "ISS-175": {
+      "id": "ISS-175",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T00:32:37+00:00",
+      "updated_at": "2026-09-14T00:32:37+00:00",
+      "touched_round": 117,
+      "severity": 4,
+      "title": "streaming chunks hardcode the completion id 'chatcmpl-stream'/'cmpl-stream' for every response (chat.rs:1650, completions.rs:1124...) — API contract says unique per-completion id; two streams cannot be told apart, client dedup/correlation collides"
+    },
+    "ISS-176": {
+      "id": "ISS-176",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T00:33:17+00:00",
+      "updated_at": "2026-09-14T00:33:17+00:00",
+      "touched_round": 117,
+      "severity": 5,
+      "title": "CUDA-graph capture produces EMPTY graphs (cuda_graph.rs:161-164 capture only sets cached=true, records no kernels/node; executor.rs:171-186 replay iterates empty nodes vec) yet process_output feeds execute()'s placeholder next_tokens (token 0) straight to the client + seq.tokens (graph_step.rs:59-64,210-222) — if any embedder wired the feature per its docs, generation would be all-zeros garbage with no sampling; latent (no production capture caller)"
+    },
+    "TASK-157": {
+      "id": "TASK-157",
+      "type": "task",
+      "status": "resolved",
+      "version": 2,
+      "created_at": "2026-09-14T01:10:39+00:00",
+      "updated_at": "2026-09-14T01:11:30+00:00",
+      "touched_round": 117,
+      "category": "correctness",
+      "title": "Gate record_request_end on response_txs.remove()==Some so stop/EOS double-finalize (Stop then Length pass) decrements requests_in_flight once, not twice"
+    },
+    "CHG-167": {
+      "id": "CHG-167",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-09-14T01:10:39+00:00",
+      "updated_at": "2026-09-14T01:10:39+00:00",
+      "touched_round": 117,
+      "commit": "9e3cf02c",
+      "title": "requests_in_flight decrement gated on first finalization (lifecycle.rs finalize_finished)"
     }
   },
   "edges": [
@@ -12534,6 +12611,54 @@
       "to": "COMP-004",
       "type": "located_in",
       "created_at": "2026-09-14T00:28:04+00:00"
+    },
+    {
+      "from": "ISS-172",
+      "to": "COMP-011",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:34:09+00:00"
+    },
+    {
+      "from": "ISS-173",
+      "to": "COMP-007",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:34:09+00:00"
+    },
+    {
+      "from": "ISS-174",
+      "to": "COMP-007",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:34:09+00:00"
+    },
+    {
+      "from": "ISS-175",
+      "to": "COMP-014",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:34:09+00:00"
+    },
+    {
+      "from": "ISS-176",
+      "to": "COMP-007",
+      "type": "located_in",
+      "created_at": "2026-09-14T00:34:09+00:00"
+    },
+    {
+      "from": "TASK-157",
+      "to": "ISS-173",
+      "type": "addresses",
+      "created_at": "2026-09-14T01:11:30+00:00"
+    },
+    {
+      "from": "CHG-167",
+      "to": "ISS-173",
+      "type": "resolves",
+      "created_at": "2026-09-14T01:11:30+00:00"
+    },
+    {
+      "from": "CHG-167",
+      "to": "TASK-157",
+      "type": "implements",
+      "created_at": "2026-09-14T01:11:30+00:00"
     }
   ]
 }
