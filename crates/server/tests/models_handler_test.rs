@@ -110,3 +110,58 @@ async fn test_model_by_id_unknown_returns_404_openai_error() {
         "unknown model type must be invalid_request_error: {json_str}"
     );
 }
+
+/// `created` must identify the model, not the moment of the request.
+///
+/// Both endpoints stamped `unix_now_secs()` per call, so `GET /v1/models`
+/// and `GET /v1/models/{id}` disagreed about the same model, and two polls a
+/// second apart reported different creation times. A client caching model
+/// metadata, or diffing two listings to spot a model swap, sees churn that
+/// means nothing. `created` should be stable for the lifetime of the server.
+#[tokio::test]
+async fn model_created_is_stable_across_requests() {
+    let state = api_state(Architecture::Qwen3);
+
+    let read_list_created = |state: vllm_server::ApiState| async move {
+        let response = models_handler(axum::extract::State(state)).await;
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        json["data"][0]["created"]
+            .as_i64()
+            .expect("created is an int")
+    };
+
+    let first = read_list_created(state.clone()).await;
+
+    // Cross a second boundary: a per-request timestamp changes here.
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+
+    let second = read_list_created(state.clone()).await;
+    assert_eq!(
+        first, second,
+        "`created` must not change between requests for the same model"
+    );
+
+    // The by-id endpoint must agree with the list.
+    let by_id = model_by_id_handler(
+        axum::extract::Path(
+            state
+                .tokenizer
+                .model_name()
+                .unwrap_or_else(|| "unknown".to_string()),
+        ),
+        axum::extract::State(state),
+    )
+    .await;
+    let bytes = axum::body::to_bytes(by_id.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        json["created"].as_i64().expect("created is an int"),
+        first,
+        "GET /v1/models/{{id}} must report the same `created` as the list"
+    );
+}

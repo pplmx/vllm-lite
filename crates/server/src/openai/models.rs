@@ -13,6 +13,20 @@ use serde::Serialize;
 
 use super::types::ErrorResponse;
 
+/// When this process started serving models — the `created` value reported
+/// by both endpoints.
+///
+/// `OpenAI`'s `created` identifies the model, not the request: it must not
+/// change when the same model is polled twice, and the list and retrieve
+/// endpoints must agree. Stamping `unix_now_secs()` per call gave every
+/// request a different creation time for the same model.
+fn serving_epoch() -> i64 {
+    static EPOCH: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    // The first caller wins; every later request reads the same instant, so
+    // `created` is stable for the life of the process.
+    *EPOCH.get_or_init(crate::util::time::unix_now_secs)
+}
+
 /// Render a model payload as a response with `OpenAI`'s `cache-control:
 /// no-cache` header — proxies must not serve a stale
 /// model list after a model is removed/added. Sets `Content-Type` to
@@ -85,7 +99,7 @@ pub async fn models_handler(State(state): State<ApiState>) -> Response {
             // model entry (vLLM's convention), not a stale hardcoded
             // epoch (1_700_000_000 = 2023-11-14) that implied a fixed
             // creation date for every model on every deployment.
-            created: crate::util::time::unix_now_secs(),
+            created: serving_epoch(),
             owned_by: "vllm-lite".to_string(),
             max_model_len: state.max_model_len,
         }],
@@ -129,7 +143,7 @@ pub async fn model_by_id_handler(
     let model = ModelObject {
         id: model_name,
         object: "model".to_string(),
-        created: crate::util::time::unix_now_secs(),
+        created: serving_epoch(),
         owned_by: "vllm-lite".to_string(),
         max_model_len: state.max_model_len,
     };
