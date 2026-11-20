@@ -103,16 +103,28 @@ impl crate::engine::Engine {
             })
             .collect();
 
-        // Emit verified tokens to their client channels (gating stale
-        // mid-chunk prefill predictions) — `results` still
-        // carries every entry so the fold below can advance frontiers.
-        let mut disconnected = Vec::new();
-        let results = self.emit_verified_tokens(&verified, &stale_by_seq, &mut disconnected);
         // Multi-token scheduler input tracking (Plan 17.1-E): fold the
         // emitted tokens into the scheduler per sequence, advancing
-        // `num_computed_tokens` by the tokens whose KV was computed
+        // `num_computed_tokens` by the tokens whose KV was computed.
+        //
+        // The fold runs BEFORE the send loop so `seq.tokens` already holds
+        // this step's tokens when they are about to be emitted — that is what
+        // lets the send path recognise a completed `stop` sequence and
+        // withhold it (OpenAI: "the returned text will not contain the stop
+        // sequence"). The fold touches only scheduler state, so ordering it
+        // ahead of the channel writes changes nothing it observes.
+        let collected: Vec<(SeqId, SampledToken)> = verified
+            .iter()
+            .filter(|(seq_id, _)| !stale_by_seq.get(seq_id).copied().unwrap_or(false))
+            .cloned()
+            .collect();
+        self.fold_speculative_update(&batch, &verified, &accepted_counts, &stale_by_seq);
 
-        self.fold_speculative_update(&batch, &results, &accepted_counts, &stale_by_seq);
+        // Emit verified tokens to their client channels (gating stale
+        // mid-chunk prefill predictions) — `results` still
+        // carries every entry so the fold above advanced frontiers from it.
+        let mut disconnected = Vec::new();
+        let results = self.emit_verified_tokens(&collected, &stale_by_seq, &mut disconnected);
 
         // cancel sequences whose response channel closed
         // (client disconnect) — after the fold, so the fold's per-sequence
@@ -222,15 +234,13 @@ impl crate::engine::Engine {
     /// `results` still carries every verified entry so the caller's
     /// per-sequence scheduler fold can advance the mid-chunk prefill's
     /// frontier — only client emission is gated here.
-    /// **Known gap:** unlike the regular and CUDA-graph paths, this does not
-    /// hold back tokens that may complete a `stop` sequence — the tokens are
-    /// folded into `seq.tokens` by [`Self::fold_speculative_update`] *after*
-    /// this send loop, so the stop suffix is not yet readable here. A
-    /// speculative request with a `stop` therefore still streams the stop
-    /// tokens. Fixing it means moving the hold-back ahead of the fold (or
-    /// teaching the buffer about this path's multi-token bursts).
+    /// Shares the regular path's stop hold-back (`scheduler/batch.rs`): a
+    /// token that may still turn out to be part of a `stop` sequence is
+    /// buffered rather than sent, and the buffer is dropped when the tail
+    /// completes a match. The caller folds this step's tokens into
+    /// `seq.tokens` *before* calling this, so the suffix is readable here.
     fn emit_verified_tokens(
-        &self,
+        &mut self,
         verified: &[(SeqId, SampledToken)],
         stale_by_seq: &std::collections::HashMap<SeqId, bool>,
         disconnected: &mut Vec<SeqId>,
@@ -244,16 +254,45 @@ impl crate::engine::Engine {
                     token = %sampled.token,
                     "Drawing stale mid-chunk prediction (not real output); not emitting"
                 );
-            } else if let Some(tx) = self.response_txs.get(seq_id) {
-                // Shares the regular path's `try_send_token` contract
-                // (scheduler/batch.rs): `Full` (consumer drains slower than
-                // the speculative path bursts) logs a WARN +
-                // counts `dropped_tokens_total`; `Closed` (receiver dropped =
-                // client disconnect) records the sequence in
-                // `disconnected` so the caller cancels it. Pre-fix both were
-                // silent no-ops and an aborted request generated into a
-                // closed channel for its whole `max_tokens` budget.
-                self.try_send_token(*seq_id, sampled, tx, disconnected);
+                results.push((*seq_id, sampled.clone()));
+                continue;
+            }
+
+            let params = self
+                .scheduler
+                .get_sequence(*seq_id)
+                .map(|s| s.sampling_params.clone());
+            let hold = self.stop_hold_back(params.as_ref());
+            let completes_stop = self.token_completes_stop_sequence(*seq_id, params.as_ref());
+
+            // Shares the regular path's `try_send_token` contract
+            // (scheduler/batch.rs): `Full` (consumer drains slower than
+            // the speculative path bursts) logs a WARN +
+            // counts `dropped_tokens_total`; `Closed` (receiver dropped =
+            // client disconnect) records the sequence in
+            // `disconnected` so the caller cancels it. Pre-fix both were
+            // silent no-ops and an aborted request generated into a
+            // closed channel for its whole `max_tokens` budget.
+            let pending = self.scheduler.pending_stream.entry(*seq_id).or_default();
+            pending.push(sampled.clone());
+            if completes_stop {
+                tracing::debug!(
+                    seq_id = %seq_id,
+                    held = pending.len(),
+                    "Generated tail completes a stop sequence; withholding it"
+                );
+                pending.clear();
+                results.push((*seq_id, sampled.clone()));
+                continue;
+            }
+            let mut released = Vec::new();
+            while pending.len() > hold {
+                released.push(pending.remove(0));
+            }
+            for ready in released {
+                if let Some(tx) = self.response_txs.get(seq_id) {
+                    self.try_send_token(*seq_id, &ready, tx, disconnected);
+                }
             }
             results.push((*seq_id, sampled.clone()));
         }

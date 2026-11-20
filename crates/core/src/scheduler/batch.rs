@@ -296,7 +296,7 @@ impl crate::engine::Engine {
     /// `stop_len - 1` for the longest configured stop, so the final token of
     /// any match can be recognised before its prefix goes out. Zero when the
     /// sequence has no multi-token stops — the common case pays nothing.
-    fn stop_hold_back(&self, params: Option<&vllm_traits::SamplingParams>) -> usize {
+    pub(crate) fn stop_hold_back(&self, params: Option<&vllm_traits::SamplingParams>) -> usize {
         let Some(stops) = params.and_then(|p| p.stop_token_sequences.as_ref()) else {
             return 0;
         };
@@ -311,7 +311,7 @@ impl crate::engine::Engine {
     ///
     /// Reads the post-update `seq.tokens`, so it must run after
     /// `scheduler.update()`.
-    fn token_completes_stop_sequence(
+    pub(crate) fn token_completes_stop_sequence(
         &self,
         seq_id: SeqId,
         params: Option<&vllm_traits::SamplingParams>,

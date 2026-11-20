@@ -143,3 +143,42 @@ fn tokens_before_the_stop_still_stream() {
     let streamed = streamed_tokens(vec![3, 4, 5, 20, 21], vec![20, 21]);
     assert_eq!(streamed, vec![3, 4, 5], "content before the stop is kept");
 }
+
+/// The speculative path must withhold stop tokens too.
+///
+/// `emit_verified_tokens` sends before `fold_speculative_update` appends this
+/// step's tokens to `seq.tokens`, so the stop suffix is not readable at send
+/// time. A speculative request therefore still streams the tokens that
+/// complete its `stop` sequence.
+#[test]
+fn speculative_path_also_withholds_stop_tokens() {
+    use vllm_testing::FakeModel;
+
+    // `FakeModel` emits the last prompt token's value every step, so a prompt
+    // ending in 6 makes the generated stream 6, 6, 6, ...
+    let target = FakeModel::new(1000);
+    let draft = FakeModel::new(1000);
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 2;
+    engine.enable_speculative();
+
+    let (tx, mut rx) = mpsc::channel(64);
+    let mut request = Request::new(1, vec![5, 6], 12);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![6, 6]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..8 {
+        engine.step().unwrap();
+    }
+    // The sequence really stops (otherwise this test would prove nothing).
+    assert!(!engine.has_pending(), "the stop sequence must have matched");
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    assert!(
+        streamed.is_empty(),
+        "both generated tokens form the stop sequence, so neither may stream; got {streamed:?}"
+    );
+}
