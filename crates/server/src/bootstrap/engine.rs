@@ -151,7 +151,7 @@ fn build_engine_legacy(
         })
         .collect();
 
-    let engine = if let Some(budget_bytes) = app_config.engine.vram_budget_bytes {
+    let mut engine = if let Some(budget_bytes) = app_config.engine.vram_budget_bytes {
         let budget = Arc::new(
             vllm_core::speculative::MemoryBudget::new(budget_bytes)
                 .context("server config: invalid vram_budget_bytes")?,
@@ -200,6 +200,28 @@ fn build_engine_legacy(
             app_config.engine.num_kv_blocks,
         )
     };
+
+    // Capture the CUDA graphs the executor was built for. Only tests used to
+    // call this, so a `--features cuda-graph` build shipped an executor with
+    // an empty graph map: the run loop saw "enabled", took the graph path,
+    // hit `GraphNotFound` and fell back on EVERY step. Capture belongs here —
+    // after construction, before any traffic.
+    //
+    // A capture failure is not fatal: graphs are an optimization and falling
+    // back to the regular step is correct, just slower. Degrading with a
+    // warning keeps a GPU that cannot capture from taking the server down.
+    // The executor only exists in `cuda-graph` builds, and the non-feature
+    // stub logs a warning on EVERY call — so calling it unconditionally would
+    // make every plain build noisy at startup. The server always asks for
+    // graphs (SchedulerConfig defaults `enabled` to true), so "did the config
+    // ask" is the wrong gate; gate on whether this build can capture at all.
+    #[cfg(feature = "cuda-graph")]
+    if let Err(e) = engine.capture_cuda_graphs() {
+        tracing::warn!(
+            error = %e,
+            "CUDA Graph capture failed; serving on the regular step path"
+        );
+    }
 
     Ok(engine)
 }
