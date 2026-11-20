@@ -229,6 +229,24 @@ impl SchedulerEngine {
         // after producing max_tokens output tokens rather than
         // max_tokens total tokens.
         if seq.tokens.len() - seq.prompt_len >= seq.max_tokens {
+            // A stop sequence can land exactly on the `max_tokens`
+            // boundary. Finishing here removes the sequence from `running`,
+            // so the later `finalize_stop_sequences` pass never sees it and
+            // the finalization reports `Length` — which would flush the
+            // held-back stop tokens to the client. Record the match so
+            // finalization discards them instead.
+            let finished_id = seq.id;
+            let stop_ended = seq
+                .sampling_params
+                .stop_token_sequences
+                .as_ref()
+                .is_some_and(|stops| {
+                    crate::sampling::matched_stop_len(&seq.tokens[seq.prompt_len..], stops)
+                        .is_some()
+                });
+            if stop_ended {
+                self.stop_ended.insert(finished_id);
+            }
             seq.status = Status::Finished;
             // Add to prefix cache. ARCH-01: the prefix cache
             // now takes a reference to these blocks, so we

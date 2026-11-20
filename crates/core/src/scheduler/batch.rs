@@ -258,6 +258,11 @@ impl crate::engine::Engine {
             let hold = self.stop_hold_back(sampling_params.get(i));
             let completes_stop =
                 self.token_completes_stop_sequence(*seq_id, sampling_params.get(i));
+            // `check_completion` removes a `max_tokens`-completed sequence
+            // from `running`, so it cannot be queried here — consult the
+            // record it left instead. That record also says whether the
+            // boundary landed on a stop.
+            let ended_on_stop = self.scheduler.stop_ended.contains(seq_id);
 
             let pending = self.scheduler.pending_stream.entry(*seq_id).or_default();
             pending.push(sampled.clone());
@@ -267,6 +272,20 @@ impl crate::engine::Engine {
                     seq_id = %seq_id,
                     held = pending.len(),
                     "Generated tail completes a stop sequence; withholding it"
+                );
+                pending.clear();
+                continue;
+            }
+            // A stop that lands exactly on the `max_tokens` boundary is
+            // finished by `check_completion` before this token is sent, and
+            // the finalization would then flush the buffer as if the tokens
+            // were ordinary output. The suffix already matches, so nothing
+            // here may be released.
+            if ended_on_stop {
+                tracing::debug!(
+                    seq_id = %seq_id,
+                    held = pending.len(),
+                    "Sequence reached max_tokens on a stop boundary; withholding the tail"
                 );
                 pending.clear();
                 continue;

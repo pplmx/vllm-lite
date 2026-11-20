@@ -76,6 +76,14 @@ pub struct SchedulerEngine {
     /// no multi-token stops), and releases them as soon as they can no
     /// longer complete a stop.
     pub(crate) pending_stream: std::collections::HashMap<SeqId, Vec<vllm_traits::SampledToken>>,
+    /// Sequences whose final output ends with a matched `stop` sequence.
+    ///
+    /// A stop can coincide with the `max_tokens` boundary: `update` marks the
+    /// sequence finished before `finalize_stop_sequences` can inspect it, so
+    /// finalization arrives as `Length` and would flush the withheld stop
+    /// tokens as ordinary output. Recording the match here lets finalization
+    /// discard them instead.
+    pub(crate) stop_ended: std::collections::HashSet<SeqId>,
 }
 
 impl std::fmt::Debug for SchedulerEngine {
@@ -171,6 +179,7 @@ impl SchedulerEngine {
             #[cfg(feature = "multi-node")]
             chain_cursors: HashMap::new(),
             pending_stream: std::collections::HashMap::new(),
+            stop_ended: std::collections::HashSet::new(),
         }
     }
 

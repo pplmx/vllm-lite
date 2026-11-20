@@ -156,10 +156,20 @@ impl Engine {
         // another reason — by length, most often. Dropping it would truncate
         // the client's output; the entry also has to go, because `SeqId`s are
         // monotonic and a leftover entry is never reused.
+        // A sequence that ended ON a stop (including the `max_tokens`
+        // boundary case, recorded by `check_completion`) must not release
+        // its withheld tail — those tokens ARE the stop sequence.
+        eprintln!(
+            "PROBE finish seq={seq_id} reason={reason:?} stop_ended={}",
+            self.scheduler.stop_ended.contains(&seq_id)
+        );
+        let ended_on_stop = self.scheduler.stop_ended.remove(&seq_id);
         if let Some(mut pending) = self.scheduler.pending_stream.remove(&seq_id) {
-            for sampled in pending.drain(..) {
-                if let Some(tx) = self.response_txs.get(&seq_id) {
-                    let _ = tx.try_send(sampled);
+            if !ended_on_stop {
+                for sampled in pending.drain(..) {
+                    if let Some(tx) = self.response_txs.get(&seq_id) {
+                        let _ = tx.try_send(sampled);
+                    }
                 }
             }
         }

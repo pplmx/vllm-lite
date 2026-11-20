@@ -328,3 +328,65 @@ fn length_terminated_sequence_still_streams_its_held_tokens() {
         "every generated token must reach the client, got {streamed:?}"
     );
 }
+
+/// A stop landing exactly on the `max_tokens` boundary must still be withheld.
+///
+/// `check_completion` finishes a sequence as soon as it has `max_tokens`
+/// output tokens, which removes it from `running` before
+/// `finalize_stop_sequences` runs — so the match is never observed there and
+/// the finalization reports `Length`. The held-back tail was then flushed as
+/// ordinary output, delivering the stop sequence the contract says to
+/// withhold.
+#[test]
+fn stop_on_the_max_tokens_boundary_is_still_withheld() {
+    // Every emitted token is 7; `max_tokens = 2` lands exactly on `[7, 7]`.
+    // `StubModel` returns a constant, so prefill and decode agree (a
+    // sequence-driven mock would burn its list during prefill).
+    let model = vllm_testing::StubModel::returning(7);
+    let mut engine = Engine::new_boxed(Box::new(model), None::<Box<dyn ModelBackend>>);
+    let (tx, mut rx) = mpsc::channel(64);
+
+    let mut request = Request::new(1, vec![1, 2], 2);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![7, 7]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..10 {
+        let _ = engine.step();
+    }
+    assert!(!engine.has_pending(), "the sequence must have finished");
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    assert!(
+        streamed.is_empty(),
+        "the whole output is the stop sequence, so nothing may stream; got {streamed:?}"
+    );
+}
+
+/// A longer stop on the boundary withholds too (`max_tokens = 4`, stop of 4).
+#[test]
+fn longer_stop_on_the_max_tokens_boundary_is_withheld() {
+    let model = vllm_testing::StubModel::returning(7);
+    let mut engine = Engine::new_boxed(Box::new(model), None::<Box<dyn ModelBackend>>);
+    let (tx, mut rx) = mpsc::channel(64);
+
+    let mut request = Request::new(1, vec![1, 2], 4);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![7, 7, 7, 7]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..12 {
+        let _ = engine.step();
+    }
+    assert!(!engine.has_pending(), "the sequence must have finished");
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    assert!(
+        streamed.is_empty(),
+        "the whole output is the stop sequence; got {streamed:?}"
+    );
+}
