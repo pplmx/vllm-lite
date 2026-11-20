@@ -85,6 +85,38 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// Without the `gguf` feature a `.gguf` path must say so.
+    ///
+    /// `GgufLoader` is compiled out entirely, so the request falls through to
+    /// the generic "No loader available for path" error — which reads like a
+    /// corrupted or unknown file rather than "this build cannot serve GGUF;
+    /// rebuild with --features gguf". The two situations need different
+    /// operator responses, so the message must distinguish them.
+    #[cfg(not(feature = "gguf"))]
+    #[test]
+    fn test_gguf_path_without_feature_names_the_feature() {
+        use candle_core::Device;
+        use std::path::Path;
+        use vllm_model::loader::load_checkpoint;
+
+        let dir = std::env::temp_dir().join("vllm_lite_gguf_no_feature");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let file = dir.join("model.gguf");
+        std::fs::write(&file, b"GGUF").expect("write fixture");
+
+        let err = load_checkpoint(&file, &Device::Cpu)
+            .expect_err("a GGUF checkpoint cannot load without the feature");
+        let message = err.to_string();
+        // The path itself contains "gguf", so a bare `contains("gguf")` would
+        // pass on the generic message. Require the actionable part.
+        assert!(
+            message.contains("--features gguf"),
+            "the error must tell the operator how to enable GGUF, got: {message}"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn test_model_loader_uses_new_checkpoint_loading() {
         use candle_core::Device;

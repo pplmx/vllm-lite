@@ -28,6 +28,19 @@ pub fn load_checkpoint(path: &Path, device: &Device) -> Result<HashMap<String, T
         }
     }
 
+    // A `.gguf` file is a KNOWN format that this build simply cannot serve:
+    // `GgufLoader` is compiled out without the feature. Falling through to the
+    // generic message reads like an unknown/corrupt file and sends the
+    // operator looking at the wrong thing.
+    #[cfg(not(feature = "gguf"))]
+    if path.extension().is_some_and(|ext| ext == "gguf") {
+        return Err(candle_core::Error::msg(format!(
+            "cannot load '{}': GGUF support is not compiled into this build \
+             (rebuild with --features gguf)",
+            path.display()
+        )));
+    }
+
     Err(candle_core::Error::msg(format!(
         "No loader available for path: {}",
         path.display()
