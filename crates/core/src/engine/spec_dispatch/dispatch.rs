@@ -222,6 +222,13 @@ impl crate::engine::Engine {
     /// `results` still carries every verified entry so the caller's
     /// per-sequence scheduler fold can advance the mid-chunk prefill's
     /// frontier — only client emission is gated here.
+    /// **Known gap:** unlike the regular and CUDA-graph paths, this does not
+    /// hold back tokens that may complete a `stop` sequence — the tokens are
+    /// folded into `seq.tokens` by [`Self::fold_speculative_update`] *after*
+    /// this send loop, so the stop suffix is not yet readable here. A
+    /// speculative request with a `stop` therefore still streams the stop
+    /// tokens. Fixing it means moving the hold-back ahead of the fold (or
+    /// teaching the buffer about this path's multi-token bursts).
     fn emit_verified_tokens(
         &self,
         verified: &[(SeqId, SampledToken)],
