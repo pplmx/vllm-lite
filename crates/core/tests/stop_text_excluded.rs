@@ -412,3 +412,81 @@ fn stop_ended_record_is_released_at_finalization() {
         "the boundary record must be cleared when the sequence finalizes"
     );
 }
+
+/// The speculative path must withhold a stop on the boundary too.
+///
+/// `emit_verified_tokens` has its own send loop; it needs the same
+/// `stop_ended` check the regular path gained, or a speculative request
+/// whose stop lands exactly on `max_tokens` still streams it.
+#[test]
+fn speculative_path_withholds_a_stop_on_the_boundary() {
+    use vllm_testing::FakeModel;
+
+    // `FakeModel` emits the last prompt token every step: a prompt ending in
+    // 6 produces 6, 6, 6, ...  `max_tokens = 2` lands on `[6, 6]`.
+    let target = FakeModel::new(1000);
+    let draft = FakeModel::new(1000);
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 2;
+    engine.enable_speculative();
+
+    let (tx, mut rx) = mpsc::channel(64);
+    let mut request = Request::new(1, vec![5, 6], 2);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![6, 6]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..8 {
+        let _ = engine.step();
+    }
+    assert!(!engine.has_pending(), "the sequence must have finished");
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    assert!(
+        streamed.is_empty(),
+        "the boundary stop must be withheld on the speculative path; got {streamed:?}"
+    );
+}
+
+/// The CUDA-graph path must withhold a boundary stop as well.
+#[test]
+#[cfg(feature = "cuda-graph")]
+fn cuda_graph_path_withholds_a_stop_on_the_boundary() {
+    use vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig;
+    use vllm_core::types::SchedulerConfig;
+    use vllm_testing::StubModel;
+
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    let mut engine = Engine::with_config(StubModel::returning(7), None, config, 4, 1024);
+    assert!(
+        engine.cuda_graph_enabled(),
+        "fixture must enable the graph path"
+    );
+
+    let (tx, mut rx) = mpsc::channel(64);
+    let mut request = Request::new(1, vec![1, 2], 2);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![7, 7]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..10 {
+        let _ = engine.step_with_graph();
+    }
+    assert!(!engine.has_pending(), "the sequence must have finished");
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    assert!(
+        streamed.is_empty(),
+        "the boundary stop must be withheld on the graph path; got {streamed:?}"
+    );
+}

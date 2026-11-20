@@ -273,9 +273,15 @@ impl crate::engine::Engine {
             // `disconnected` so the caller cancels it. Pre-fix both were
             // silent no-ops and an aborted request generated into a
             // closed channel for its whole `max_tokens` budget.
+            // A stop that landed exactly on the `max_tokens` boundary is
+            // recorded by `check_completion`, which has already removed the
+            // sequence from `running` — so it cannot be queried here. Consult
+            // the record: the tail must stay withheld rather than be
+            // released as ordinary output.
+            let ended_on_stop = self.scheduler.stop_ended.contains(seq_id);
             let pending = self.scheduler.pending_stream.entry(*seq_id).or_default();
             pending.push(sampled.clone());
-            if completes_stop {
+            if completes_stop || ended_on_stop {
                 tracing::debug!(
                     seq_id = %seq_id,
                     held = pending.len(),
