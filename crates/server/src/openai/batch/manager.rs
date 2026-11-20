@@ -119,12 +119,19 @@ impl BatchManager {
 
     /// Mark a job `Completed` and stamp its completion time.
     ///
+    /// Leaves a job that already reached a terminal state untouched: a
+    /// worker that finishes its loop after [`Self::request_cancel`] won
+    /// must not report the cancelled batch as completed.
+    ///
     /// # Panics
     ///
     /// Panics only if the system clock reports a time before `UNIX_EPOCH`.
     pub async fn set_completed(&self, job_id: &str) {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.get_mut(job_id) {
+            if job.is_terminal() {
+                return;
+            }
             job.status = BatchStatus::Completed;
             job.completed_at = Some(
                 // invariant: monotonic clock is always >= UNIX_EPOCH.
@@ -167,12 +174,18 @@ impl BatchManager {
     /// completion timestamp so `get_batch` reports a terminal state; partial
     /// results remain readable via `get_batch_results`.
     ///
+    /// Leaves a job that already reached a terminal state untouched, for the
+    /// same reason as [`Self::set_completed`].
+    ///
     /// # Panics
     ///
     /// Panics only if the system clock reports a time before `UNIX_EPOCH`.
     pub async fn set_failed(&self, job_id: &str) {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.get_mut(job_id) {
+            if job.is_terminal() {
+                return;
+            }
             job.status = BatchStatus::Failed;
             if job.completed_at.is_none() {
                 job.completed_at = Some(
@@ -264,6 +277,54 @@ mod tests {
             Some(0.7),
         ));
         assert_ne!(id1, id2);
+    }
+
+    /// A job cancelled while its worker was mid-flight must stay `Cancelled`.
+    /// The worker finishes its loop and calls `set_completed` unconditionally;
+    /// letting that overwrite the status reports a cancelled batch as
+    /// completed, so a client polling on `status` believes the work happened.
+    #[test]
+    fn set_completed_does_not_overwrite_cancelled() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id = rt.block_on(mgr.create_job(
+            BatchEndpoint::Chat,
+            vec!["prompt".into()],
+            None,
+            None,
+            None,
+        ));
+        assert!(rt.block_on(mgr.request_cancel(&id)));
+        rt.block_on(mgr.set_completed(&id));
+        let job = rt.block_on(mgr.get_job(&id)).unwrap();
+        assert_eq!(
+            job.status,
+            BatchStatus::Cancelled,
+            "a cancelled job must not be reported as completed"
+        );
+    }
+
+    /// Same race, `Failed` leg: a cancelled job whose worker then errors
+    /// stays `Cancelled` rather than flipping to `Failed`.
+    #[test]
+    fn set_failed_does_not_overwrite_cancelled() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id = rt.block_on(mgr.create_job(
+            BatchEndpoint::Chat,
+            vec!["prompt".into()],
+            None,
+            None,
+            None,
+        ));
+        assert!(rt.block_on(mgr.request_cancel(&id)));
+        rt.block_on(mgr.set_failed(&id));
+        let job = rt.block_on(mgr.get_job(&id)).unwrap();
+        assert_eq!(
+            job.status,
+            BatchStatus::Cancelled,
+            "a cancelled job must not be flipped to failed"
+        );
     }
 
     #[test]
