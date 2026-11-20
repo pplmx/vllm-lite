@@ -279,6 +279,18 @@ impl SchedulerEngine {
     }
 
     /// Get finished sequences
+    /// Snapshot of the sequences finalized in the CURRENT step.
+    ///
+    /// The list is populated during a step and cleared by
+    /// [`Self::clear_finished`] at the END of that SAME step (all three step
+    /// paths: `scheduler/batch.rs`, `engine/graph_step.rs`,
+    /// `engine/spec_dispatch/dispatch.rs`). Every consumer reads it inside the
+    /// step, before the clear.
+    ///
+    /// Polling this from outside `step` therefore always returns an empty
+    /// vector. To observe completion externally, watch the per-request
+    /// response channel: the engine drops its sender when it finalizes the
+    /// sequence, so `Receiver::is_closed` is the reliable signal.
     pub fn finished_sequences(&self) -> Vec<Sequence> {
         self.finished.clone()
     }

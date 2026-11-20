@@ -499,14 +499,20 @@ fn gpu_engine_e2e_continuous_batching() {
 
     // Add multiple requests with varying prompt lengths.
     let num_requests = 10;
-    let mut seq_ids = Vec::new();
+    // Completion is observed through each request's response channel: the
+    // engine drops the sender when it finalizes the sequence, and every step
+    // path clears `finished_sequences()` in the same step — so polling that
+    // list from outside `step` can never see a completion.
+    let mut rxs = Vec::new();
 
     for i in 0..num_requests {
         let prompt_len = 4 + (i % 4);
         let prompt: Vec<TokenId> = (0..prompt_len).map(|j| (i as TokenId * 100 + j)).collect();
-        let (tx, _rx) = tokio::sync::mpsc::channel::<SampledToken>(64);
-        let sid = engine.add_request(Request::new(u64::from(i), prompt, 8), tx);
-        seq_ids.push(sid);
+        let (tx, rx) = tokio::sync::mpsc::channel::<SampledToken>(64);
+        // `Request::new(0, ..)` lets the scheduler assign the id; passing the
+        // loop counter collides with the ids it hands out.
+        engine.add_request(Request::new(0, prompt, 8), tx);
+        rxs.push(rx);
     }
 
     // Step until all requests complete.
@@ -517,30 +523,15 @@ fn gpu_engine_e2e_continuous_batching() {
         if engine.has_pending() {
             let _ = engine.step();
         }
-
-        let finished_count = engine
-            .scheduler
-            .finished_sequences()
-            .iter()
-            .filter(|s| seq_ids.contains(&s.id))
-            .count();
-
-        if finished_count >= num_requests as usize {
+        if rxs.iter().all(tokio::sync::mpsc::Receiver::is_closed) {
             break;
         }
-
         if start.elapsed() > timeout {
-            break;
-        }
-
-        if !engine.has_pending() && engine.scheduler.running().is_empty() {
             break;
         }
     }
 
-    let finished = engine.scheduler.finished_sequences();
-    let finished_count = finished.iter().filter(|s| seq_ids.contains(&s.id)).count();
-
+    let finished_count = rxs.iter().filter(|rx| rx.is_closed()).count();
     assert_eq!(
         finished_count,
         num_requests as usize,
@@ -567,12 +558,17 @@ fn gpu_engine_e2e_kv_cache_allocation() {
     };
     let mut engine = make_engine_with_config(config, 256);
 
-    // Add requests that require multiple KV blocks.
+    // Add requests that require multiple KV blocks. Completion is observed
+    // through the response channels: every step path clears
+    // `finished_sequences()` in the same step it finalizes, so polling that
+    // list from outside `step` always reads empty.
+    let mut rxs = Vec::new();
     for i in 0..4 {
         let prompt: Vec<TokenId> = (0..16).map(|j| (i as TokenId * 10 + j)).collect();
-        let (tx, _rx) = tokio::sync::mpsc::channel::<SampledToken>(64);
-        let sid = engine.add_request(Request::new(i as u64, prompt, 4), tx);
+        let (tx, rx) = tokio::sync::mpsc::channel::<SampledToken>(64);
+        let sid = engine.add_request(Request::new(0, prompt, 4), tx);
         assert!(sid > 0, "seq {i} should be added");
+        rxs.push(rx);
     }
 
     // Step until all complete or timeout.
@@ -580,7 +576,9 @@ fn gpu_engine_e2e_kv_cache_allocation() {
         if engine.has_pending() {
             let _ = engine.step();
         }
-
+        if rxs.iter().all(tokio::sync::mpsc::Receiver::is_closed) {
+            break;
+        }
         if !engine.has_pending() && engine.scheduler.running().is_empty() {
             break;
         }
@@ -588,7 +586,7 @@ fn gpu_engine_e2e_kv_cache_allocation() {
 
     // All sequences should either be finished or gracefully handled
     // (preemption, etc.) — the key invariant: no panic, no crash.
-    let total = engine.scheduler.finished_sequences().len();
+    let total = rxs.iter().filter(|rx| rx.is_closed()).count();
     assert!(total > 0, "at least some sequences should complete on GPU");
 }
 
@@ -639,10 +637,19 @@ fn gpu_engine_cuda_graph_config_respected() {
         },
         ..Default::default()
     };
-    let engine = make_engine_with_config(config, 512);
+    let mut engine = make_engine_with_config(config, 512);
 
+    // `cuda_graph_enabled` reports replay readiness, not the configured flag:
+    // an executor that never captured has nothing to replay.
+    assert!(
+        !engine.cuda_graph_enabled(),
+        "a freshly built engine has captured no graphs"
+    );
+    engine
+        .capture_cuda_graphs()
+        .expect("capturing the two configured batch sizes on this GPU must succeed");
     assert!(
         engine.cuda_graph_enabled(),
-        "engine should report CUDA graph enabled when config is set"
+        "engine should report CUDA graph enabled after capture"
     );
 }
