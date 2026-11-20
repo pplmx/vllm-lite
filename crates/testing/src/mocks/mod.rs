@@ -463,6 +463,115 @@ impl ModelBackend for NeverProgressModel {
     }
 }
 
+/// A model whose `forward` and `forward_logits` agree on the next token.
+///
+/// `FakeModel` returns `seq_id % vocab_size` from `forward` but peaks the
+/// logits at the INPUT token, so a draft produced through `forward` never
+/// matches what the target's `forward_logits` predicts — every draft is
+/// rejected and the speculative path degenerates to one token per step. Any
+/// test that needs real multi-token speculative bursts (stop handling across
+/// a burst, acceptance accounting) needs a fixture where the two agree.
+///
+/// Both paths emit `last_input_token + 1` (mod `vocab_size`), so the draft's
+/// prediction equals the target's prediction at the same position and a
+/// speculative step accepts the whole draft budget.
+#[derive(Debug, Clone, Copy)]
+pub struct ConsistentModel {
+    vocab_size: usize,
+}
+
+impl ConsistentModel {
+    /// Create a consistent model with the given vocabulary size.
+    #[must_use]
+    pub const fn new(vocab_size: usize) -> Self {
+        Self { vocab_size }
+    }
+
+    /// The token both `forward` and `forward_logits` predict for `token`.
+    const fn next_of(token: TokenId, vocab_size: usize) -> TokenId {
+        if vocab_size == 0 {
+            return 0;
+        }
+        ((token as usize + 1) % vocab_size) as TokenId
+    }
+}
+
+impl ModelBackend for ConsistentModel {
+    fn forward(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
+    ) -> Result<BatchOutput> {
+        Ok(BatchOutput {
+            seq_ids: seq_ids.to_vec(),
+            next_tokens: (0..seq_ids.len())
+                .map(|i| {
+                    let last = input_tokens
+                        .get(i)
+                        .and_then(|t| t.last())
+                        .copied()
+                        .unwrap_or(0);
+                    vllm_traits::SampledToken {
+                        token: Self::next_of(last, self.vocab_size),
+                        logprob: 0.0,
+                        top_logprobs: Vec::new(),
+                    }
+                })
+                .collect(),
+        })
+    }
+
+    fn forward_logits(
+        &mut self,
+        _seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
+    ) -> Result<Vec<Vec<f32>>> {
+        Ok(input_tokens
+            .iter()
+            .map(|tokens| {
+                let mut logits = Vec::with_capacity(tokens.len() * self.vocab_size);
+                for &t in tokens {
+                    let mut pos_logits = vec![-10.0_f32; self.vocab_size];
+                    let next = Self::next_of(t, self.vocab_size) as usize;
+                    if next < pos_logits.len() {
+                        pos_logits[next] = 10.0;
+                    }
+                    logits.extend(pos_logits);
+                }
+                logits
+            })
+            .collect())
+    }
+
+    fn embed(
+        &mut self,
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+    ) -> Result<Vec<Vec<f32>>> {
+        Ok(input_tokens.iter().map(|_| vec![0.0_f32; 8]).collect())
+    }
+
+    fn vocab_size(&self) -> usize {
+        self.vocab_size
+    }
+
+    fn num_layers(&self) -> usize {
+        32
+    }
+
+    fn num_heads(&self) -> usize {
+        32
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -789,6 +898,53 @@ mod tests {
         assert_eq!(model.vocab_size(), 151_936);
         assert_eq!(model.num_layers(), 32);
         assert_eq!(model.num_heads(), 32);
+    }
+
+    /// The whole point of the fixture: `forward` and `forward_logits` must
+    /// predict the SAME token, which is what lets a speculative draft be
+    /// accepted. `FakeModel` fails that (forward returns `seq_id % vocab`,
+    /// logits peak at the input token), so every draft is rejected there.
+    #[test]
+    fn test_consistent_model_forward_and_logits_agree() {
+        let mut model = ConsistentModel::new(1000);
+        let seq_ids = vec![1u64];
+        let input = vec![vec![42u32]];
+        let out = model
+            .forward(&seq_ids, &input, &[vec![0]], &[vec![0]], &[0], &[false])
+            .expect("forward");
+        let logits = model
+            .forward_logits(&seq_ids, &input, &[vec![0]], &[vec![0]], &[0], &[false])
+            .expect("logits");
+
+        let from_forward = out.next_tokens[0].token;
+        let best = logits[0]
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).expect("finite logits"))
+            .map(|(i, _)| i)
+            .expect("non-empty logits");
+        assert_eq!(
+            from_forward as usize, best,
+            "forward and forward_logits must predict the same token, or speculative drafts can never be accepted"
+        );
+        assert_eq!(from_forward, 43, "42 -> 43 under the +1 rule");
+    }
+
+    /// Wrapping at the vocabulary edge must stay in range.
+    #[test]
+    fn test_consistent_model_wraps_at_vocab_edge() {
+        let mut model = ConsistentModel::new(8);
+        let out = model
+            .forward(
+                &[1u64],
+                &[vec![7u32]],
+                &[vec![0]],
+                &[vec![0]],
+                &[0],
+                &[false],
+            )
+            .expect("forward");
+        assert_eq!(out.next_tokens[0].token, 0, "7 + 1 wraps to 0");
     }
 
     #[test]

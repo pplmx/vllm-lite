@@ -67,7 +67,7 @@ pub use device::{cuda_available, gpu_device, gpu_or_cpu};
 // for less-common exports that don't warrant top-level ergonomics.
 pub use fixtures::TestFixtures;
 pub use harness::TestHarness;
-pub use mocks::{ConstModel, FakeModel, IncrementModel, StubModel};
+pub use mocks::{ConsistentModel, ConstModel, FakeModel, IncrementModel, StubModel};
 pub use request_factory::RequestFactory;
 pub use slow_model::SlowModel;
 
