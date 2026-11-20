@@ -252,9 +252,21 @@ async fn execute_one(
         }
     };
 
+    // Poll the cancel flag WHILE waiting for tokens, not after each one.
+    // Checking only after `recv()` returns ties cancellation latency to token
+    // production: a cancel landing during the prefill of a long prompt is not
+    // acted on until that prefill finishes and emits its first token, so the
+    // engine keeps working on a batch the operator already cancelled.
     let mut tokens = Vec::new();
-    while let Some(sampled) = response_rx.recv().await {
-        tokens.push(sampled);
+    let cancel_poll = std::time::Duration::from_millis(50);
+    loop {
+        tokio::select! {
+            maybe_token = response_rx.recv() => match maybe_token {
+                Some(sampled) => tokens.push(sampled),
+                None => break,
+            },
+            () = tokio::time::sleep(cancel_poll) => {}
+        }
         if cancel_requested.load(std::sync::atomic::Ordering::Relaxed) {
             // Best-effort: cancel the in-flight sequence so the engine
             // stops generating; the channel then closes and we break.
@@ -389,6 +401,90 @@ mod tests {
         let finished = state.batch_manager.get_job(&job).await.unwrap();
         assert_eq!(finished.status, BatchStatus::Cancelled);
         assert!(finished.results.is_empty(), "nothing should have run");
+    }
+
+    /// Cancelling a batch must reach the engine even when the in-flight
+    /// prompt has not produced its first token yet.
+    ///
+    /// The worker checks the cancel flag only *after* `response_rx.recv()`
+    /// returns, so a cancel that lands while the first token is still being
+    /// generated (a long prefill) is not acted on until that token arrives —
+    /// the engine keeps working for the whole prefill. A client cancelling a
+    /// batch should stop the work promptly.
+    #[tokio::test]
+    async fn cancel_reaches_engine_before_the_first_token() {
+        use std::sync::atomic::Ordering;
+
+        let mut state = test_fixtures::api_state(Architecture::Qwen3);
+        let cancels: Arc<tokio::sync::Mutex<Vec<u64>>> =
+            Arc::new(tokio::sync::Mutex::new(Vec::new()));
+        let cancels_clone = cancels.clone();
+        let (engine_tx, mut engine_rx) =
+            tokio::sync::mpsc::channel::<vllm_core::types::EngineMessage>(256);
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Some(msg) = engine_rx.recv().await {
+                match msg {
+                    vllm_core::types::EngineMessage::AddRequest {
+                        seq_id_tx,
+                        response_tx,
+                        ..
+                    } => {
+                        if let Some(tx) = seq_id_tx {
+                            let _ = tx.send(42);
+                        }
+                        // Hold the response channel open without emitting a
+                        // token: a sequence still in its prefill.
+                        held.push(response_tx);
+                    }
+                    vllm_core::types::EngineMessage::CancelRequest { seq_id } => {
+                        cancels_clone.lock().await.push(seq_id);
+                    }
+                    _ => {}
+                }
+            }
+        });
+        state.engine_tx = engine_tx;
+
+        let job = state
+            .batch_manager
+            .create_job(
+                BatchEndpoint::Completion,
+                vec!["a".to_string()],
+                None,
+                Some(10),
+                None,
+            )
+            .await;
+
+        let handle = spawn_batch_worker(&state, state.batch_manager.get_job(&job).await.unwrap());
+
+        // Let the worker enqueue the prompt and park on the token channel,
+        // then cancel from outside while no token has been produced.
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        state.batch_manager.request_cancel(&job).await;
+
+        // The cancel must reach the engine well within the prefill window.
+        let mut recorded = Vec::new();
+        for _ in 0..50 {
+            recorded = cancels.lock().await.clone();
+            if !recorded.is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            recorded,
+            vec![42],
+            "a cancel during prefill must reach the engine, got {recorded:?}"
+        );
+
+        handle.abort();
+        let _ = handle.await;
+        let _ = Ordering::Relaxed;
     }
 
     #[tokio::test]
