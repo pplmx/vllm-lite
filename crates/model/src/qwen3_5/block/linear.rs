@@ -91,13 +91,16 @@ impl LinearAttentionBlock {
 
 impl LinearAttentionBlock {
     /// Build from weights.
+    ///
     /// # Errors
     ///
+    /// Returns `Err` when a required weight tensor is missing from `weights`
+    /// or a tensor operation fails.
     ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    /// Returns `Err` if reading or parsing the source fails.
+    /// Panics only if allocating the zero-initialised norm bias fails on a
+    /// statically-known shape (treated as infallible upstream).
     pub fn from_weights(
         prefix: &str,
         weights: &HashMap<String, Tensor>,

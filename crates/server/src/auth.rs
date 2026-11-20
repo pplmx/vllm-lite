@@ -451,8 +451,8 @@ fn is_health_path(path: &str) -> bool {
 
 /// # Panics
 ///
-/// Panics if a required invariant is violated (e.g. A `None` value is force-unwrapped or an
-/// out-of-bounds index is used).
+/// Panics only if building a rejection response fails — an invalid header
+/// constant or a body that cannot be constructed, both programmer errors.
 pub async fn auth_middleware(
     auth: axum::extract::State<Arc<AuthMiddleware>>,
     request: Request,

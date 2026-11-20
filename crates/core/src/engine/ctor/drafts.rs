@@ -22,11 +22,12 @@ impl Engine {
     /// any I/O. The Engine's `draft_resolver` is wired with a `NoopLoader`:
     /// any attempt to lazy-load falls back to self-spec via FALL-01. The
     /// server should construct a real `DraftLoader` via
+    /// [`Self::set_draft_loader`] before serving requests that name drafts.
     ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    /// [`Self::set_draft_loader`] before serving requests that name drafts.
+    /// Panics if `draft_specs` contains the same `DraftId` twice — registering
+    /// the duplicate is a programmer error, not a runtime condition.
     #[must_use]
     pub fn with_drafts_boxed(
         target_model: Box<dyn ModelBackend>,
@@ -78,11 +79,12 @@ impl Engine {
 
     /// Construct an Engine with a custom memory budget. The same budget is
     /// shared with the draft registry. `draft_resolver` is wired with a
+    /// `NoopLoader` (callers may replace via [`Self::set_draft_loader`]).
     ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    /// `NoopLoader` (callers may replace via [`Self::set_draft_loader`]).
+    /// Panics if `draft_specs` contains the same `DraftId` twice — registering
+    /// the duplicate is a programmer error, not a runtime condition.
     pub fn with_budget_boxed(
         target_model: Box<dyn ModelBackend>,
         draft_model: Option<Box<dyn ModelBackend>>,

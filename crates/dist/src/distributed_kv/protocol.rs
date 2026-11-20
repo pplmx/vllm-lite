@@ -65,9 +65,12 @@ pub struct CacheMessage {
 
 impl CacheMessage {
     /// Construct a new instance from the given configuration.
+    ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    /// Panics only if the system clock reports a time before `UNIX_EPOCH`
+    /// (a misconfigured clock); the message id itself comes from an atomic
+    /// counter and the millisecond conversion saturates.
     pub fn new(source: NodeId, destination: NodeId, operation: CacheOperation) -> Self {
         static MSG_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 

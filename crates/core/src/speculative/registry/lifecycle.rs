@@ -32,9 +32,6 @@ impl DraftModelRegistry {
     ///
     /// Returns `Err` if the operation fails.
     ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     ///   Use `force_unload` to bypass.
     pub fn unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -70,9 +67,6 @@ impl DraftModelRegistry {
     ///
     /// Returns `Err` if the operation fails.
     ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// - `UnknownDraftId` if no entry with `id` exists
     pub fn force_unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -106,15 +100,12 @@ impl DraftModelRegistry {
     /// Increment the reference count for a registered draft.
     ///
     /// Updated in v18.3 — increment is driven by per-request routing logic;
+    /// see ADR-007 for the routing design.
     ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    /// see ADR-007 for the routing design.
+    /// Returns `UnknownDraftId` when `id` is not registered, or the lock
+    /// error when the registry lock is poisoned.
     pub fn increment_ref(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self.drafts.write()?;
@@ -141,9 +132,6 @@ impl DraftModelRegistry {
     ///
     /// Returns `Err` if the operation fails.
     ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Returns `true` if auto-unload was triggered by this call.
     pub fn decrement_ref(&self, id: &DraftId) -> Result<bool, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -178,9 +166,6 @@ impl DraftModelRegistry {
     ///
     /// Returns `Err` if the operation fails.
     ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Snapshot the reference count for a registered draft.
     pub fn ref_count(&self, id: &DraftId) -> Result<usize, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -196,10 +181,6 @@ impl DraftModelRegistry {
 
     /// Get a clone of the `Arc<Mutex<Box<dyn ModelBackend>>>` for a loaded draft.
     /// Returns None if the draft is unloaded or unknown. Used by
-    ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// `DraftResolver` to hand the backend to the engine.
     pub fn get_loaded_backend(&self, id: &DraftId) -> Option<Arc<Mutex<Box<dyn ModelBackend>>>> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -236,9 +217,6 @@ impl DraftModelRegistry {
     /// Read-only lookup of the current state. Does NOT trigger loading.
     ///
     ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Returns `None` if no entry with `id` is registered.
     pub fn lookup(&self, id: &DraftId) -> Option<DraftState> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -257,10 +235,11 @@ impl DraftModelRegistry {
         result
     }
 
+    /// Check whether a draft is registered (either state).
+    ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    /// Check whether a draft is registered (either state).
+    /// Panics if the registry lock is poisoned.
     pub fn contains(&self, id: &DraftId) -> bool {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         self.drafts
@@ -270,10 +249,11 @@ impl DraftModelRegistry {
             .contains_key(id)
     }
 
+    /// Check whether a draft is currently loaded.
+    ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    /// Check whether a draft is currently loaded.
+    /// Panics if the registry lock is poisoned.
     pub fn is_loaded(&self, id: &DraftId) -> bool {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         matches!(
@@ -288,15 +268,12 @@ impl DraftModelRegistry {
 
     /// Number of bytes currently allocated to KV cache blocks for this draft.
     /// Returns 0 if the draft is `Unloaded`. Used by the Engine for runtime
+    /// KV-cache growth tracking (MEM-02).
     ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    /// KV-cache growth tracking (MEM-02).
+    /// Returns `UnknownDraftId` when `id` is not registered, or the lock
+    /// error when the registry lock is poisoned.
     #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
     pub(crate) fn draft_allocated_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -310,9 +287,6 @@ impl DraftModelRegistry {
         Ok(bytes)
     }
 
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// List all registered draft ids (sorted).
     pub fn ids(&self) -> Vec<DraftId> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -326,10 +300,11 @@ impl DraftModelRegistry {
         ids
     }
 
+    /// Count of registered drafts (both states).
+    ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    /// Count of registered drafts (both states).
+    /// Panics if the registry lock is poisoned.
     pub fn len(&self) -> usize {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         self.drafts
@@ -358,10 +333,6 @@ impl DraftModelRegistry {
     ///
     /// Returns `Err` if the operation fails.
     ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is
-    /// force-unwrapped or an out-of-bounds index is used).
     /// Zero for `Unloaded` drafts.
     pub(crate) fn draft_reserved_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic

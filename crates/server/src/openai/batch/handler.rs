@@ -312,11 +312,10 @@ pub async fn get_batch_results(
     }))
 }
 
-/// Run the operation (see signature for params and return type).
-/// # Panics
+/// List every batch known to the manager, newest first.
 ///
-/// Panics if a required invariant is violated (e.g. A `None` value is force-unwrapped or an
-/// out-of-bounds index is used).
+/// Infallible: the manager returns owned job state, so no result can be
+/// missing here.
 pub async fn list_batches(State(state): State<ApiState>) -> Json<BatchListResponse> {
     let jobs = state.batch_manager.get_all_jobs().await;
 

@@ -18,16 +18,11 @@ use vllm_traits::ModelBackend;
 impl DraftModelRegistry {
     /// Register a draft spec. The spec is stored as `Unloaded`; no I/O happens.
     ///
-    /// Returns [`DraftRegistryError::AlreadyLoaded`] if an entry with the same
-    ///
     /// # Errors
     ///
-    /// Returns `Err` if registration fails (e.g. duplicate name or invalid input).
-    ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    /// id already exists in either state.
+    /// Returns [`DraftRegistryError::AlreadyLoaded`] if an entry with the same
+    /// id already exists in either state, or the lock error when the registry
+    /// lock is poisoned.
     pub fn register(&self, spec: DraftSpec) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self.drafts.write()?;
@@ -45,17 +40,11 @@ impl DraftModelRegistry {
     /// responsible for invoking the actual model loader before calling this
     /// method. The registry only owns the state transition.
     ///
-    /// Errors:
-    /// - `UnknownDraftId` if no entry with `id` exists
-    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    /// - `UnknownDraftId` if no entry with `id` exists
     /// - `AlreadyLoaded` if the entry is already in `Loaded` state
+    /// - the lock error when the registry lock is poisoned
     pub fn attach_loaded(
         &self,
         id: &DraftId,
@@ -92,18 +81,12 @@ impl DraftModelRegistry {
     /// On budget exhaustion, returns [`DraftRegistryError::MemoryBudgetExceeded`]
     /// without changing state.
     ///
-    /// Errors:
-    /// - `UnknownDraftId` if no entry with `id` exists
-    /// - `AlreadyLoaded` if the entry is already `Loaded`
-    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    /// - `UnknownDraftId` if no entry with `id` exists
+    /// - `AlreadyLoaded` if the entry is already `Loaded`
     /// - `MemoryBudgetExceeded` if the budget can't accommodate this draft
+    /// - the lock error when the registry lock is poisoned
     pub fn attach_loaded_budgeted(
         &self,
         id: &DraftId,

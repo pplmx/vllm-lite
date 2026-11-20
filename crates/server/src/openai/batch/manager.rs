@@ -117,11 +117,11 @@ impl BatchManager {
         }
     }
 
-    /// Set completed.
+    /// Mark a job `Completed` and stamp its completion time.
+    ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. A `None` value is force-unwrapped or an
-    /// out-of-bounds index is used).
+    /// Panics only if the system clock reports a time before `UNIX_EPOCH`.
     pub async fn set_completed(&self, job_id: &str) {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.get_mut(job_id) {
@@ -169,8 +169,7 @@ impl BatchManager {
     ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. A `None` value is force-unwrapped or an
-    /// out-of-bounds index is used).
+    /// Panics only if the system clock reports a time before `UNIX_EPOCH`.
     pub async fn set_failed(&self, job_id: &str) {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.get_mut(job_id) {

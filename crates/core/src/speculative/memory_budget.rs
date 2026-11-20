@@ -73,18 +73,23 @@ impl Default for MemoryBudget {
 impl MemoryBudget {
     #[must_use]
     /// Construct a memory budget with effectively no cap (returns `usize::MAX`).
+    ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    /// Panics only if `u64::MAX` were rejected by [`Self::new`], which cannot
+    /// happen: it rejects 0 alone.
     pub fn unlimited() -> Self {
         // invariant: `u64::MAX` is a non-zero literal; `MemoryBudget::new` only rejects 0.
         Self::new(u64::MAX).expect("u64::MAX always > 0")
     }
 
     /// Construct a new instance from the given configuration.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if any required tensor allocation or weight loading fails.
+    /// Returns `MemoryBudgetExceeded` when `total_bytes` is 0: a zero budget
+    /// could never reserve the target model, so it is rejected at
+    /// construction rather than at the first reservation.
     pub const fn new(total_bytes: u64) -> Result<Self, MemoryBudgetExceeded> {
         if total_bytes == 0 {
             return Err(MemoryBudgetExceeded {

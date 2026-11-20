@@ -141,10 +141,11 @@ impl MapLoader {
         }
     }
 
-    /// Runs the operation.
+    /// Install a backend under `id`.
+    ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    /// Panics if the fixture's mutex is poisoned.
     pub fn insert(&self, id: DraftId, backend: Box<dyn ModelBackend>) {
         self.backends.lock().unwrap().insert(id, backend);
     }
@@ -197,11 +198,12 @@ pub fn harness_unlimited() -> Harness {
     harness_with_budget(u64::MAX)
 }
 
-#[must_use]
-/// Runs the operation.
+/// Build a harness whose draft memory budget is `total_bytes`.
+///
 /// # Panics
 ///
-/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+/// Panics if `total_bytes` is 0 — `MemoryBudget::new` rejects a zero budget.
+#[must_use]
 pub fn harness_with_budget(total_bytes: u64) -> Harness {
     let budget = Arc::new(MemoryBudget::new(total_bytes).unwrap());
     let registry = Arc::new(DraftModelRegistry::with_budget(budget.clone()));
