@@ -500,3 +500,51 @@ fn cuda_graph_path_withholds_a_stop_on_the_boundary() {
         "the boundary stop must be withheld on the graph path; got {streamed:?}"
     );
 }
+
+/// **Known defect — ignored.** A stop that completes INSIDE a speculative
+/// burst is not detected.
+///
+/// The speculative path folds the whole burst into `seq.tokens` before
+/// emitting, so the stop suffix is no longer at the tail when the send loop
+/// runs: `token_completes_stop_sequence` (a tail check) and
+/// `finalize_stop_sequences` (a suffix check on the finalized sequence) both
+/// look at the LAST token only. With `stop: [[8, 9]]` against a stream of
+/// 7, 8, 9, 10, ... the client receives the whole stream and the sequence
+/// keeps generating.
+///
+/// Fixing it needs the send path to walk the burst token by token AND to
+/// finalize the sequence at the match point; two attempts at the emit layer
+/// either still leaked the tail or dropped tokens past the stop, so this is
+/// recorded rather than half-fixed.
+#[test]
+#[ignore = "known defect: mid-burst stop is not detected on the speculative path"]
+fn speculative_mid_burst_stop_is_withheld() {
+    use vllm_testing::ConsistentModel;
+
+    let mut engine = Engine::new_boxed(
+        Box::new(ConsistentModel::new(1000)),
+        Some(Box::new(ConsistentModel::new(1000))),
+    );
+    engine.max_draft_tokens = 4;
+    engine.enable_speculative();
+
+    let (tx, mut rx) = mpsc::channel(64);
+    // ConsistentModel emits 7, 8, 9, 10, ...; the stop completes at tokens
+    // 2-3, i.e. inside the first burst.
+    let mut request = Request::new(1, vec![5, 6], 20);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![8, 9]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..3 {
+        let _ = engine.step();
+    }
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    assert!(
+        !streamed.iter().any(|&t| t == 8 || t == 9),
+        "a stop completing mid-burst must be withheld, got {streamed:?}"
+    );
+}
