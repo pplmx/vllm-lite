@@ -95,10 +95,9 @@ pub async fn models_handler(State(state): State<ApiState>) -> Response {
         data: vec![ModelObject {
             id: model_name,
             object: "model".to_string(),
-            // report when this server instance serves the
-            // model entry (vLLM's convention), not a stale hardcoded
-            // epoch (1_700_000_000 = 2023-11-14) that implied a fixed
-            // creation date for every model on every deployment.
+            // When this process started serving models (vLLM's
+            // convention) — stable across requests, unlike a per-request
+            // timestamp. See `serving_epoch`.
             created: serving_epoch(),
             owned_by: "vllm-lite".to_string(),
             max_model_len: state.max_model_len,
