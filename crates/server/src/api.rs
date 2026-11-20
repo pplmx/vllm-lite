@@ -197,6 +197,10 @@ pub async fn shutdown(State(state): State<ApiState>, headers: axum::http::Header
     // the SIGTERM path's behaviour in `main.rs::shutdown_signal`.
     if let Ok(mut checker) = state.health.write() {
         checker.mark_not_ready();
+    } else {
+        // Silent here would mean the probe keeps reporting Ready while the
+        // process is tearing down; the SIGTERM path warns for the same case.
+        tracing::warn!("health lock poisoned during /shutdown; readiness may not flip");
     }
     (
         axum::http::StatusCode::OK,
