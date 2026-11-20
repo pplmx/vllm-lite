@@ -62,12 +62,11 @@ use crate::security::correlation::CorrelationId;
 /// handler, then records one audit row with the HTTP method,
 /// path, and outcome.
 ///
-/// **Best-effort**: a failure inside `audit_logger.log(...)` would
-/// block the response; we `.await` the logger but treat any
-/// failure as a soft warning rather than failing the request. In
-/// practice the logger is a tokio `RwLock<Vec<...>>` and never
-/// fails — but this guards against future storage backends that
-/// could.
+/// **Never fails the request**: `AuditLogger::log` is infallible (it
+/// appends to an in-memory ring and emits a `tracing` event), so there is
+/// no error to swallow here. A future storage-backed logger would need this
+/// call site to decide between blocking the response and dropping the row;
+/// today the audit trail cannot make a request fail.
 pub async fn audit_middleware(
     State(audit): State<Arc<AuditLogger>>,
     request: Request,
@@ -87,13 +86,28 @@ pub async fn audit_middleware(
         .map(|u| u.0.clone());
     let method = request.method().to_string();
     let path = request.uri().path().to_string();
+    // Captured here for the same reason as the fields above: the handler may
+    // replace or drop headers. `None` when the header is absent or not valid
+    // UTF-8 — an audit row must not fail on a malformed client header.
+    let user_agent = request
+        .headers()
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .map(std::string::ToString::to_string);
 
     let response = next.run(request).await;
     let status = response.status();
     let result = audit_status_to_result(status);
 
     audit
-        .log_api_request(user_id.as_deref(), &method, &path, &result, &request_id)
+        .log_api_request_with_client(
+            user_id.as_deref(),
+            &method,
+            &path,
+            &result,
+            &request_id,
+            user_agent.as_deref(),
+        )
         .await;
 
     response

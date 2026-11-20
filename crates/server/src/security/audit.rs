@@ -126,6 +126,28 @@ impl AuditLogger {
         result: &str,
         request_id: &str,
     ) {
+        self.log_api_request_with_client(user_id, action, resource, result, request_id, None)
+            .await;
+    }
+
+    /// Record an API request together with the caller's `User-Agent`.
+    ///
+    /// The audit row exposes a `user_agent` field (surfaced by
+    /// `/debug/audit`), but every construction site passed `None`, so the
+    /// field was permanently `null` and an operator investigating a run of
+    /// requests could not tell which client produced them. `ip_address`
+    /// stays `None`: this server does not see the peer address (no
+    /// `ConnectInfo`) and does not trust `X-Forwarded-For`, so inventing a
+    /// value there would be worse than leaving it out.
+    pub async fn log_api_request_with_client(
+        &self,
+        user_id: Option<&str>,
+        action: &str,
+        resource: &str,
+        result: &str,
+        request_id: &str,
+        user_agent: Option<&str>,
+    ) {
         self.log(AuditEvent {
             timestamp: chrono::Utc::now().to_rfc3339(),
             user_id: user_id.map(std::string::ToString::to_string),
@@ -134,7 +156,7 @@ impl AuditLogger {
             result: result.to_string(),
             request_id: request_id.to_string(),
             ip_address: None,
-            user_agent: None,
+            user_agent: user_agent.map(std::string::ToString::to_string),
         })
         .await;
     }

@@ -144,3 +144,55 @@ async fn consecutive_requests_record_distinct_audit_events() {
     let ids: Vec<&str> = events.iter().map(|e| e.request_id.as_str()).collect();
     assert_eq!(ids, vec!["trace-0", "trace-1", "trace-2"]);
 }
+
+/// The audit row carries the caller's `User-Agent`.
+///
+/// `AuditEvent` exposes `user_agent` (and `/debug/audit` returns it), but
+/// every construction site passed `None`, so the field was permanently
+/// `null` — an operator investigating a run of requests could see the path
+/// and outcome but not which client produced them. The middleware now reads
+/// the header before the handler runs, like the other captured fields.
+#[tokio::test]
+async fn audit_event_records_user_agent() {
+    let audit = Arc::new(AuditLogger::new(100));
+    let app = build_app(audit.clone());
+
+    let req = HttpRequest::builder()
+        .method("GET")
+        .uri("/ok")
+        .header("user-agent", "vllm-lite-test-client/1.2.3")
+        .body(Body::empty())
+        .expect("build request");
+    let resp: Response = app.oneshot(req).await.expect("response");
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let events = audit.get_events().await;
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].user_agent.as_deref(),
+        Some("vllm-lite-test-client/1.2.3"),
+        "the audit row must carry the client's User-Agent"
+    );
+}
+
+/// A request without a `User-Agent` still produces an audit row.
+///
+/// The header is optional in HTTP and clients omit it; the audit layer must
+/// record the request regardless, with `user_agent = None`.
+#[tokio::test]
+async fn audit_event_tolerates_missing_user_agent() {
+    let audit = Arc::new(AuditLogger::new(100));
+    let app = build_app(audit.clone());
+
+    let req = HttpRequest::builder()
+        .method("GET")
+        .uri("/ok")
+        .body(Body::empty())
+        .expect("build request");
+    let resp: Response = app.oneshot(req).await.expect("response");
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let events = audit.get_events().await;
+    assert_eq!(events.len(), 1, "the request must still be audited");
+    assert!(events[0].user_agent.is_none());
+}
