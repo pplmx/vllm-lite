@@ -208,6 +208,17 @@ impl Engine {
                     })
             })
             .collect::<Vec<_>>();
+        // `update` must stay aligned with the FULL batch (seq_ids /
+        // next_tokens / input_counts all index the same batch entries); the
+        // stale-masked `results` is only for client emission and metrics.
+        //
+        // It runs BEFORE the send loop so `seq.tokens` already holds this
+        // step's tokens when they are about to be emitted — that is what lets
+        // the send path recognise a completed `stop` sequence and withhold it
+        // (OpenAI: "the returned text will not contain the stop sequence").
+        self.scheduler
+            .update(&output.seq_ids, &output.next_tokens, &input_counts);
+
         let mut disconnected = Vec::new();
         let results = self.send_and_collect_results(
             &output.seq_ids,
@@ -216,12 +227,6 @@ impl Engine {
             &batch.sampling_params,
             &mut disconnected,
         );
-
-        // `update` must stay aligned with the FULL batch (seq_ids /
-        // next_tokens / input_counts all index the same batch entries); the
-        // stale-masked `results` is only for client emission and metrics.
-        self.scheduler
-            .update(&output.seq_ids, &output.next_tokens, &input_counts);
 
         // cancel sequences whose response channel closed
         // (client disconnect) — after `update` has advanced their frontier,

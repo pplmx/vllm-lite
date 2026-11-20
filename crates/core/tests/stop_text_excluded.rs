@@ -182,3 +182,52 @@ fn speculative_path_also_withholds_stop_tokens() {
         "both generated tokens form the stop sequence, so neither may stream; got {streamed:?}"
     );
 }
+
+/// The CUDA-graph step path must withhold stop tokens as well.
+///
+/// `step_with_graph` has its own send loop (`graph_step.rs`) that was given
+/// the same hold-back as the regular path; without a test here that wiring
+/// could regress silently on the `cuda-graph` feature only.
+#[test]
+#[cfg(feature = "cuda-graph")]
+fn cuda_graph_path_also_withholds_stop_tokens() {
+    use vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig;
+    use vllm_core::types::SchedulerConfig;
+    use vllm_testing::FakeModel;
+
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    // Same engine construction the CUDA-graph integration tests use.
+    let mut engine = Engine::with_config(FakeModel::new(1000), None, config, 4, 1024);
+    assert!(
+        engine.cuda_graph_enabled(),
+        "fixture must enable the graph path"
+    );
+
+    let (tx, mut rx) = mpsc::channel(64);
+    let mut request = Request::new(1, vec![5, 6], 12);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![6, 6]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..8 {
+        engine.step_with_graph().unwrap();
+    }
+    assert!(
+        !engine.has_pending(),
+        "the stop sequence must have matched on the graph path"
+    );
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    assert!(
+        streamed.is_empty(),
+        "the graph path must not stream stop tokens; got {streamed:?}"
+    );
+}
