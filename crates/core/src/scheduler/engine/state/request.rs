@@ -32,6 +32,16 @@ impl SchedulerEngine {
         self.add_request_inner(req, false)
     }
 
+    /// Whether `seq_id` is already held by a live sequence (queued or running).
+    ///
+    /// `add_request` honours an explicit `Request::id`, so before adopting one
+    /// — or before issuing one from the counter — the scheduler has to know it
+    /// is free. `running` is capped at `max_num_seqs` (256 by default), so the
+    /// linear scan is bounded; the queue is a `HashMap`.
+    fn seq_id_is_taken(&self, seq_id: SeqId) -> bool {
+        self.running.iter().any(|s| s.id == seq_id) || self.request_queue.get(seq_id).is_some()
+    }
+
     fn add_request_inner(&mut self, mut req: Request, use_prefix_cache: bool) -> SeqId {
         let _span = tracing::info_span!(
             "scheduler.add_request",
@@ -45,19 +55,22 @@ impl SchedulerEngine {
         self.metrics.record_request();
 
         // A caller-supplied id is honoured, but a COLLISION must not silently
-        // drop the request: the second sequence would overwrite the first in
-        // `running`/the queue, the first would vanish from the batch, and the
-        // caller would get back an id naming different work than it asked
-        // for. Assign a fresh id instead and say so.
-        let collides = req.id != 0
-            && (self.running.iter().any(|s| s.id == req.id)
-                || self.request_queue.get(req.id).is_some());
+        // drop the request: the second sequence would overwrite the first and
+        // the caller would get back an id naming different work than it asked
+        // for.
+        let collides = req.id != 0 && self.seq_id_is_taken(req.id);
         if req.id == 0 || collides {
             if collides {
                 tracing::warn!(
                     requested_id = req.id,
                     "duplicate sequence id rejected; assigning a fresh one"
                 );
+            }
+            // `next_seq_id` counts what this scheduler issued, but a caller may
+            // have claimed a high id explicitly — so the counter can walk into
+            // one it never handed out. Skip those instead of reusing them.
+            while self.seq_id_is_taken(self.next_seq_id) {
+                self.next_seq_id += 1;
             }
             req.id = self.next_seq_id;
             self.next_seq_id += 1;

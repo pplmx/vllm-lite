@@ -711,3 +711,43 @@ fn duplicate_sequence_id_does_not_drop_the_request() {
         "the first request's sequence must survive intact"
     );
 }
+
+/// The id counter must not walk into an id a caller claimed explicitly.
+///
+/// `next_seq_id` counts what the scheduler issued, so a caller that passes a
+/// high `Request::id` (say 100) leaves a hole the counter eventually reaches.
+/// Issuing that id anyway reuses it: the two requests collapse into one
+/// sequence and one silently disappears from its batch.
+#[test]
+fn id_counter_skips_over_a_caller_claimed_id() {
+    use std::sync::Arc;
+    use vllm_core::metrics::EnhancedMetricsCollector;
+    use vllm_core::types::SchedulerConfig;
+
+    let metrics = Arc::new(EnhancedMetricsCollector::new());
+    let mut scheduler = SchedulerEngine::new(SchedulerConfig::default(), 65536, metrics);
+
+    // Claim id 3 by hand; the counter starts at 1.
+    assert_eq!(
+        scheduler.add_request(Request::new(3, vec![1], 4)),
+        3,
+        "an explicit id is honoured while free"
+    );
+
+    let mut ids = vec![3];
+    // Allocate enough to pass the claimed id.
+    for _ in 0..5 {
+        ids.push(scheduler.add_request(Request::new(0, vec![2], 4)));
+    }
+
+    let unique: std::collections::HashSet<_> = ids.iter().copied().collect();
+    assert_eq!(
+        unique.len(),
+        ids.len(),
+        "every request must get a distinct id, got {ids:?}"
+    );
+    assert!(
+        !ids.contains(&3) || ids.iter().filter(|&&i| i == 3).count() == 1,
+        "the caller-claimed id must be issued once, got {ids:?}"
+    );
+}
