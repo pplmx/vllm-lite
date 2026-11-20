@@ -59,6 +59,32 @@ mod tests {
         assert!(!GgufLoader::can_load(path));
     }
 
+    /// A `.gguf` checkpoint must not load as an empty weight map.
+    ///
+    /// GGUF parsing is deferred (ADR-009), so the loader has no weights to
+    /// return. Reporting `Ok({})` made an unparsed checkpoint
+    /// indistinguishable from a successfully loaded one, and the caller
+    /// then served a model with no parameters. The refusal has to name the
+    /// format so the operator knows this build cannot serve it.
+    #[cfg(feature = "gguf")]
+    #[test]
+    fn test_gguf_checkpoint_load_reports_unimplemented_not_empty() {
+        let dir = std::env::temp_dir().join("vllm_lite_gguf_refusal");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let file = dir.join("model.gguf");
+        std::fs::write(&file, b"GGUF").expect("write fixture");
+
+        let err = load_checkpoint(&file, &Device::Cpu)
+            .expect_err("a GGUF checkpoint must not load as an empty weight map");
+        let message = err.to_string();
+        assert!(
+            message.contains("GGUF"),
+            "the error must name the format, got: {message}"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn test_model_loader_uses_new_checkpoint_loading() {
         use candle_core::Device;

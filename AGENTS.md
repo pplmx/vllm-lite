@@ -86,7 +86,7 @@ Integration tests live in `crates/*/tests/` (per crate), not in a top-level `tes
 The `ModelLoader` supports multiple checkpoint formats with automatic format detection:
 
 - **Safetensors** (`.safetensors`, sharded: `model-00001-of-00002.safetensors`)
-- **GGUF** (`.gguf`) - format **detection only**; the `Q4_K_M` parser/dequantizer is a deferred stub (ADR-009 / v22.0 GGUF-01) — `load_gguf_tensors` returns no weights today
+- **GGUF** (`.gguf`) - format **detection only**; the `Q4_K_M` parser/dequantizer is deferred (ADR-009 / v22.0 GGUF-01), so loading a `.gguf` checkpoint fails with an explicit "not yet loadable" error instead of returning an empty weight map
 
 ### Usage
 
@@ -120,7 +120,7 @@ let weights = load_checkpoint(Path::new("model.gguf"), &device)?;
 
 Quantization scaffolding (format detection + storage types; **dequantization is deferred** — ADR-009 / v22.0 GGUF-01):
 
-- GGUF Q4_K_M — `QuantizationFormat::GgufQ4_K_M` + `QuantizedTensor` types exist, but `load_gguf_tensors` returns an empty map and `dequantize_to_f32` is a zero-filling placeholder. Real GGUF loading/dequant is future work.
+- GGUF Q4_K_M — `QuantizationFormat::GgufQ4_K_M` + `QuantizedTensor` types exist, but `load_gguf_tensors` reports the deferred parser as an error and `dequantize_to_f32` is a zero-filling placeholder. Real GGUF loading/dequant is future work.
 
 The `StorageTensor` abstraction supports multiple storage strategies:
 
