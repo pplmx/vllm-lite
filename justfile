@@ -45,6 +45,15 @@ nextest:
 nextest-fast:
     cargo nextest run --workspace --no-fail-fast -P optimized
 
+# `nextest` runs `--all-features`, which cannot compile the
+# `#[cfg(not(feature = "..."))]` arms at all, so the tests guarding those
+# arms (a .gguf path naming the missing `gguf` feature, multi_node.enabled
+# rejected without `multi-node`) are silently skipped by the main gate.
+#
+# Test with DEFAULT features only — `ci` runs both for this reason.
+nextest-default:
+    cargo nextest run --workspace --no-fail-fast
+
 # Run nextest including all tests (with #[ignore])
 nextest-all:
     cargo nextest run --release --workspace --all-features --run-ignored all --no-fail-fast
@@ -205,11 +214,11 @@ release-manifest-write:
     bash scripts/release-manifest.sh --out target/release-manifest.env
 
 # Run all CI checks (skips #[ignore] slow tests)
-ci: fmt-check clippy doc-check doctest nextest public-api-check doc-coverage-check
+ci: fmt-check clippy doc-check doctest nextest nextest-default public-api-check doc-coverage-check
 
 # Run the full CI gate including security checks (audit + deny). Requires
 # `cargo-audit` and `cargo-deny` installed locally.
-ci-all: fmt-check clippy doc-check doctest nextest public-api-check doc-coverage-check security
+ci-all: fmt-check clippy doc-check doctest nextest nextest-default public-api-check doc-coverage-check security
 
 # Engineering-quality §8: `just ci-full` is the documented three-entry
 # alias for the full-gate recipe. We keep `ci-all` as the canonical
