@@ -205,3 +205,132 @@ async fn embeddings_accepts_single_string_input() {
         "single-string input must reach the engine, not be rejected at the boundary"
     );
 }
+
+/// A short engine reply must not become a short `data` array.
+///
+/// `EmbeddingsResponse::new` copies whatever the engine returned. Nothing
+/// checks that the vector count matches the number of inputs, so a backend
+/// that returns one vector for a two-input request yields a 200 whose
+/// `data` has one entry — a client pairing vectors with inputs by `index`
+/// silently loses one, with no error to detect.
+#[tokio::test]
+async fn embeddings_rejects_a_reply_whose_length_mismatches_the_input() {
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel(16);
+    // Answer every request with a SINGLE vector, no matter how many inputs.
+    tokio::spawn(async move {
+        while let Some(msg) = engine_rx.recv().await {
+            if let vllm_core::types::EngineMessage::GetEmbeddings { response_tx, .. } = msg {
+                let _ = response_tx.send(vec![vec![0.1_f32, 0.2, 0.3]]);
+            }
+        }
+    });
+
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
+        metrics: Arc::new(EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: Some(ArchCapabilities::PRODUCTION),
+    };
+    let app = router(state);
+
+    // Two inputs, one vector returned.
+    let body = serde_json::json!({
+        "model": "qwen3",
+        "input": ["hello", "world"]
+    })
+    .to_string();
+    let resp = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/v1/embeddings")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .expect("response");
+
+    assert_ne!(
+        resp.status(),
+        StatusCode::OK,
+        "a reply with fewer vectors than inputs must not be served as 200"
+    );
+    let json = body_json(resp).await;
+    assert!(
+        json.get("error").is_some(),
+        "the mismatch must use the OpenAI error envelope, got {json}"
+    );
+}
+
+/// A correctly-sized reply still serves normally (guards the check above
+/// against over-rejection).
+#[tokio::test]
+async fn embeddings_serves_a_reply_whose_length_matches_the_input() {
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel(16);
+    // Echo one vector per input.
+    tokio::spawn(async move {
+        while let Some(msg) = engine_rx.recv().await {
+            if let vllm_core::types::EngineMessage::GetEmbeddings {
+                input_tokens,
+                response_tx,
+            } = msg
+            {
+                let vectors = input_tokens
+                    .iter()
+                    .map(|_| vec![0.1_f32, 0.2, 0.3])
+                    .collect();
+                let _ = response_tx.send(vectors);
+            }
+        }
+    });
+
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
+        metrics: Arc::new(EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: Some(ArchCapabilities::PRODUCTION),
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "qwen3",
+        "input": ["hello", "world", "again"]
+    })
+    .to_string();
+    let resp = app
+        .oneshot(
+            HttpRequest::builder()
+                .method("POST")
+                .uri("/v1/embeddings")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let json = body_json(resp).await;
+    let data = json["data"].as_array().expect("data array");
+    assert_eq!(data.len(), 3, "one vector per input");
+    for (i, item) in data.iter().enumerate() {
+        assert_eq!(
+            item["index"].as_i64(),
+            Some(i as i64),
+            "indexes must be dense"
+        );
+    }
+}

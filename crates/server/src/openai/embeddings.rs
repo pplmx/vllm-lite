@@ -175,6 +175,7 @@ pub async fn embeddings(
     // `usage.prompt_tokens` per OpenAI — the vector length returned by the
     // engine is the embedding dimension, not a token count.
     let prompt_tokens: usize = input_tokens.iter().map(Vec::len).sum();
+    let input_count: usize = input_tokens.len();
 
     let (response_tx, mut rx) = mpsc::unbounded_channel::<Vec<Vec<f32>>>();
 
@@ -196,6 +197,26 @@ pub async fn embeddings(
             )),
         )
     })?;
+
+    // `EmbeddingsResponse::new` copies the vectors verbatim, so a backend
+    // that returns one vector per BATCH rather than per input would yield a
+    // 200 whose `data` is shorter than `input`. Clients pair vectors with
+    // inputs by `index`, so the shortfall is silent data loss — fail loudly
+    // instead.
+    let expected = input_count;
+    if embeddings.len() != expected {
+        return Err((
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse::with_code(
+                &format!(
+                    "engine returned {} embeddings for {expected} inputs",
+                    embeddings.len()
+                ),
+                "server_error",
+                "engine_embedding_count_mismatch",
+            )),
+        ));
+    }
 
     Ok(Json(EmbeddingsResponse::new(
         embeddings,
