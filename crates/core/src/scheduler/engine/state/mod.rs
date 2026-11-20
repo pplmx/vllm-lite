@@ -238,6 +238,16 @@ impl SchedulerEngine {
     /// `None` if not in the running set. v18.0 — used by the per-seq draft
     /// dispatch to read `Sequence.degraded_draft` and `draft_model_id` without
     /// cloning the whole running vec.
+    /// Number of sequences currently holding back unsent tokens.
+    ///
+    /// Exposed so tests can assert the buffer is released when a sequence
+    /// finishes: entries are keyed by monotonic `SeqId`s, so a leftover entry
+    /// is never reused and leaks for the life of the process.
+    #[must_use]
+    pub fn pending_stream_len(&self) -> usize {
+        self.pending_stream.len()
+    }
+
     pub fn get_sequence(&self, seq_id: SeqId) -> Option<&Sequence> {
         self.running.iter().find(|s| s.id == seq_id)
     }

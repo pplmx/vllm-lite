@@ -155,6 +155,11 @@ impl Engine {
         if let Some(tx) = self.finish_reason_txs.remove(&seq_id) {
             let _ = tx.send(reason);
         }
+        // Drop any tokens still held back for a `stop` sequence. Without this
+        // the buffer entry outlives its sequence, and since `SeqId`s are
+        // monotonic it is never reused — one leaked entry (plus its withheld
+        // tokens) per request that configured a multi-token stop.
+        self.scheduler.pending_stream.remove(&seq_id);
         // tell the target model the sequence is done so it can
         // drop per-sequence state (e.g. the Qwen3.5 hybrid GDN recurrent
         // map). Best-effort: a poisoned lock just skips the cleanup.

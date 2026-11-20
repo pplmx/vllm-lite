@@ -231,3 +231,64 @@ fn cuda_graph_path_also_withholds_stop_tokens() {
         "the graph path must not stream stop tokens; got {streamed:?}"
     );
 }
+
+/// The hold-back buffer must not outlive its sequence.
+///
+/// `pending_stream` is keyed by `SeqId`, and ids are monotonic — so an entry
+/// left behind is never reused or overwritten. Every request that configured
+/// a multi-token stop allocates one, which makes the leak unbounded for a
+/// long-lived server.
+#[test]
+fn pending_stream_is_cleared_when_a_sequence_finishes() {
+    // Prompt [1, 2]; the model emits 5, then 20, 21 (which completes the stop
+    // `[20, 21]`), so the buffer is created and then discarded mid-flight —
+    // but the map entry itself must go when the sequence is finalized.
+    let model = SequenceModel {
+        tokens: vec![5, 20, 21],
+        next: Arc::new(AtomicUsize::new(0)),
+    };
+    let mut engine = Engine::new_boxed(Box::new(model), None::<Box<dyn ModelBackend>>);
+    let (tx, _rx) = mpsc::channel(64);
+
+    let mut request = Request::new(1, vec![1, 2], 8);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![20, 21]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..10 {
+        engine.step().unwrap();
+    }
+    assert!(
+        !engine.has_pending(),
+        "the sequence must have finished for this test to mean anything"
+    );
+    assert!(
+        engine.scheduler.pending_stream_len() == 0,
+        "the hold-back buffer must be dropped when the sequence finishes"
+    );
+}
+
+/// Same for a plain length-terminated sequence that never matched a stop, so
+/// the buffer holds unreleased tokens at finish time.
+#[test]
+fn pending_stream_is_cleared_when_a_sequence_hits_max_tokens() {
+    let model = SequenceModel {
+        tokens: vec![7, 7, 7, 7],
+        next: Arc::new(AtomicUsize::new(0)),
+    };
+    let mut engine = Engine::new_boxed(Box::new(model), None::<Box<dyn ModelBackend>>);
+    let (tx, _rx) = mpsc::channel(64);
+
+    // `max_tokens = 2` so the sequence ends by length with tokens held back.
+    let mut request = Request::new(1, vec![1, 2], 2);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![9, 9, 9]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..10 {
+        engine.step().unwrap();
+    }
+    assert!(!engine.has_pending(), "the sequence must have finished");
+    assert!(
+        engine.scheduler.pending_stream_len() == 0,
+        "a length-terminated sequence must not leave its buffer behind"
+    );
+}
