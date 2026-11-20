@@ -5,6 +5,7 @@
 //! memory for the rolling export.
 #![allow(clippy::module_name_repetitions)]
 use serde::Serialize;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
@@ -37,7 +38,7 @@ pub struct AuditEvent {
 /// `max_events`.
 #[derive(Debug)]
 pub struct AuditLogger {
-    events: Arc<RwLock<Vec<AuditEvent>>>,
+    events: Arc<RwLock<VecDeque<AuditEvent>>>,
     max_events: usize,
 }
 
@@ -48,7 +49,7 @@ impl AuditLogger {
     #[must_use]
     pub fn new(max_events: usize) -> Self {
         Self {
-            events: Arc::new(RwLock::new(Vec::new())),
+            events: Arc::new(RwLock::new(VecDeque::with_capacity(max_events.min(1024)))),
             max_events,
         }
     }
@@ -58,10 +59,13 @@ impl AuditLogger {
     /// aggregation.
     pub async fn log(&self, event: AuditEvent) {
         let mut events = self.events.write().await;
-        events.push(event.clone());
+        events.push_back(event.clone());
 
+        // `VecDeque::pop_front` is O(1); `Vec::remove(0)` shifted the whole
+        // buffer, which at the production capacity (10_000) meant moving
+        // 10_000 elements on every logged request once the ring filled.
         if events.len() > self.max_events {
-            events.remove(0);
+            events.pop_front();
         }
 
         info!(
@@ -137,7 +141,7 @@ impl AuditLogger {
 
     /// Return a clone of all recorded audit events (oldest-first).
     pub async fn get_events(&self) -> Vec<AuditEvent> {
-        self.events.read().await.clone()
+        self.events.read().await.iter().cloned().collect()
     }
 
     /// Remove all recorded audit events.

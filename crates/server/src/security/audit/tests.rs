@@ -71,3 +71,41 @@ async fn test_audit_clear() {
         "clear() must empty the ring buffer"
     );
 }
+
+/// The ring buffer must stay bounded and keep insertion order under sustained
+/// load, the shape the production capacity sees (thousands of requests per
+/// window rather than the three-event fixtures elsewhere in this file).
+///
+/// Eviction is `VecDeque::pop_front` — O(1) — so this also fails loudly if a
+/// future change reintroduces a whole-buffer shift on the hot path.
+#[tokio::test]
+async fn test_ring_buffer_stays_bounded_and_ordered_under_load() {
+    let capacity = 16;
+    let logger = AuditLogger::new(capacity);
+
+    for i in 0..1_000 {
+        logger
+            .log_api_request(
+                Some("user"),
+                "GET",
+                &format!("/v1/requests/{i}"),
+                "success",
+                &format!("req-{i}"),
+            )
+            .await;
+    }
+
+    let events = logger.get_events().await;
+    assert_eq!(
+        events.len(),
+        capacity,
+        "the ring must hold exactly `max_events` entries"
+    );
+    // Newest last: the retained window is the tail of the inserted sequence.
+    assert_eq!(events[0].resource, "/v1/requests/984");
+    assert_eq!(
+        events[capacity - 1].resource,
+        "/v1/requests/999",
+        "the most recent event must be last"
+    );
+}
