@@ -181,15 +181,32 @@ async fn main() -> Result<()> {
     // and the gRPC submodule compiles to nothing without the
     // `multi-node` Cargo feature).
     if app_config.server.multi_node.enabled {
-        let node_id =
-            bootstrap::grpc::spawn_multi_node_grpc_server(&engine, &app_config.server.multi_node)
-                .await
-                .context("failed to spawn multi-node gRPC server")?;
-        tracing::info!(
-            node_id,
-            bind_addr = %app_config.server.multi_node.bind_addr,
-            "Multi-node KV block transfer enabled"
+        // Without the feature the bootstrap below is a stub returning
+        // `Ok("")`, so the "enabled" log line would claim a listener that
+        // does not exist — every peer fetch would then fail with a
+        // connection error and nothing in the logs would explain why.
+        // Refuse to start instead: the operator asked for a capability this
+        // binary does not have.
+        #[cfg(not(feature = "multi-node"))]
+        anyhow::bail!(
+            "multi_node.enabled is set but this build does not include the `multi-node` \
+             feature; rebuild with --features multi-node"
         );
+
+        #[cfg(feature = "multi-node")]
+        {
+            let node_id = bootstrap::grpc::spawn_multi_node_grpc_server(
+                &engine,
+                &app_config.server.multi_node,
+            )
+            .await
+            .context("failed to spawn multi-node gRPC server")?;
+            tracing::info!(
+                node_id,
+                bind_addr = %app_config.server.multi_node.bind_addr,
+                "Multi-node KV block transfer enabled"
+            );
+        }
     }
 
     // REL-01 (technical due diligence): use a bounded mailbox so a

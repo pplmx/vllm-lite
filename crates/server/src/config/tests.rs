@@ -72,6 +72,36 @@ fn test_app_config_validate_fails_zero_port() {
     );
 }
 
+/// Enabling multi-node in a build without the feature must be rejected.
+///
+/// The bootstrap is a stub returning `Ok("")` in that build, so startup
+/// logged "Multi-node KV block transfer enabled" while nothing listened —
+/// peers then failed to fetch blocks with no explanation in the logs.
+#[cfg(not(feature = "multi-node"))]
+#[test]
+fn test_app_config_validate_rejects_multi_node_without_feature() {
+    let mut config = AppConfig::default();
+    config.server.multi_node.enabled = true;
+    let errors = config.validate().unwrap_err();
+    assert!(
+        errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::MultiNodeFeatureMissing)),
+        "enabling multi-node without the feature must be a validation error, got {:?}",
+        errors.0
+    );
+}
+
+/// The default (multi-node off) stays valid in the same build.
+#[cfg(not(feature = "multi-node"))]
+#[test]
+fn test_app_config_validate_allows_multi_node_disabled_without_feature() {
+    let config = AppConfig::default();
+    assert!(!config.server.multi_node.enabled);
+    assert!(config.validate().is_ok());
+}
+
 #[test]
 fn test_tensor_parallel_size_default() {
     let config = AppConfig::default();

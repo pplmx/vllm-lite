@@ -56,6 +56,11 @@ pub enum ConfigValidationError {
     MaxWaitingBatchesOutOfRange,
     #[error("engine.max_model_len must be > 0 (a zero context length rejects every request)")]
     MaxModelLenZero,
+    #[error(
+        "server.multi_node.enabled is set but this build lacks the `multi-node` feature \
+         (rebuild with --features multi-node)"
+    )]
+    MultiNodeFeatureMissing,
     #[error("engine.max_model_len must be <= 4000000")]
     MaxModelLenTooLarge,
     #[error("engine.vram_budget_bytes must be > 0 when set")]
@@ -369,6 +374,14 @@ impl AppConfig {
 
         if self.server.port == 0 {
             errors.push(ConfigValidationError::PortZero);
+        }
+
+        // A build without the feature cannot serve multi-node block
+        // transfer; accepting the config would log "enabled" over a stub that
+        // listens on nothing.
+        #[cfg(not(feature = "multi-node"))]
+        if self.server.multi_node.enabled {
+            errors.push(ConfigValidationError::MultiNodeFeatureMissing);
         }
 
         let valid_levels = ["trace", "debug", "info", "warn", "error"];
