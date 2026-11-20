@@ -159,10 +159,6 @@ impl Engine {
         // A sequence that ended ON a stop (including the `max_tokens`
         // boundary case, recorded by `check_completion`) must not release
         // its withheld tail — those tokens ARE the stop sequence.
-        eprintln!(
-            "PROBE finish seq={seq_id} reason={reason:?} stop_ended={}",
-            self.scheduler.stop_ended.contains(&seq_id)
-        );
         let ended_on_stop = self.scheduler.stop_ended.remove(&seq_id);
         if let Some(mut pending) = self.scheduler.pending_stream.remove(&seq_id) {
             if !ended_on_stop {

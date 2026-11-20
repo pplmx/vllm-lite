@@ -247,6 +247,16 @@ impl SchedulerEngine {
     /// `None` if not in the running set. v18.0 — used by the per-seq draft
     /// dispatch to read `Sequence.degraded_draft` and `draft_model_id` without
     /// cloning the whole running vec.
+    /// Number of sequences recorded as having ended on a stop sequence.
+    ///
+    /// Exposed so tests can assert the record is released at finalization —
+    /// like `pending_stream`, it is keyed by monotonic `SeqId`s, so a
+    /// leftover entry never gets reused.
+    #[must_use]
+    pub fn stop_ended_len(&self) -> usize {
+        self.stop_ended.len()
+    }
+
     /// Number of sequences currently holding back unsent tokens.
     ///
     /// Exposed so tests can assert the buffer is released when a sequence

@@ -390,3 +390,25 @@ fn longer_stop_on_the_max_tokens_boundary_is_withheld() {
         "the whole output is the stop sequence; got {streamed:?}"
     );
 }
+
+/// The boundary record must not outlive its sequence either.
+#[test]
+fn stop_ended_record_is_released_at_finalization() {
+    let model = vllm_testing::StubModel::returning(7);
+    let mut engine = Engine::new_boxed(Box::new(model), None::<Box<dyn ModelBackend>>);
+    let (tx, _rx) = mpsc::channel(64);
+
+    let mut request = Request::new(1, vec![1, 2], 2);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![7, 7]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..10 {
+        let _ = engine.step();
+    }
+    assert!(!engine.has_pending(), "the sequence must have finished");
+    assert_eq!(
+        engine.scheduler.stop_ended_len(),
+        0,
+        "the boundary record must be cleared when the sequence finalizes"
+    );
+}
