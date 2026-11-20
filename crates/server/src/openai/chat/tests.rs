@@ -8,7 +8,7 @@ use super::*;
 use axum::http::StatusCode;
 use vllm_model::tokenizer::Tokenizer;
 
-/// RIL ISS-044: an unknown-context model (no `max_position_embeddings`, no
+/// an unknown-context model (no `max_position_embeddings`, no
 /// `--max-model-len`) must NOT accept an unbounded `max_tokens`. Before the
 /// fix, `check_context_length` returned `Ok(())` when `max_model_len` was
 /// `None`, so `max_tokens = i64::MAX` passed every validator and the engine
@@ -75,7 +75,7 @@ fn test_should_skip_token_text_normal() {
     assert!(!should_skip_token_text(&tokenizer, " world"));
 }
 
-/// Regression (RIL ISS-035): the single-shot streaming path must emit a
+/// Regression: the single-shot streaming path must emit a
 /// well-formed JSON chunk (empty content) for skipped tokens instead of a
 /// bare `data: ` SSE event. Pin the wire shape the skipped-token branch now
 /// produces: valid JSON with `choices[0].delta.content == ""`.
@@ -110,12 +110,12 @@ fn test_skipped_token_chunk_is_valid_json_with_empty_content() {
     );
 }
 
-/// RIL ISS-123: `ChatChunk` constructors must carry the caller-supplied
+/// `ChatChunk` constructors must carry the caller-supplied
 /// stream-epoch `created` verbatim. The struct's doc promises "Unix
 /// timestamp at the start of the stream" (types.rs:677), so stamping a
 /// fresh `unix_now_secs()` per chunk lets finish/usage chunks drift from
 /// the request start across a second boundary — the n > 1 path already
-/// captured one `created` for its consolidated chunk (ISS-122) while the
+/// captured one `created` for its consolidated chunk while the
 /// per-token/usage chunks used their own now-times. Both constructors now
 /// REQUIRE the value so no call site can reintroduce per-chunk timestamps.
 #[test]
@@ -244,7 +244,7 @@ fn test_validate_chat_request_empty_messages() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
-/// RIL ISS-069 / TASK-082: an empty message content must be rejected,
+/// an empty message content must be rejected,
 /// mirroring sync completions' `req.prompt.is_empty()` -> 400. Pre-fix
 /// `validate_chat_request` never inspected `content`, so
 /// `messages: [{role:"user", content:""}]` passed validation and yielded
@@ -266,7 +266,7 @@ fn test_validate_chat_request_rejects_empty_content() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
-/// RIL ISS-069 / TASK-082: an empty content anywhere in the list must
+/// an empty content anywhere in the list must
 /// fail the whole request (a single empty message poisons the prompt —
 /// same all-or-nothing contract as the batch empty-prompt rejection).
 #[test]
@@ -292,7 +292,7 @@ fn test_validate_chat_request_rejects_any_empty_content_in_list() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
-/// RIL ISS-069 / TASK-082: the `role` field is a free `String` today, and
+/// the `role` field is a free `String` today, and
 /// every chat template silently drops any role outside
 /// {system, user, assistant, tool} (`_ => {}` in `chat_template.rs`).
 /// An unknown role is therefore silent data loss wrapped in a 200 OK — the
@@ -314,7 +314,7 @@ fn test_validate_chat_request_rejects_unknown_role() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
-/// RIL ISS-069 / TASK-082: malformed roles like a typo (`"syste"`) or an
+/// malformed roles like a typo (`"syste"`) or an
 /// injected space (`"user "`) must be caught at the boundary — they would
 /// otherwise render as nothing (silent drop) or, worse, text-injection into
 /// the rendered prompt shape.
@@ -339,7 +339,7 @@ fn test_validate_chat_request_rejects_malformed_role() {
     }
 }
 
-/// RIL ISS-069 / TASK-082: the four `OpenAI` roles must remain accepted.
+/// the four `OpenAI` roles must remain accepted.
 #[test]
 fn test_validate_chat_request_accepts_valid_roles() {
     for role in ["system", "user", "assistant", "tool"] {
@@ -601,7 +601,7 @@ fn test_chat_choice_logprobs_suppressed_when_speculative_placeholder_present() {
     );
 }
 
-// RIL ISS-162: `map_engine_send_error` — the single funnel all nine
+// `map_engine_send_error` — the single funnel all nine
 // engine-mailbox send sites flow through — must keep mapping `Full` →
 // `503 engine_overloaded` and `Closed` → `503 engine_unavailable` after
 // the observability change added `warn!` logs. Pinned so the response

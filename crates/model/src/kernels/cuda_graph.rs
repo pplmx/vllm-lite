@@ -1,4 +1,5 @@
-//! CUDA-Graph capture and replay: record a sequence of GPU kernel launches once, then replay it with near-zero CPU overhead for every subsequent batch of the same shape.
+// ! CUDA-Graph capture and replay: record a sequence of GPU kernel launches once, then replay it
+// with near-zero CPU overhead for every subsequent batch of the same shape.
 //!
 //! Activated by `--features cuda-graph`. The `cuda_graph/` submodule
 //! owns the per-architecture capture logic; this file is the public
@@ -94,7 +95,8 @@ impl CudaGraphTensor for NullCudaGraphTensor {
     }
 }
 
-/// Error type for `CudaGraph`. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Error type for `CudaGraph`. Returned from every fallible public API; covers I/O, validation, and
+/// resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CudaGraphError {
     #[error("capture failed: {0}")]
@@ -174,7 +176,7 @@ impl CudaGraph {
                 "Graph not captured".to_string(),
             ));
         }
-        // RIL ISS-176: a cached graph with ZERO nodes recorded nothing —
+        // a cached graph with ZERO nodes recorded nothing —
         // `capture()` is a CPU-side stub that only sets `cached`, so every
         // `BatchCudaGraphExecutor` capture is empty. Replaying it must fail
         // loudly (the engine then falls back to the eager forward) rather

@@ -5,7 +5,7 @@
 //! String`) returns as soon as the first differing byte is seen, so an
 //! attacker iterating candidate keys observes a time that grows with the
 //! number of correct prefix bytes — recovering the key prefix
-//! byte-by-byte over the network (RIL ISS-049). `constant_time_eq`
+// byte-by-byte over the network. `constant_time_eq`
 //! always iterates every byte, so its runtime is independent of where
 //! the first mismatch falls.
 

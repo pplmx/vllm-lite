@@ -284,7 +284,7 @@ fn test_finish_sequence_excludes_from_future_batches() {
     assert_eq!(finished[0].id, 1);
 }
 
-// RIL ISS-052: a decode sequence must never be composed with a short KV
+// a decode sequence must never be composed with a short KV
 // table. When a boundary-crossing growth allocation fails (pool exhausted
 // mid-update), the table is one block short; if the pool recovers (other
 // sequences finish) before the next round, the preemption gate sees
@@ -327,7 +327,7 @@ fn decode_growth_failure_composes_only_complete_tables() {
 
     // Decode round: A's blocks_needed (2) is exactly `available` (2), so
     // the preemption gate does NOT fire. The scheduler must grow A's table
-    // to its full 2 blocks before composing (ISS-052) — never compose it
+    // to its full 2 blocks before composing — never compose it
     // short (block-0 fallback) or silently drop it.
     let batch = engine.build_batch();
     assert_eq!(batch.seq_ids, vec![1], "A must be composed (and only A)");
@@ -360,13 +360,13 @@ fn step(engine: &mut SchedulerEngine, batch: &vllm_traits::Batch) {
     engine.update(&batch.seq_ids, &next_tokens, &input_counts);
 }
 
-// RIL ISS-051: a prompt longer than max_num_batched_tokens must be served
+// a prompt longer than max_num_batched_tokens must be served
 // via chunked prefill instead of spinning in the Prefill phase forever.
 // Each round processes a budget-sized (and prefill_chunk_size-capped)
 // chunk, the partial sequence is re-queued with its computed KV blocks +
 // num_computed_tokens preserved, and the final chunk transitions it to
 // Decoding. The invariant "running never holds Prefilling across steps"
-// (ISS-045) must hold between rounds.
+// must hold between rounds.
 #[test]
 fn long_prompt_is_served_via_chunked_prefill() {
     // 100-token prompt = 100/16 = 7 KV blocks. Batch token budget 32 and
@@ -392,7 +392,7 @@ fn long_prompt_is_served_via_chunked_prefill() {
             "round {rounds}: a chunk must always be servable (max_num_seqs/budget are not the bottleneck here)"
         );
         step(&mut engine, &batch);
-        // ISS-045 invariant: `running` never holds Prefilling across steps
+        // invariant: `running` never holds Prefilling across steps
         // (a partial chunk is re-queued by update; only a completed prefill
         // stays in running, as Decoding).
         for seq in engine.running() {
@@ -432,7 +432,7 @@ fn long_prompt_is_served_via_chunked_prefill() {
     );
 }
 
-// RIL ISS-051: a prompt that FITS the batch token budget is NOT chunked —
+// a prompt that FITS the batch token budget is NOT chunked —
 // mid-size prefills keep their single-round behavior (no regression).
 #[test]
 fn fitting_prompt_stays_unchunked() {
@@ -460,13 +460,13 @@ fn fitting_prompt_stays_unchunked() {
     assert_eq!(seq.status, Status::Decoding);
 }
 
-// RIL ISS-054: a chunked prefill whose chunk lost the token-budget
+// a chunked prefill whose chunk lost the token-budget
 // competition must NOT lose its computed progress.
 //
-// `requeue_seq` (used by ISS-041 uncomposed-overflow requeue and ISS-045
+// `requeue_seq` (used by uncomposed-overflow requeue and
 // forward-error recovery) used to unconditionally reset every requeued
 // prefill to `num_computed_tokens == 0` and release its blocks. That was
-// correct for never-advanced sequences, but chunked prefill (ISS-051)
+// correct for never-advanced sequences, but chunked prefill
 // deliberately requeues ADVANCED sequences — a long prompt that made
 // partial progress and is then squeezed out of the composed batch by
 // shorter requests would be reset to scratch and recompute its whole
@@ -527,7 +527,7 @@ fn uncomposed_prefill_overflow_keeps_chunked_progress() {
     );
 }
 
-// RIL ISS-055 (TASK-059): the build_batch preemption gate must compare the
+// the build_batch preemption gate must compare the
 // ADDITIONAL blocks a sequence still needs against the free pool, not its
 // full-prompt block count. A re-admitted chunked prefill ALREADY HOLDS its
 // whole prompt table, so demanding `full_prompt_blocks` of free space

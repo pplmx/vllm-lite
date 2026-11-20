@@ -242,7 +242,7 @@ where
     }
 
     fn supports_prefix_caching(&self) -> bool {
-        // RIL ISS-038: the GDN recurrent state is NOT in the paged KV cache,
+        // the GDN recurrent state is NOT in the paged KV cache,
         // so a full prefix hit would admit a new sequence straight into
         // Decode with fresh `None` states and error on the first linear
         // layer. Fall back to full prefill instead.
@@ -250,7 +250,7 @@ where
     }
 
     fn on_sequence_finished(&mut self, seq_id: SeqId) {
-        // RIL ISS-034: drop the recurrent GDN state for a finished sequence.
+        // drop the recurrent GDN state for a finished sequence.
         // `gdn_states` is keyed by engine-assigned SeqId (monotonic), so
         // entries were never removed and every completed request leaked its
         // per-layer recurrent/conv tensors for the engine's lifetime.
@@ -351,7 +351,7 @@ mod tests {
         }
     }
 
-    /// Regression (RIL ISS-034): `on_sequence_finished` must remove the
+    /// Regression: `on_sequence_finished` must remove the
     /// sequence's GDN recurrent-state entry. Without it, `gdn_states` grows
     /// one entry per finished request for the engine's lifetime (`SeqId`s are
     /// monotonic, so every completed sequence leaked its per-layer

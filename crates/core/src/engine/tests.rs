@@ -134,7 +134,7 @@ fn test_engine_response_channel_cleanup() {
     assert!(!engine.has_pending());
 }
 
-/// RIL ISS-110: when the client drops the response channel mid-generation
+/// when the client drops the response channel mid-generation
 /// (`TrySendError::Closed` — the ONLY disconnect signal on non-streaming
 /// paths, which build no `CancelOnDrop` guard), the engine must cancel the
 /// sequence instead of silently generating into a closed channel for the
@@ -179,7 +179,7 @@ fn test_engine_cancels_sequence_on_closed_response_channel() {
     );
 }
 
-/// RIL ISS-074 / TASK-089: a full token response channel must not silently
+/// a full token response channel must not silently
 /// lose the token. Pre-fix `send_and_collect_results` did `let _ =
 /// tx.try_send(...)` and ignored `TrySendError::Full`, so a handler that
 /// drained slower than generation got a permanent stream gap with zero
@@ -214,13 +214,13 @@ fn test_engine_full_response_channel_records_dropped_token() {
     assert_eq!(
         engine.scheduler.metrics.get_counter("dropped_tokens_total"),
         1,
-        "a Full try_send must be counted as a dropped token (RIL ISS-074)"
+        "a Full try_send must be counted as a dropped token"
     );
 }
 
 #[test]
 fn test_tokens_total_counts_generated_not_input() {
-    // RIL ISS-083: `tokens_total` ("Total tokens generated") must count
+    // `tokens_total` ("Total tokens generated") must count
     // the emitted OUTPUT tokens, not the sum of input (prompt) token
     // lengths. Pre-fix the regular path (`scheduler/batch.rs`) summed
     // `input_tokens.len()` per step — the full 40-token prompt on the
@@ -251,7 +251,7 @@ fn test_tokens_total_counts_generated_not_input() {
 
 #[test]
 fn test_prefill_and_decode_throughput_are_live() {
-    // RIL ISS-095: `prefill_throughput` / `decode_throughput` (exported
+    // `prefill_throughput` / `decode_throughput` (exported
     // on /metrics as prefill_throughput_tps / decode_throughput_tps) were
     // pinned at 0.000 forever because the only recorders
     // (`record_prefill_tokens` / `record_decode_tokens`) lived under
@@ -289,7 +289,7 @@ fn test_prefill_and_decode_throughput_are_live() {
 
 #[test]
 fn test_scheduler_wait_time_is_live() {
-    // RIL TASK-119: `avg_scheduler_wait_time_ms` was pinned at 0.000 in
+    // `avg_scheduler_wait_time_ms` was pinned at 0.000 in
     // production because the only recorder (`record_scheduler_wait_time`)
     // lived under `#[cfg(test)]` — no admission path measured queue→drain
     // delay. Both scheduler batch builders now record each drained
@@ -315,7 +315,7 @@ fn test_scheduler_wait_time_is_live() {
 
 #[test]
 fn test_kv_cache_usage_is_live_without_get_metrics() {
-    // RIL ISS-100: `kv_cache_usage_percent` (exported on /metrics) was
+    // `kv_cache_usage_percent` (exported on /metrics) was
     // pinned at 0.000 whenever an operator scraped only /metrics: the sole
     // production writer (`record_kv_cache_usage`) lived inside the
     // `EngineMessage::GetMetrics` arm of `run()`, but the /metrics handler
@@ -356,9 +356,9 @@ fn test_kv_cache_usage_is_live_without_get_metrics() {
 
 #[test]
 fn test_prefix_cache_nodes_is_live_without_get_metrics() {
-    // RIL ISS-120: `prefix_cache_nodes` (exposed on /debug/metrics) had
+    // `prefix_cache_nodes` (exposed on /debug/metrics) had
     // the same GetMetrics-only writer as `kv_cache_usage_percent`, which
-    // ISS-100 fixed — a /metrics- or /debug-metrics-only deployment never
+    // fixed — a /metrics- or /debug-metrics-only deployment never
     // round-trips, so the gauge pinned at 0 forever. A prefill step that
     // installs a prefix-cache block must leave `snapshot().prefix_cache_nodes
     // > 0` with no GetMetrics message sent.
@@ -395,7 +395,7 @@ fn test_prefix_cache_nodes_is_live_without_get_metrics() {
 
 #[test]
 fn test_requests_in_flight_live_and_balanced() {
-    // RIL ISS-082: `requests_in_flight` (Prometheus gauge / OTLP
+    // `requests_in_flight` (Prometheus gauge / OTLP
     // `inflight_requests`) must be a live signal. Pre-fix the only
     // writers lived under `#[cfg(test)]`, so the gauge was pinned at 0
     // under any load. Now `add_request` (admitted) increments and
@@ -441,7 +441,7 @@ fn test_requests_in_flight_live_and_balanced() {
 
 #[test]
 fn test_requests_in_flight_stop_completion_decrements_once() {
-    // RIL ISS-173: a stop-sequence (or EOS) completion must decrement
+    // a stop-sequence (or EOS) completion must decrement
     // `requests_in_flight` exactly ONCE. Pre-fix the Length pass
     // re-finalized every stop-completed sequence: `finalize_stop_sequences`
     // already called `finalize_finished(Stop)` (removing the response_tx
@@ -518,7 +518,7 @@ fn test_requests_in_flight_stop_completion_decrements_once() {
 
 #[test]
 fn test_requests_in_flight_skips_rejected_admission() {
-    // RIL ISS-082: a rejected admission (empty prompt → seq_id 0) must NOT
+    // a rejected admission (empty prompt → seq_id 0) must NOT
     // increment the in-flight counter — it never reaches finalize_finished,
     // so a start without an end would leave the gauge stuck at 1.
     let stub = StubModel::returning(42);
@@ -538,7 +538,7 @@ fn test_requests_in_flight_skips_rejected_admission() {
 
 #[test]
 fn test_requests_in_flight_balances_on_cancel() {
-    // RIL ISS-082: cancel_request finalizes with FinishReason::Cancelled,
+    // cancel_request finalizes with FinishReason::Cancelled,
     // which must decrement an admitted request's in-flight count.
     let stub = StubModel::returning(42);
     let mut engine = Engine::new(stub, None);
@@ -566,7 +566,7 @@ fn test_requests_in_flight_balances_on_cancel() {
 
 #[test]
 fn test_requests_in_flight_end_saturates_at_zero() {
-    // RIL ISS-082: an unbalanced `record_request_end` (double-finalize,
+    // an unbalanced `record_request_end` (double-finalize,
     // or cancel without a start) must saturate at 0 — the pre-fix raw
     // `fetch_sub(1)` wrapped to u64::MAX (~1.8e19), poisoning dashboards.
     let metrics = crate::metrics::EnhancedMetricsCollector::default();
@@ -953,7 +953,7 @@ fn test_finalize_stop_sequences_ignores_prompt_only_match() {
     assert_eq!(engine.scheduler.running_count(), 1);
 }
 
-/// RIL ISS-075: when the engine knows the model's EOS token id and the
+/// when the engine knows the model's EOS token id and the
 /// generated token equals it, the sequence must finish with
 /// `FinishReason::Stop` long before `max_tokens` — a 'short' answer must not
 /// burn the whole budget or report `Length`.
@@ -985,7 +985,7 @@ fn test_eos_stop_finalizes_with_stop_reason() {
     );
 }
 
-/// RIL ISS-075: with no EOS id configured (the engine default, e.g. a mock
+/// with no EOS id configured (the engine default, e.g. a mock
 /// or a checkpoint that declares none), a token equal to what WOULD be the
 /// EOS id must not stop the sequence — legacy run-to-`max_tokens` behavior
 /// is preserved.

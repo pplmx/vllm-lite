@@ -14,7 +14,7 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 /// override. `/debug/trace` reports the **effective** directive — `RUST_LOG`
 /// when set, else this value — which is exactly the precedence
 /// [`init_logging`] applies when building the `EnvFilter`, so the endpoint
-/// agrees with what the process actually emits (RIL ISS-093).
+/// agrees with what the process actually emits.
 pub(crate) static CONFIGURED_LOG_LEVEL: OnceLock<String> = OnceLock::new();
 
 /// The effective filter directive: `RUST_LOG` when set and parseable,
@@ -40,7 +40,7 @@ pub(crate) fn effective_log_level() -> String {
 /// Calling this more than once is a no-op for the second call (tracing refuses
 /// to re-install the global subscriber).
 pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
-    // RIL ISS-093: record the configured fallback so `/debug/trace` can
+    // record the configured fallback so `/debug/trace` can
     // report the effective level (RUST_LOG wins when set). First set wins —
     // late OTLP-fallback re-inits keep the first (authoritative) value.
     let _ = CONFIGURED_LOG_LEVEL.set(log_level.to_string());
@@ -50,7 +50,7 @@ pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
     let subscriber = tracing_subscriber::registry().with(env_filter);
 
     if let Some(dir) = log_dir {
-        // RIL ISS-150: fail fast when the log directory can't be created
+        // fail fast when the log directory can't be created
         // instead of panicking deep inside `RollingFileAppender::new` with
         // an init stack trace and exit 101. `create_dir_all(...).ok()` used
         // to swallow the error here, so a typo'd `--log-dir` (parent is a

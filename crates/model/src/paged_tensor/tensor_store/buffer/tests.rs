@@ -104,9 +104,9 @@ fn test_read_kv_multiple_blocks() -> Result<()> {
 
 /// A block table may hold headroom blocks beyond the sequence's computed
 /// length (the speculative verifier pre-allocates
-/// `num_computed + input_len + max_draft` blocks, RIL ISS-026). `read_kv`
+/// `num_computed + input_len + max_draft` blocks). `read_kv`
 /// must read only up to `seq_len` instead of underflowing on the trailing
-/// blocks (RIL ISS-026 decode-side regression).
+/// blocks (decode-side regression).
 #[test]
 fn test_read_kv_with_headroom_blocks_beyond_seq_len() -> Result<()> {
     let device = Device::Cpu;
@@ -273,7 +273,7 @@ fn test_quantized_scale_tracking() -> Result<()> {
     Ok(())
 }
 
-/// Regression (RIL ISS-020): a quantized KV cache must round-trip each block
+/// Regression: a quantized KV cache must round-trip each block
 /// with ITS OWN scale. Pre-fix a single per-layer scale (the last-written
 /// block's) was used to dequantize every block, and `write_kv`'s
 /// read-modify-write re-quantized stored integers as if raw — so a multi-block
@@ -306,12 +306,12 @@ fn test_quantized_multi_block_roundtrip_per_block_scale() -> Result<()> {
         let tol = if expected > 50.0 { 5.0 } else { 0.5 }; // ~INT8 precision per magnitude
         assert!(
             (gk - expected).abs() < tol,
-            "block-{} token {i}: K expected ~{expected}, got {gk} (per-block scale => RIL ISS-020)",
+            "block-{} token {i}: K expected ~{expected}, got {gk} (per-block scale)",
             i / 16
         );
         assert!(
             (gv - expected).abs() < tol,
-            "block-{} token {i}: V expected ~{expected}, got {gv} (per-block scale => RIL ISS-020)",
+            "block-{} token {i}: V expected ~{expected}, got {gv} (per-block scale)",
             i / 16
         );
     }

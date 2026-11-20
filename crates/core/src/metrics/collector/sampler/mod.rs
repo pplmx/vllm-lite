@@ -1,4 +1,5 @@
-//! Metrics sampling pipeline: receive raw events from workers, bucketise them, and publish aggregated snapshots to the `MetricsExporter`.
+// ! Metrics sampling pipeline: receive raw events from workers, bucketise them, and publish
+// aggregated snapshots to the `MetricsExporter`.
 //!
 //! The collector runs on a dedicated thread, draining the channel with
 //! `try_recv` to keep latency low and falling through to a periodic flush
@@ -39,11 +40,11 @@ pub struct EnhancedMetricsCollector {
     /// Total CUDA-Graph cache misses (re-captures) since process start.
     cuda_graph_misses: AtomicU64,
     /// Total tokens dropped because their bounded response channel was full
-    /// (RIL ISS-074): the engine `try_send`s every sampled token and a slow
+    /// the engine `try_send`s every sampled token and a slow
     /// consumer fills the 64-slot buffer. This counter makes the resulting
     /// stream gap visible on `/metrics` instead of silent.
     dropped_tokens_total: AtomicU64,
-    /// Total engine step failures (RIL ISS-090): the run loop's sole error
+    /// Total engine step failures: the run loop's sole error
     /// increment site (`Engine::error_count`) surfaces here as `errors_total`,
     /// which /debug/metrics was showing as a fabricated `0` via the
     /// collector's fallback arm.
@@ -55,7 +56,6 @@ pub struct EnhancedMetricsCollector {
     /// Speculative acceptance rate (accepted / drafted) × `100_000` (fixed-point).
     /// The single wire name for the accepted/drafted ratio — the duplicate
     /// `speculative_efficiency` gauge (fed the identical value) was removed
-    /// (RIL ISS-108).
     speculative_acceptance_rate: AtomicU64,
     /// Throughput speedup vs. greedy decoding × 100 (fixed-point).
     throughput_speedup_ratio: AtomicU64,
@@ -143,7 +143,7 @@ impl EnhancedMetricsCollector {
         self.runtime.snapshot()
     }
 
-    /// Mark the start of an admitted request (RIL ISS-082): delegates to
+    /// Mark the start of an admitted request: delegates to
     /// the lock-free `LockFreeMetrics.requests_in_flight` counter so the
     /// `requests_in_flight` Prometheus gauge / OTLP `inflight_requests`
     /// are live signals instead of the always-0 they exported when the
@@ -153,7 +153,7 @@ impl EnhancedMetricsCollector {
         self.runtime.record_request_start();
     }
 
-    /// Mark the end of a request (RIL ISS-082): delegates to the lock-free
+    /// Mark the end of a request: delegates to the lock-free
     /// saturating decrement. Wired into
     /// [`crate::engine::Engine::finalize_finished`] so every Stop/Length/
     /// Cancelled finalization balances a prior `record_request_start`.

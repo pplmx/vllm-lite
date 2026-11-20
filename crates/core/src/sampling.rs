@@ -1,4 +1,5 @@
-//! Token sampling: temperature scaling, top-k, top-p (nucleus), and the combined `sample` entry point.
+// ! Token sampling: temperature scaling, top-k, top-p (nucleus), and the combined `sample` entry
+// point.
 //!
 //! Designed to be called per sequence per decode step. Beam-search
 //! state types live in [`crate::beam`]; no orchestration methods are
@@ -50,7 +51,7 @@ const fn splitmix64(mut x: u64) -> u64 {
 /// fresh `StdRng` with the bare request seed on every decode step and
 /// reading its first value would return the *same* threshold at every
 /// step (per-step quantile lock), freezing the nucleus / temperature
-/// cutoff and collapsing cross-step independence (RIL ISS-007). Instead
+/// cutoff and collapsing cross-step independence. Instead
 /// the step index is mixed into the seed so step `n` draws a distinct,
 /// deterministic position of the stream: same seed + same step ⇒ same
 /// draw (reproducibility), distinct steps ⇒ distinct draws
@@ -92,7 +93,7 @@ fn log_softmax(logits: &[f32]) -> Vec<f32> {
     if logits.is_empty() {
         return Vec::new();
     }
-    // RIL ISS-073 / TASK-086: sanitise `NaN` to `-inf` before the exp-sum
+    // sanitise `NaN` to `-inf` before the exp-sum
     // (same rationale as `temperature_sample` — `f32::max` ignores NaN, so
     // a single NaN would leave `max_val` finite while NaN-poisoning the
     // sum and hence every finite entry's logprob). `+inf` stays so the
@@ -137,7 +138,7 @@ fn renormalized_top_p_logprobs(logits: &[f32], top_p: f32) -> Vec<f32> {
     // (zero-indexed) iff the cumulative probability up to and
     // including `i` is `≤ top_p`; the first index that pushes
     // cumsum over `top_p` becomes the exclusive upper bound.
-    // RIL ISS-073 / TASK-086: sanitise `NaN` to `-inf` before sorting +
+    // sanitise `NaN` to `-inf` before sorting +
     // softmax (same rationale as `top_p_sample`; a NaN would otherwise sort
     // last, keep `max_val` finite, NaN-poison every logprob, and break the
     // cutoff loop). `+inf` stays so the guard below routes to the
@@ -203,7 +204,7 @@ pub(crate) fn temperature_sample(
         return greedy_sample(logits);
     }
 
-    // RIL ISS-073 / TASK-086: sanitise `NaN` logits to `-inf` BEFORE the
+    // sanitise `NaN` logits to `-inf` BEFORE the
     // softmax. A single NaN among finite logits would otherwise slip past
     // the `max_val.is_finite()` guard (`f32::max` silently ignores NaN, so
     // `max_val` stays finite) and poison the exp-sum: every probability
@@ -250,7 +251,7 @@ pub(crate) fn top_p_sample(logits: &[f32], top_p: f32, random_threshold: f32) ->
         return greedy_sample(logits);
     }
 
-    // RIL ISS-073 / TASK-086: sanitise `NaN` logits to `-inf` BEFORE
+    // sanitise `NaN` logits to `-inf` BEFORE
     // sorting + softmax. A single NaN would otherwise sort last, keep
     // `max_val` finite (the `.1` of the first entry is the largest finite
     // value), and poison the exp-sum exactly like `temperature_sample`:
@@ -394,7 +395,7 @@ pub fn sample_batch(
             }
 
             if temperature <= 0.0 {
-                // RIL ISS-078: `temperature = 0` 'selects greedy argmax'
+                // `temperature = 0` 'selects greedy argmax'
                 // regardless of `top_p`. Pre-fix the `top_p < 1.0` branch
                 // was checked first, so a "greedy" request with `top_p < 1.0`
                 // drew from the RNG — non-greedy and non-reproducible.
@@ -422,7 +423,7 @@ pub fn sample_batch(
 /// layer always chose argmax, so the params silently had no effect.
 ///
 /// **Per-step seeded stream (P34 v0.2 wire-type follow-up engine
-/// wire-through; per-step fix RIL ISS-007):** each call to
+/// wire-through; per-step fix):** each call to
 /// [`sample_one_with_params`] reads ONE random threshold from either a
 /// deterministic per-step stream derived from
 /// `(params.seed, seen.len())` (when `params.seed.is_some()`) or the
@@ -477,12 +478,12 @@ pub fn sample_batch_with_params(
 /// [`sample_batch_with_params`].
 ///
 /// **RNG selection (P34 v0.2 wire-type follow-up engine wire-through;
-/// per-step fix RIL ISS-007):** `params.seed` is consulted exactly
+/// per-step fix):** `params.seed` is consulted exactly
 /// once per call. `Some(s)` reads the decode-step's value from a
 /// deterministic stream derived from `(s, seen.len())` — the seen-set
 /// length is the step index, so the stream advances each step while
 /// staying reproducible; `None` reads from the thread-local default
-/// RNG. The greedy path (`temperature <= 0` — RIL ISS-078, taken
+/// RNG. The greedy path (`temperature <= 0` —, taken
 /// unconditionally regardless of `top_p`) bypasses the RNG entirely —
 /// `seed` has no observable effect there.
 ///
@@ -547,15 +548,15 @@ pub fn sample_one_with_params(
     //
     // The decode-step index is the already-generated seen-set length:
     // it advances by one each step and is deterministic for a given
-    // seed + prompt, so it drives the per-step seeded stream (RIL
-    // ISS-007). On the CUDA-Graph fallback path the seen-set is empty
+    // seed + prompt, so it drives the per-step seeded stream. On the CUDA-Graph fallback path the
+    // seen-set is empty
     // (step 0) — the same best-effort degradation as that path's
     // repeat-penalty no-op.
     let step = seen.len();
     let random_threshold = sample_random_threshold(params.seed, step);
 
     let token = if params.temperature <= 0.0 {
-        // RIL ISS-078: `SamplingParams::temperature` doc "0.0 selects
+        // `SamplingParams::temperature` doc "0.0 selects
         // greedy argmax" is unconditional — temperature = 0 must force
         // greedy even when `top_p < 1.0`. Pre-fix the `top_p < 1.0`
         // branch was checked first, so a "greedy" request with

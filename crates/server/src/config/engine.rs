@@ -45,7 +45,7 @@ pub struct EngineConfig {
     /// the checkpoint provides a length, request validation rejects
     /// `max_tokens` above a documented hard ceiling (see
     /// `openai::chat::check_context_length`) instead of admitting an
-    /// unbounded generation (RIL ISS-044).
+    /// unbounded generation.
     #[serde(default)]
     pub max_model_len: Option<usize>,
     /// Maximum draft tokens per speculative step (capped at 64).

@@ -26,7 +26,7 @@ pub(super) fn repeat_kv_heads(kv: &Tensor, num_v_heads: usize) -> CandleResult<T
             "num_v_heads {num_v_heads} must be a multiple of num_k_heads {num_k_heads}"
         )));
     }
-    // BLOCKED grouping (RIL ISS-010 family): V head `v` shares K/Q head
+    // BLOCKED grouping (family): V head `v` shares K/Q head
     // `v / group`, so expansion must be repeat-interleave `[K0×g, K1×g, …]`,
     // not the tiled `[K0, K1, …]` that `Tensor::repeat` produces (which
     // pairs V head `v` with the wrong K/Q head `v % num_k_heads`). Matches

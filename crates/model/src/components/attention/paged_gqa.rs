@@ -41,8 +41,8 @@ pub fn write_prefill_kv(
         // The block holding `global_pos` is the sequence's
         // `(global_pos / block_size)`-th block, and `block_ids` is indexed by
         // that block index — matching `read_kv`, which iterates `block_ids` in
-        // block order (block_ids[b] holds tokens [b*block_size, …)). RIL
-        // ISS-019: the old code indexed `block_ids[token_idx]` (treating it as
+        // block order (block_ids[b] holds tokens [b*block_size, …)). The old code indexed
+        // `block_ids[token_idx]` (treating it as
         // one-per-token), sending every token past the first block to the wrong
         // block and wrapping later tokens back onto block 0 — silently
         // corrupting the KV cache for any multi-block prefill (prompt longer
@@ -89,7 +89,7 @@ pub fn read_decode_kv(
         // The new token at `num_computed_tokens` lives in the sequence's
         // `(num_computed_tokens / block_size)`-th block; look up its actual
         // block id in `block_ids` (indexed by block index, matching `read_kv`).
-        // RIL ISS-019: the old code used the raw block INDEX as the block id
+        // the old code used the raw block INDEX as the block id
         // (`num_computed_tokens / block_size`), which is only correct when block
         // ids happen to be contiguous from 0 — a real allocator returns
         // arbitrary ids, so the decode KV was written to the wrong block.
@@ -256,7 +256,7 @@ mod tests {
         Ok(())
     }
 
-    /// Regression (RIL ISS-019): multi-block prefill + decode KV writes must
+    /// Regression: multi-block prefill + decode KV writes must
     /// map each token to `block_ids[global_pos / block_size]` at slot
     /// `global_pos % block_size` — matching `read_kv`, which iterates
     /// `block_ids` in block order. Pre-fix, `write_prefill_kv` indexed
@@ -290,11 +290,11 @@ mod tests {
         let got_v: Vec<f32> = read_v.flatten_all()?.to_vec1()?;
         assert_eq!(
             got_k, vals,
-            "multi-block prefill K must round-trip in token order (RIL ISS-019)"
+            "multi-block prefill K must round-trip in token order"
         );
         assert_eq!(
             got_v, vals,
-            "multi-block prefill V must round-trip in token order (RIL ISS-019)"
+            "multi-block prefill V must round-trip in token order"
         );
 
         // Decode the next token (position 20 -> block_ids[20/16 = 1] = block 9,
@@ -306,7 +306,7 @@ mod tests {
         let b9: Vec<f32> = b9.flatten_all()?.to_vec1()?;
         assert!(
             (b9[4] - 20.0).abs() < 1e-4,
-            "decode token must be written to block_ids[20/16]=block 9 slot 4, got {} (RIL ISS-019)",
+            "decode token must be written to block_ids[20/16]=block 9 slot 4, got {}",
             b9[4]
         );
         Ok(())

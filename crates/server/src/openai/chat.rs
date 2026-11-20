@@ -227,7 +227,7 @@ pub(crate) fn validate_chat_request(
         ));
     }
 
-    // RIL ISS-069 / TASK-082: validate every message at the boundary.
+    // validate every message at the boundary.
     //
     // Empty content mirrors the sync completions empty-prompt contract
     // (`req.prompt.is_empty()` -> 400); an empty message would otherwise
@@ -241,7 +241,7 @@ pub(crate) fn validate_chat_request(
     // into the role position of the prompt shape). Whitespace-padded or
     // case-mangled variants of the four OpenAI roles are also rejected.
     for msg in &req.messages {
-        // RIL ISS-139: whitespace-only parity with embeddings — a content
+        // whitespace-only parity with embeddings — a content
         // of only spaces would render an all-blank turn onto the template.
         if msg.content.trim().is_empty() {
             return Err((
@@ -422,7 +422,7 @@ pub(crate) type TokenizedStopResult =
 /// Rejects the request with `400 Bad Request` when *all* stop sequences
 /// tokenize to zero tokens, surfacing the user error explicitly. The
 /// completions twin (`completions::tokenize_stop_sequences`) rejects the
-/// same input identically (RIL ISS-164 parity), so the two endpoints no
+/// same input identically (parity), so the two endpoints no
 /// longer diverge on a degenerate stop set.
 ///
 /// Shared by `handle_chat`, `spawn_chat_n_candidate`, and
@@ -471,7 +471,7 @@ pub(crate) fn tokenize_chat_stop_sequences(
 /// model passes every validator (`max_tokens >= 1`, and the context gate is
 /// skipped) and the engine then grows the sequence's token list by one entry
 /// per decode step forever with no stop/EOS — holding the single scheduler
-/// thread and pinning RAM until the process OOMs (RIL ISS-044). This ceiling
+/// thread and pinning RAM until the process OOMs. This ceiling
 /// bounds the worst-case scheduler burn and `seq.tokens` growth per request.
 /// Operators who genuinely need longer generations set `--max-model-len`.
 const DEFAULT_MAX_GENERATION_TOKENS: usize = 8192;
@@ -526,7 +526,7 @@ pub(crate) fn check_context_length(
 /// Shared by all chat spawn paths to guarantee identical error
 /// mapping without duplicating the match closure at each call site.
 ///
-/// RIL ISS-162: emits a `warn!` for every rejection (this is the single
+/// emits a `warn!` for every rejection (this is the single
 /// funnel all nine call sites flow through, so one log covers chat,
 /// completions, embeddings, and batch uniformly). Pre-fix these were
 /// fully silent — when the mailbox saturated, clients got 503s while the
@@ -1016,7 +1016,7 @@ pub async fn chat_completions(
     // does not fully apply them." Honest 400 > silent degradation.
     validate_chat_request_fields(&req)?;
 
-    // RIL ISS-069 / TASK-082: structural validation (model/messages
+    // structural validation (model/messages
     // non-empty, per-message role + content) runs here — BEFORE the
     // stream / n>1 dispatch — so every path shares the same gate.
     // Pre-fix `validate_chat_request` ran only inside `handle_chat`
@@ -1027,7 +1027,7 @@ pub async fn chat_completions(
     // sync completions returns for an empty prompt (completions.rs:1402).
     validate_chat_request(&req)?;
 
-    // RIL ISS-152: never serve a request for a model that isn't loaded —
+    // never serve a request for a model that isn't loaded —
     // a typo'd or wrong id (`"gpt-4o"` against a Qwen deploy) previously
     // ran the loaded model and echoed the wrong id back with 200 (silent
     // wrong-model). Matches OpenAI's `404 model_not_found`. Strict only
@@ -1110,8 +1110,7 @@ struct ChatNParallelStreamingState {
     tokenizer: std::sync::Arc<vllm_model::tokenizer::Tokenizer>,
     /// Per-candidate incremental UTF-8-safe stream decoders (index-aligned
     /// with the candidates). A multi-byte char split across two byte-level
-    /// BPE tokens must not be flushed as `U+FFFD` between SSE chunks (RIL
-    /// ISS-105).
+    /// BPE tokens must not be flushed as `U+FFFD` between SSE chunks.
     decoders: Vec<vllm_model::tokenizer::StreamingDecoder>,
     /// `finish_reasons[i]` = `Some(reason)` once candidate `i` has
     /// emitted its `Finished` event; `None` while still active.
@@ -1125,7 +1124,7 @@ struct ChatNParallelStreamingState {
     /// `Token` event has been forwarded into the SSE stream.
     first_emitted: Vec<bool>,
     cancel_guards: Vec<std::sync::Arc<CancelOnDrop>>,
-    /// RIL ISS-111 follow-up: aggregation of generated tokens across ALL N
+    /// aggregation of generated tokens across ALL N
     /// candidates, feeding the `include_usage` chunk's `completion_tokens`
     /// (`OpenAI` counts every choice's output).
     completion_tokens: usize,
@@ -1135,7 +1134,7 @@ struct ChatNParallelStreamingState {
 #[derive(Debug)]
 enum ChatNParallelTerminal {
     Streaming,
-    /// RIL ISS-111 follow-up: emit the `choices: []` + `usage` chunk after
+    /// emit the `choices: []` + `usage` chunk after
     /// the consolidated final chunk and before `[DONE]` (only reached when
     /// the request set `stream_options.include_usage`).
     EmitUsage,
@@ -1565,18 +1564,18 @@ async fn stream_n_parallel_chat(
     // contributes its `index` + tokens across the stream; final
     // event carries `finish_reason` per index).
     let tokenizer = state.tokenizer.clone();
-    // RIL ISS-111 follow-up: honor `stream_options.include_usage` on the
+    // honor `stream_options.include_usage` on the
     // n > 1 path too — the usage chunk is emitted after the consolidated
     // final chunk and before `[DONE]`, with `completion_tokens` counting
     // ALL N candidates' generated tokens. `req` / `prompt_tokens` are
     // still owned here (cloned into each candidate spawn above).
     let include_usage = req.stream_options.is_some_and(|s| s.include_usage);
     let prompt_tokens_len = prompt_tokens.len();
-    // RIL ISS-122: capture one stream-epoch `created` (seconds) so every
+    // capture one stream-epoch `created` (seconds) so every
     // chunk on this n > 1 stream reports the same timestamp (the raw
     // `json!` consolidated chunk previously omitted `created` entirely).
     let created = crate::util::time::unix_now_secs();
-    // RIL ISS-175: one completion id per streamed response (the n > 1
+    // one completion id per streamed response (the n > 1
     // candidates MERGE into a single response, so one id identifies the
     // whole stream); the old hardcoded `"chatcmpl-stream"` constant hit
     // every stream. Cloned inside the closure so all chunks agree.
@@ -1602,7 +1601,7 @@ async fn stream_n_parallel_chat(
                 match state.terminal {
                     ChatNParallelTerminal::Done => None,
                     ChatNParallelTerminal::EmitUsage => {
-                        // RIL ISS-111 follow-up: OpenAI streaming-usage
+                        // OpenAI streaming-usage
                         // contract on the n > 1 path — one final chunk with
                         // `choices: []` and the real usage (completion_tokens
                         // aggregated across all N candidates), after the
@@ -1614,7 +1613,8 @@ async fn stream_n_parallel_chat(
                             Usage::new(prompt_tokens_len, state.completion_tokens),
                         );
                         let usage_payload = serde_json::to_string(&usage_chunk)
-                            // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                            // invariant: ChatChunk is a plain serde-derived struct with no failing
+                            // serialize path.
                             .expect("Failed to serialize chat chunk");
                         state.terminal = ChatNParallelTerminal::EmitDoneSentinel;
                         Some((
@@ -1631,7 +1631,7 @@ async fn stream_n_parallel_chat(
                     }
                     ChatNParallelTerminal::Streaming => match state.rx.recv().await {
                         Some(ChatNParallelSseEvent::Token { index, token }) => {
-                            // RIL ISS-111 follow-up: this generated token
+                            // this generated token
                             // counts toward the include_usage chunk across
                             // ALL candidates.
                             state.completion_tokens += 1;
@@ -1642,7 +1642,7 @@ async fn stream_n_parallel_chat(
                             // carries `role: "assistant"` per the
                             // OpenAI chat streaming convention;
                             // subsequent events carry `content` only.
-                            // RIL ISS-105: decode through the per-candidate
+                            // decode through the per-candidate
                             // streaming decoder so a multi-byte char split
                             // across two tokens is not flushed as U+FFFD.
                             let text = state.decoders[index].push(&state.tokenizer, token.token);
@@ -1687,7 +1687,8 @@ async fn stream_n_parallel_chat(
                                 },
                             );
                             let sse_payload = serde_json::to_string(&chunk)
-                                // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                                // invariant: ChatChunk is a plain serde-derived struct with no
+                                // failing serialize path.
                                 .expect("Failed to serialize chat chunk");
                             Some((Ok(Event::default().data(sse_payload)), state))
                         }
@@ -1701,7 +1702,7 @@ async fn stream_n_parallel_chat(
                             // only) finish event or the consolidated
                             // final event (all N finish_reasons).
                             state.finish_reasons[index] = Some(finish_reason);
-                            // RIL ISS-105: flush this candidate's held-back
+                            // flush this candidate's held-back
                             // bytes (a partial char at stream end) so they
                             // are emitted with its finish event, not dropped.
                             let tail = state.decoders[index].flush(&state.tokenizer);
@@ -1746,7 +1747,7 @@ async fn stream_n_parallel_chat(
                                         };
                                         serde_json::json!({
                                             "index": i,
-                                            // RIL ISS-105: preserve the
+                                            // preserve the
                                             // candidate's held-back tail in
                                             // its final delta. The candidate
                                             // that just finalized (the one
@@ -1756,7 +1757,7 @@ async fn stream_n_parallel_chat(
                                             // pending, so re-flushing it
                                             // here would return "" and drop
                                             // its split multi-byte chars
-                                            // (RIL ISS-121). Other
+                                            // Other
                                             // candidates flushed at their
                                             // own intermediate finish
                                             // events; their re-flush here is
@@ -1767,7 +1768,7 @@ async fn stream_n_parallel_chat(
                                                 } else {
                                                     state.decoders[i].flush(&state.tokenizer)
                                                 },
-                                                // RIL ISS-126 follow-up: the
+                                                // the
                                                 // consolidated chunk is the
                                                 // ONLY delta a zero-token
                                                 // candidate ever gets (roles
@@ -1788,14 +1789,14 @@ async fn stream_n_parallel_chat(
                                 let chunk = serde_json::json!({
                                     "id": completion_id.clone(),
                                     "object": "chat.completion.chunk",
-                                    // RIL ISS-122: `created` was missing on the
+                                    // `created` was missing on the
                                     // raw-json n > 1 consolidated chunk (schema
                                     // requires it); carry the stream-epoch value.
                                     "created": created,
                                     "model": model,
                                     "choices": choices,
                                 });
-                                // RIL ISS-111 follow-up: route the usage
+                                // route the usage
                                 // chunk before [DONE] when requested.
                                 state.terminal = if include_usage {
                                     ChatNParallelTerminal::EmitUsage
@@ -1822,7 +1823,7 @@ async fn stream_n_parallel_chat(
                                     ChatChunkChoice {
                                         index: index as i32,
                                         delta: ChatMessage {
-                                            // RIL ISS-126 follow-up: a
+                                            // a
                                             // candidate that finalized with
                                             // ZERO token chunks has this
                                             // finish delta as its first (and
@@ -1835,7 +1836,7 @@ async fn stream_n_parallel_chat(
                                             } else {
                                                 "assistant".to_string()
                                             },
-                                            // RIL ISS-105: preserve the
+                                            // preserve the
                                             // candidate's held-back tail.
                                             content: tail,
                                             name: None,
@@ -1845,9 +1846,10 @@ async fn stream_n_parallel_chat(
                                     },
                                 );
                                 let sse_payload = serde_json::to_string(&chunk)
-                                    // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                                    // invariant: ChatChunk is a plain serde-derived struct with no
+                                    // failing serialize path.
                                     .expect("Failed to serialize chat chunk");
-                                // RIL ISS-126: this finish delta was this
+                                // this finish delta was this
                                 // candidate's first (zero-token) delta, so its
                                 // role marker is now spent — the consolidated
                                 // chunk must not repeat it.
@@ -1875,7 +1877,7 @@ async fn stream_n_parallel_chat(
         },
     );
 
-    // RIL TASK: SSE keepalive — emit an empty comment every 15s of idle so
+    // SSE keepalive — emit an empty comment every 15s of idle so
     // proxies / load balancers with an inactivity timeout don't drop a
     // long-running stream between tokens (a multi-second prefill or a
     // reasoning-model pause produces no data events). axum's KeepAliveStream
@@ -1928,12 +1930,12 @@ async fn stream_chat_completion(
     }
 
     let start = std::time::Instant::now();
-    // RIL ISS-123: capture one stream-epoch `created` so EVERY chunk on
+    // capture one stream-epoch `created` so EVERY chunk on
     // this stream reports the same timestamp — `ChatChunk::new` /
     // `new_usage_chunk` now require the value (they no longer stamp a
-    // per-chunk `unix_now_secs()`). Matches the n > 1 path (ISS-122).
+    // per-chunk `unix_now_secs()`). Matches the n > 1 path.
     let created = crate::util::time::unix_now_secs();
-    // RIL ISS-175: OpenAI's SSE chunk `id` identifies ONE completion, so
+    // OpenAI's SSE chunk `id` identifies ONE completion, so
     // every chunk on this stream must carry the same per-request unique
     // value, not the old hardcoded `"chatcmpl-stream"` constant (which
     // every concurrent stream shared — a client deduping/correlating by
@@ -1967,7 +1969,7 @@ async fn stream_chat_completion(
     );
 
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
-    // RIL ISS-111 follow-up: the OpenAI streaming-usage contract. When the
+    // the OpenAI streaming-usage contract. When the
     // request sets `stream_options.include_usage`, the stream emits one extra
     // final chunk (after the `finish_reason` chunk) whose `choices` is `[]` and
     // whose `usage` carries the real prompt/completion token counts — before
@@ -2227,12 +2229,12 @@ async fn stream_chat_completion(
             cancel_guard,
             Some(finish_reason_rx),
             Terminal::Streaming,
-            // RIL ISS-105: incremental UTF-8-safe decoder for this stream.
+            // incremental UTF-8-safe decoder for this stream.
             vllm_model::tokenizer::StreamingDecoder::new(),
-            // RIL ISS-111 follow-up: completion-token counter feeding the
+            // completion-token counter feeding the
             // `include_usage` chunk, incremented once per sampled token.
             0usize,
-            // RIL ISS-126: OpenAI emits `role` only on the first delta chunk;
+            // OpenAI emits `role` only on the first delta chunk;
             // later chunks carry "" (matches the n>1 first_emitted convention).
             false,
         ),
@@ -2258,7 +2260,7 @@ async fn stream_chat_completion(
                         None
                     }
                     Terminal::EmitUsage => {
-                        // RIL ISS-111 follow-up: OpenAI streaming-usage
+                        // OpenAI streaming-usage
                         // contract — one final chunk with `choices: []` and
                         // the real usage, emitted AFTER the finish_reason
                         // chunk and BEFORE `[DONE]`.
@@ -2269,7 +2271,8 @@ async fn stream_chat_completion(
                             Usage::new(prompt_tokens_len, completion_tokens),
                         );
                         let usage_payload = serde_json::to_string(&usage_chunk)
-                            // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                            // invariant: ChatChunk is a plain serde-derived struct with no failing
+                            // serialize path.
                             .expect("Failed to serialize chat chunk");
                         terminal = Terminal::EmitDoneSentinel;
                         Some((
@@ -2311,7 +2314,7 @@ async fn stream_chat_completion(
                             // text-skipped ones still were generated).
                             completion_tokens += 1;
                             let text = decoder.push(&tokenizer, sampled.token);
-                            // RIL ISS-126: OpenAI sends `role` only on the
+                            // OpenAI sends `role` only on the
                             // stream's FIRST chunk; subsequent chunks carry
                             // an empty role string (the n > 1 path already
                             // applies this via `first_emitted`).
@@ -2322,7 +2325,7 @@ async fn stream_chat_completion(
                             };
                             role_emitted = true;
                             if should_skip_token_text(&tokenizer, &text) {
-                                // RIL ISS-035: emit a well-formed chunk with
+                                // emit a well-formed chunk with
                                 // empty content instead of a bare `data: `
                                 // SSE event. The n>1 parallel path already
                                 // emits `{"delta": {"content": ""}}`; a raw
@@ -2344,7 +2347,8 @@ async fn stream_chat_completion(
                                     },
                                 );
                                 let sse_payload = serde_json::to_string(&chunk)
-                                    // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                                    // invariant: ChatChunk is a plain serde-derived struct with no
+                                    // failing serialize path.
                                     .expect("Failed to serialize chat chunk");
                                 return Some((
                                     Ok::<Event, Infallible>(Event::default().data(sse_payload)),
@@ -2388,7 +2392,8 @@ async fn stream_chat_completion(
                                 },
                             );
                             let sse_payload = serde_json::to_string(&chunk)
-                                // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                                // invariant: ChatChunk is a plain serde-derived struct with no
+                                // failing serialize path.
                                 .expect("Failed to serialize chat chunk");
                             Some((
                                 Ok(Event::default().data(sse_payload)),
@@ -2403,7 +2408,7 @@ async fn stream_chat_completion(
                                 ),
                             ))
                         } else {
-                            // RIL ISS-126: even a zero-token stream carries
+                            // even a zero-token stream carries
                             // `role` on its first (possibly only) delta —
                             // the finish chunk inherits "assistant" when no
                             // token chunk preceded it.
@@ -2431,7 +2436,7 @@ async fn stream_chat_completion(
                             } else {
                                 "stop"
                             };
-                            // RIL ISS-105: flush any held-back bytes (a
+                            // flush any held-back bytes (a
                             // partial char that never completed) so they
                             // reach the client instead of vanishing with
                             // the channel close.
@@ -2457,7 +2462,8 @@ async fn stream_chat_completion(
                                     },
                                 );
                                 let tail_payload = serde_json::to_string(&tail_chunk)
-                                    // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                                    // invariant: ChatChunk is a plain serde-derived struct with no
+                                    // failing serialize path.
                                     .expect("Failed to serialize chat chunk");
                                 return Some((
                                     Ok(Event::default().data(tail_payload)),
@@ -2496,7 +2502,8 @@ async fn stream_chat_completion(
                                 },
                             );
                             let sse_payload = serde_json::to_string(&chunk)
-                                // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
+                                // invariant: ChatChunk is a plain serde-derived struct with no
+                                // failing serialize path.
                                 .expect("Failed to serialize chat chunk");
                             tracing::info!(
                                 request_id = %request_id,
@@ -2537,7 +2544,7 @@ async fn stream_chat_completion(
     // dropped — firing CancelRequest. The natural-completion
     // path explicitly disarms the guard before returning the
     // final chunk so we don't double-cancel.
-    // RIL TASK: SSE keepalive — emit an empty comment every 15s of idle so
+    // SSE keepalive — emit an empty comment every 15s of idle so
     // proxies / load balancers with an inactivity timeout don't drop a
     // long-running stream between tokens (a multi-second prefill or a
     // reasoning-model pause produces no data events). axum's KeepAliveStream

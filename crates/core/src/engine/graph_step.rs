@@ -1,4 +1,5 @@
-//! Engine step execution through a captured CUDA Graph: replays the graph for a given batch shape and unwraps the output tokens.
+// ! Engine step execution through a captured CUDA Graph: replays the graph for a given batch shape
+// and unwraps the output tokens.
 //!
 //! Falls back to the eager (`engine/run.rs`) path when no captured
 //! graph matches the shape. The executor behind `self.cuda_graph` is a
@@ -74,13 +75,13 @@ impl Engine {
             Ok(self.process_output(output, batch, input_counts, start))
         })();
 
-        // RIL ISS-045: same recovery as `Engine::step` — a forward error
+        // same recovery as `Engine::step` — a forward error
         // leaves freshly-admitted Prefilling sequences stranded in
         // `running`; roll them back so the engine doesn't spin and leak.
         if result.is_err() {
             self.scheduler.requeue_stuck_prefills();
         }
-        // RIL ISS-100: keep the /metrics KV-usage gauge fresh on the
+        // keep the /metrics KV-usage gauge fresh on the
         // CUDA-graph step path too (the regular/speculative path does
         // this in `Engine::step`).
         self.record_step_metrics();
@@ -192,7 +193,7 @@ impl Engine {
             "process_output: received model output"
         );
 
-        // RIL ISS-053: a mid-chunk prefill's predicted token is stale (the
+        // a mid-chunk prefill's predicted token is stale (the
         // real next prompt token is re-fed on the next chunk) — it must not
         // reach the client channel or metrics. Read while the sequence is
         // still in `running` (update requeues partial prefills below).
@@ -221,7 +222,7 @@ impl Engine {
         self.scheduler
             .update(&output.seq_ids, &output.next_tokens, &input_counts);
 
-        // RIL ISS-110: cancel sequences whose response channel closed
+        // cancel sequences whose response channel closed
         // (client disconnect) — after `update` has advanced their frontier,
         // so they don't burn the rest of their `max_tokens` budget.
         self.cancel_on_closed_channels(&disconnected);
@@ -264,7 +265,7 @@ impl Engine {
         scheduler
             .metrics
             .record_tokens(u64::try_from(results.len()).unwrap_or(0));
-        // RIL ISS-095: prefill/decode phase split on the graph path too.
+        // prefill/decode phase split on the graph path too.
         scheduler.metrics.record_batch_phase_tokens(batch);
         scheduler.metrics.record_batch_size(results.len());
         // invariant: elapsed millis fits in f64 mantissa (< 2^52 ms ≈ 142 years).

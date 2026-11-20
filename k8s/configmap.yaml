@@ -8,7 +8,7 @@ data:
   # (set in deployment.yaml). `metrics:` was a fabricated section — the
   # server has no metrics listener; `/metrics` is served on the main HTTP
   # port (`server.port`) by the same axum router, and `AppConfig` does not
-  # recognise a top-level `metrics` key (RIL ISS-102 / ISS-097 WARN).
+  # recognise a top-level `metrics` key (WARN).
   production.yaml: |
     server:
       host: 0.0.0.0

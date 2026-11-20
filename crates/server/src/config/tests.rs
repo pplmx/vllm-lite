@@ -112,7 +112,7 @@ fn test_kv_quantization_from_config() {
     assert!(config.engine.kv_quantization);
 }
 
-// ─────────────────── CLI-parity bounds (RIL ISS-154) ───────────────────
+// ─────────────────── CLI-parity bounds ───────────────────
 // The CLI flag parsers (args.rs) enforce upper bounds the YAML path
 // previously bypassed; `validate()` must reject the same values so both
 // config sources agree. A YAML `engine.max_batch_size: 20000` (which no
@@ -222,7 +222,7 @@ fn test_validate_max_model_len_none_ok() {
 
 #[test]
 fn test_validate_max_model_len_zero_fails() {
-    // RIL ISS-167: YAML `engine.max_model_len: 0` must be rejected just
+    // YAML `engine.max_model_len: 0` must be rejected just
     // like the CLI path (`--max-model-len` uses range 1..=4_000_000). The
     // config validator previously only checked the upper bound, so a `0`
     // passed validation, overrode a real checkpoint value in `main.rs`
@@ -564,7 +564,7 @@ auth:
 /// var before it's removed, loading the wrong port and failing its
 /// assertion.
 ///
-/// RIL ISS-109: uses the crate-wide `test_fixtures::ENV_TEST_LOCK` so the
+/// uses the crate-wide `test_fixtures::ENV_TEST_LOCK` so the
 /// `cli::args` tests that parse `env = "VLLM_*"` args (and expect the env
 /// unset) serialize against these setters under `cargo test` too.
 
@@ -575,7 +575,7 @@ fn app_config_load_defaults_when_no_path() {
     assert_eq!(config.server.port, 8000);
 }
 
-/// RIL ISS-132 / DEC-057 (replaces TASK-107's "degrade to defaults"): an
+/// (replaces 's "degrade to defaults"): an
 /// EXPLICITLY-passed config source that cannot be honored is an operator
 /// error, not a silent fallback. Pre-fix, a missing `--config` path
 /// degraded to defaults and the server booted healthy-looking on the
@@ -594,7 +594,7 @@ fn app_config_load_nonexistent_file_is_an_error() {
     assert!(matches!(err, ConfigLoadError::Missing(_)));
 }
 
-/// RIL ISS-132 / DEC-057 (supersedes TASK-107's graceful-degradation
+/// (supersedes 's graceful-degradation
 /// leg): a config file that *exists* but fails to parse must NOT boot
 /// the server on defaults — the operator's deliberate settings silently
 /// vanish and the healthy-looking server runs the wrong configuration.
@@ -620,7 +620,7 @@ fn app_config_load_malformed_file_is_an_error() {
     );
 }
 
-/// RIL ISS-169: with BOTH sources set, the EXPLICIT `--config` flag wins —
+/// with BOTH sources set, the EXPLICIT `--config` flag wins —
 /// matching the documented precedence (`CLI flags > env > YAML`,
 /// OPERATIONS.md:125). Pre-fix the env var silently overrode an explicit
 /// flag, so `vllm-server --config /tmp/test.yaml` inside a deployment that
@@ -642,7 +642,7 @@ fn app_config_load_flag_takes_precedence_over_env() {
     let config = AppConfig::load(Some(file_path.clone())).unwrap();
     assert_eq!(config.server.port, 9999);
 
-    // 2. Both set: the explicit --config flag must win (RIL ISS-169).
+    // 2. Both set: the explicit --config flag must win.
     set_test_env("VLLM_CONFIG_PATH", env_path.to_string_lossy().as_ref());
     let config = AppConfig::load(Some(file_path)).unwrap();
     assert_eq!(config.server.port, 9999);
@@ -679,7 +679,7 @@ fn is_loopback_address_rejects_non_loopback() {
     assert!(!is_loopback_address("invalid"));
 }
 
-// RIL ISS-097: unknown top-level config keys (typo'd sections) must be
+// unknown top-level config keys (typo'd sections) must be
 // detectable so the server can WARN instead of silently degrading to
 // defaults. `unknown_top_level_keys` is the best-effort detector.
 
@@ -695,7 +695,7 @@ fn test_unknown_top_level_keys_detects_typo_sections() {
 
 #[test]
 fn test_unknown_top_level_keys_flags_fabricated_metrics_section() {
-    // RIL ISS-102: the shipped `k8s/configmap.yaml` used to declare a
+    // the shipped `k8s/configmap.yaml` used to declare a
     // `metrics: {enabled: true, port: 9090}` section that the server does
     // not recognise (no metrics listener exists; /metrics is on the main
     // HTTP port). Guard so the fabricated section is always surfaced as a
@@ -706,7 +706,7 @@ fn test_unknown_top_level_keys_flags_fabricated_metrics_section() {
     assert_eq!(keys, vec!["metrics".to_string()]);
 }
 
-// RIL ISS-168: nested (non-top-level) unknown keys must also be
+// nested (non-top-level) unknown keys must also be
 // detectable — `unknown_top_level_keys` only catches typo'd SECTION
 // names, so `engine: { num_kv_blcks: 4096 }` slid through the lenient
 // parse and ran the server on the default 1024 with zero warning.
@@ -776,7 +776,7 @@ fn test_unknown_top_level_keys_empty_on_garbage() {
 
 #[test]
 fn example_yaml_stays_valid() {
-    // RIL ISS-116: `config/example.yaml` is the operator-facing reference
+    // `config/example.yaml` is the operator-facing reference
     // for the on-disk schema. If a field in it ever stops being recognized
     // (a `#[serde(default)]` section silently dropped) or fails validation,
     // that is a docs-drift bug — fail CI instead of shipping a stale
@@ -791,7 +791,7 @@ fn example_yaml_stays_valid() {
         config.validate().is_ok(),
         "config/example.yaml must satisfy AppConfig::validate()"
     );
-    // RIL ISS-168: `SECTION_FIELDS` (the nested-typo detector's field
+    // `SECTION_FIELDS` (the nested-typo detector's field
     // lists) must stay in sync with the real config structs. The shipped
     // example is the reference for the on-disk schema, so parsing it must
     // produce ZERO nested unknowns — a field we renamed / removed in the

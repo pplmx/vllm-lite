@@ -286,7 +286,7 @@ fn test_paged_attention_single_token_decode() {
     assert_eq!(output.dims(), &[batch_size, seq_q, num_heads * head_dim]);
 }
 
-/// Regression (RIL ISS-010 / TASK-010): GQA expansion must be **blocked**
+/// Regression: GQA expansion must be **blocked**
 /// (repeat-interleave), not tiled. Query head `h` attends to KV head
 /// `h / group_size`, so the expanded head order must be
 /// `[K0, K0, ..., K1, K1, ...]`. Pre-fix `expand_kv` used `Tensor::repeat`,
@@ -303,11 +303,11 @@ fn test_expand_kv_blocked_grouping() {
     assert_eq!(
         vals,
         vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
-        "expansion must be blocked [K0x4, K1x4]; got {vals:?} (tiled => RIL ISS-010)"
+        "expansion must be blocked [K0x4, K1x4]; got {vals:?} (tiled)"
     );
 }
 
-/// Regression (RIL ISS-010 / TASK-010): end-to-end GQA grouping through
+/// Regression: end-to-end GQA grouping through
 /// `paged_attention`. With a single key position the softmax weight is
 /// exactly 1.0, so each query head's output equals its paired VALUE head
 /// verbatim — directly revealing the grouping. Query heads {0,1} (group 0)
@@ -332,7 +332,7 @@ fn test_gqa_grouping_end_to_end_single_token() {
         vals,
         vec![1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0],
         "query heads {{0,1}} must attend to KV head 0 and {{2,3}} to KV head 1; \
-         got {vals:?} (wrong grouping => RIL ISS-010)"
+         got {vals:?} (wrong grouping)"
     );
 }
 
@@ -340,7 +340,7 @@ fn test_gqa_grouping_end_to_end_single_token() {
 /// per-head grouping (query head `h` attends to KV head `h / group`),
 /// scaled dot-product, causal mask, stable softmax. Used to validate the
 /// production `expand_kv` + `paged_attention` path against the mathematical
-/// definition (RIL ISS-010 / DEC-007: pin VALUES against a reference, not
+/// definition (pin VALUES against a reference, not
 /// just shape or path-parity — parity tests missed the grouping bug because
 /// both paths shared the same buggy `expand_kv`).
 #[allow(clippy::too_many_arguments)]
@@ -385,7 +385,7 @@ fn naive_gqa_attention(
     out
 }
 
-/// Regression (RIL ISS-010 / DEC-007): the production GQA path
+/// Regression: the production GQA path
 /// (`expand_kv` → transpose → `paged_attention`) must match an independent
 /// naive reference that groups query head `h` to KV head `h / group`.
 /// Pre-fix `expand_kv` tiled instead of blocked, so query heads past the
@@ -452,7 +452,7 @@ fn test_gqa_attention_matches_naive_reference() {
         assert!(
             (g - r).abs() < 1e-4,
             "GQA attention diverges from naive reference at idx {i}: got {g}, want {r} \
-             (wrong head grouping => RIL ISS-010)"
+             (wrong head grouping)"
         );
     }
 }

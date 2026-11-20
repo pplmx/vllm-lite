@@ -95,7 +95,7 @@ fn test_engine_multiple_requests() {
     assert!(batch.seq_ids.contains(&id2));
 }
 
-/// RIL ISS-136: the CUDA-graph admission path
+/// the CUDA-graph admission path
 /// (`select_sequences_for_phase`, graph.rs) drains `request_queue` into
 /// `running` but pre-fix never published the `active_sequences` /
 /// `request_queue_depth` gauges that `build_batch` (state/batch.rs:66,140)
@@ -119,7 +119,7 @@ fn test_graph_path_publishes_active_sequences_and_queue_depth() {
     assert_eq!(
         metrics.get_gauge("active_sequences"),
         1,
-        "graph admission must publish the running count (pre-fix pinned at 0, RIL ISS-136)"
+        "graph admission must publish the running count (pre-fix pinned at 0)"
     );
     assert_eq!(
         metrics.get_gauge("request_queue_depth"),
@@ -282,7 +282,7 @@ fn test_engine_metrics_tracking() {
     assert_eq!(metrics.get_counter("requests_total"), 1);
 }
 
-/// Regression (RIL TASK-001 / ISS-001): `execute_preemption` must never
+/// Regression: `execute_preemption` must never
 /// leave a running sequence with a partial hole in its block table.
 /// The block table is positional (block `i` ↔ tokens
 /// `i * BLOCK_SIZE..(i + 1) * BLOCK_SIZE`), so removing an interior
@@ -356,7 +356,7 @@ fn test_preemption_never_leaves_partial_block_holes() {
     assert_eq!(engine.memory.available_blocks(), 13);
 }
 
-/// Regression (RIL ISS-174): phase-2 fallback preemption must continue
+/// Regression: phase-2 fallback preemption must continue
 /// from the blocks phase 1 actually released, not from the victim-block
 /// count. `select_victims` returns only evictable (refcount ≤ 1) blocks,
 /// but phase 1 preempts victim-owning sequences WHOLESALE — releasing
@@ -429,7 +429,7 @@ fn test_phase2_preemption_continues_from_phase1_freed_count() {
     assert_eq!(engine.memory.get_block_ref_count(b5), 1);
 }
 
-/// Regression (RIL TASK-003 / ISS-003): completing the same prompt
+/// Regression: completing the same prompt
 /// twice must not inflate the cache's refcount on the prompt's block.
 /// The finish path re-inserts the prefix entry; before the fix the
 /// overwrite orphaned the cache's previous ref, so the block's
@@ -473,7 +473,7 @@ fn test_repeated_prompt_completion_keeps_single_cache_refcount() {
     );
 }
 
-/// Regression (RIL TASK-005 / ISS-005): a request whose prompt fully
+/// Regression: a request whose prompt fully
 /// matches the prefix cache must still run to completion. Before the
 /// fix, `add_request` parked full hits in `Status::Waiting`; the
 /// prefill composer skips sequences with no new tokens and decode
@@ -514,7 +514,7 @@ fn test_full_prefix_hit_request_completes() {
     );
 }
 
-/// Regression (RIL ISS-022): a freshly-admitted prefill sequence must have
+/// Regression: a freshly-admitted prefill sequence must have
 /// its prompt KV blocks allocated by `build_batch` BEFORE the forward pass
 /// writes its KV. Pre-fix, blocks were allocated only in `update()` (after the
 /// forward), so `batch.kv_block_ids` was empty for a fresh prefill and the
@@ -535,7 +535,7 @@ fn test_build_batch_preallocates_prefill_kv_blocks() {
         batch.kv_block_ids[0].len(),
         expected_blocks,
         "build_batch must allocate the prompt's KV blocks before the forward \
-         (got {} blocks, expected {expected_blocks}) (RIL ISS-022)",
+         (got {} blocks, expected {expected_blocks})",
         batch.kv_block_ids[0].len()
     );
     // The allocated blocks must be distinct (not all the block-0 fallback).
@@ -547,7 +547,7 @@ fn test_build_batch_preallocates_prefill_kv_blocks() {
     );
 }
 
-/// Regression (RIL ISS-032): the CUDA-Graph admission path must run the
+/// Regression: the CUDA-Graph admission path must run the
 /// same memory-pressure preemption gate as `build_batch` before admitting
 /// new sequences. Pre-fix, `select_sequences_for_phase` admitted a prefill
 /// sequence whose blocks exceeded available memory without preempting a
@@ -606,9 +606,9 @@ fn test_build_batch_with_graph_preempts_before_admitting_under_pressure() {
     assert_eq!(engine.waiting_count(), 1, "victim must be re-queued");
 }
 
-/// Regression (RIL ISS-028): the CUDA-Graph batch builder
+/// Regression: the CUDA-Graph batch builder
 /// (`build_batch_with_graph`) must pre-allocate prefill KV blocks exactly
-/// like `build_batch` (RIL ISS-022). Pre-fix, `select_sequences_for_phase`
+/// like `build_batch`. Pre-fix, `select_sequences_for_phase`
 /// admitted fresh prefill sequences with empty `kv_blocks`, so the model's
 /// `write_prefill_kv` fell back to block 0 and corrupted the cache on every
 /// `cuda-graph` build.
@@ -639,7 +639,7 @@ fn test_build_batch_with_graph_preallocates_prefill_kv_blocks() {
         batch.kv_block_ids[0].len(),
         expected_blocks,
         "build_batch_with_graph must allocate the prompt's KV blocks before \
-         the forward (got {} blocks, expected {expected_blocks}) (RIL ISS-028)",
+         the forward (got {} blocks, expected {expected_blocks})",
         batch.kv_block_ids[0].len()
     );
     let unique: std::collections::HashSet<usize> = batch.kv_block_ids[0].iter().copied().collect();
@@ -650,9 +650,9 @@ fn test_build_batch_with_graph_preallocates_prefill_kv_blocks() {
     );
 }
 
-/// Regression (RIL ISS-072 / TASK-085): the CUDA-Graph decode selection
+/// Regression: the CUDA-Graph decode selection
 /// must NOT forward a `Decoding` sequence whose KV table is short of its
-/// token count. The regular path's `admit_decode_sequences` (RIL ISS-052)
+/// token count. The regular path's `admit_decode_sequences`
 /// grows each running decode table to cover its `tokens` before composing
 /// (or defers it); `select_sequences_for_phase` previously cloned every
 /// `Decoding` sequence as-is — a short table (e.g. from an earlier
@@ -700,14 +700,14 @@ fn test_build_batch_with_graph_grows_short_decode_table() {
         batch.kv_block_ids[0].len(),
         14,
         "select_sequences_for_phase must grow the short decode table before \
-         forwarding (got {} blocks, need 14 for 224 tokens) (RIL ISS-072)",
+         forwarding (got {} blocks, need 14 for 224 tokens)",
         batch.kv_block_ids[0].len()
     );
 }
 
-/// Regression (RIL ISS-072 / TASK-085): the CUDA-Graph preemption gate must
+/// Regression: the CUDA-Graph preemption gate must
 /// demand only the ADDITIONAL blocks a sequence still needs, not its
-/// full-prompt block count (the ISS-055/056 fix that `build_batch` has was
+/// full-prompt block count (the fix that `build_batch` has was
 /// never applied to `select_sequences_for_phase`). Pre-fix a running decode
 /// sequence holding its full table re-charged itself for the whole 14-block
 /// table (14 > 6 free), so `execute_preemption` selected it as the victim
@@ -755,7 +755,7 @@ fn test_build_batch_with_graph_does_not_over_preempt_full_table_decode() {
         batch.len(),
         1,
         "the running decode must be composed; it owns its full table so it \
-         demands zero ADDITIONAL blocks and must not be preempted (RIL ISS-072)"
+         demands zero ADDITIONAL blocks and must not be preempted"
     );
     // The decode sequence must NOT have been preempted back to the queue —
     // it still owns its full table and stays running.

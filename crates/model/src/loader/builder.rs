@@ -1,4 +1,5 @@
-//! `ModelLoader` + `ModelLoaderBuilder`: open a checkpoint directory, detect the format, load weights into the architecture registry, return a ready-to-use model.
+// ! `ModelLoader` + `ModelLoaderBuilder`: open a checkpoint directory, detect the format, load
+// weights into the architecture registry, return a ready-to-use model.
 //!
 //! Format detection is automatic: safetensors (single or sharded),
 //! GGUF (with `Q4_K_M` dequantization to FP16). The builder wires the
@@ -15,7 +16,8 @@ use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
 
 #[derive(Debug)]
-/// Builder for `ModelLoader`. Use `with_*` methods to override defaults, then call `.build()` to produce the final value.
+/// Builder for `ModelLoader`. Use `with_*` methods to override defaults, then call `.build()` to
+/// produce the final value.
 pub struct ModelLoaderBuilder {
     /// Compute device (CPU or CUDA).
     device: Device,
@@ -63,7 +65,8 @@ impl ModelLoaderBuilder {
         self
     }
 
-    /// Allow loading stub architectures (Gemma3, Llama4, Phi4, …) that do not perform real inference.
+    /// Allow loading stub architectures (Gemma3, Llama4, Phi4, …) That do not perform real
+    /// inference.
     #[must_use]
     pub const fn with_allow_stub(mut self, allow: bool) -> Self {
         self.allow_stub = allow;
@@ -130,7 +133,7 @@ impl ModelLoaderInner {
         allow_stub: bool,
     ) -> Result<Self> {
         let config_path = Path::new(&model_dir).join("config.json");
-        // RIL ISS-149: name the config file in the error — "Failed to read
+        // name the config file in the error — "Failed to read
         // config" (no path) left the operator guessing which config on a
         // typo'd / missing `--model` dir, the single most common startup
         // mistake ("some config" ≠ "this model's config.json").
@@ -259,7 +262,7 @@ impl ModelLoader {
     #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
     pub(crate) fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         let config_path = Path::new(&self.inner.model_dir).join("config.json");
-        // RIL ISS-149: name the file in the error (see `ModelLoaderInner::new`).
+        // name the file in the error (see `ModelLoaderInner::new`).
         let content = std::fs::read_to_string(&config_path).map_err(|e| {
             candle_core::Error::msg(format!("Failed to read {}: {e}", config_path.display()))
         })?;

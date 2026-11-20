@@ -68,7 +68,7 @@ impl Engine {
             // prompt-exclusion semantic (a stop suffix in the prompt
             // must not match) — see the pinned regression test.
             let generated = &seq.tokens[seq.prompt_len..];
-            // RIL ISS-075: the model's end-of-sentence token is a MODEL-level
+            // the model's end-of-sentence token is a MODEL-level
             // stop signal that applies to every sequence regardless of its
             // per-request `stop_token_sequences`. Without it, a 'short'
             // answer burns the full `max_tokens` budget and reports
@@ -101,7 +101,7 @@ impl Engine {
         newly_stopped
     }
 
-    /// Configure the model's end-of-sentence token id (RIL ISS-075).
+    /// Configure the model's end-of-sentence token id.
     ///
     /// Called by the server after engine construction (same hook pattern as
     /// `configure_speculative`); the core default is `None` so engines
@@ -126,10 +126,10 @@ impl Engine {
     /// oneshot (e.g. it gave up waiting after a client disconnect),
     /// the `Result` is ignored.
     pub(crate) fn finalize_finished(&mut self, seq_id: SeqId, reason: FinishReason) {
-        // RIL ISS-082: balance the `record_request_start` from
+        // balance the `record_request_start` from
         // `add_request` so the `requests_in_flight` gauge is live.
         //
-        // RIL ISS-173: decrement only on the FIRST finalization. The
+        // decrement only on the FIRST finalization. The
         // step paths call `finalize_stop_sequences` (→ `finalize_finished`
         // Stop) for a stop/EOS match, then a second `finished_sequences()`
         // pass re-finalizes the same seq as Length — so
@@ -155,7 +155,7 @@ impl Engine {
         if let Some(tx) = self.finish_reason_txs.remove(&seq_id) {
             let _ = tx.send(reason);
         }
-        // RIL ISS-034: tell the target model the sequence is done so it can
+        // tell the target model the sequence is done so it can
         // drop per-sequence state (e.g. the Qwen3.5 hybrid GDN recurrent
         // map). Best-effort: a poisoned lock just skips the cleanup.
         if let Ok(mut model) = crate::sync::lock_mutex(&self.target_model) {
@@ -194,7 +194,7 @@ impl Engine {
         canceled
     }
 
-    /// RIL ISS-110: cancel every sequence whose response channel returned
+    /// cancel every sequence whose response channel returned
     /// `TrySendError::Closed` during the token-emission loop (the client
     /// dropped the receiver — a disconnect). `Closed` is the engine's ONLY
     /// disconnect signal on non-streaming paths (the HTTP layer builds no
@@ -239,7 +239,7 @@ impl Engine {
             return 0;
         }
 
-        // RIL ISS-038: stateful backends (Qwen3.5 hybrid GDN) cannot resume
+        // stateful backends (Qwen3.5 hybrid GDN) cannot resume
         // from a prefix-cache hit — their recurrent state is not in the KV
         // cache — so route them through the no-prefix path (full prefill).
         let supports_prefix_caching = crate::sync::lock_mutex(&self.target_model)
@@ -250,7 +250,7 @@ impl Engine {
             self.scheduler.add_request_without_prefix_cache(req)
         };
         self.response_txs.insert(seq_id, response_tx);
-        // RIL ISS-082: count ADMITTED requests only — a rejected admission
+        // count ADMITTED requests only — a rejected admission
         // (`seq_id == 0`, e.g. an empty prompt that slipped through) never
         // reaches `finalize_finished`, so it must not get a start either.
         // `finalize_finished` balances this via `record_request_end`.

@@ -146,7 +146,7 @@ impl BatchComposer {
             return PrefillAction::Skip;
         }
 
-        // RIL ISS-051: a sequence that overfills the batch token budget is
+        // a sequence that overfills the batch token budget is
         // CHUNKED (process `budget_room` tokens now, resume the rest on a
         // later round) instead of breaking. Breaking meant a prompt longer
         // than `max_token_budget` could never be served — the queue spun in
@@ -190,7 +190,7 @@ impl BatchComposer {
             tokens,
             token_count,
             kv_blocks: seq.kv_blocks.as_ref().clone(),
-            // RIL ISS-021: a resumed prefill (start > 0 after a partial
+            // a resumed prefill (start > 0 after a partial
             // prefix-cache hit) is still a prefill. It must keep
             // `is_prefill = true` so the model dispatches to `forward_prefill`,
             // which routes to `forward_prefill_continue` when

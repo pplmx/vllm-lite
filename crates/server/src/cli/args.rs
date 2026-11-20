@@ -95,7 +95,7 @@ fn validate_max_model_len(s: &str) -> Result<usize, CliValidationError> {
 }
 
 /// The server's semver, compiled from `[workspace.package]` / `[package]`
-/// `version` (RIL ISS-119). Single source of truth: bumping the crate
+/// `version`. Single source of truth: bumping the crate
 /// version updates `--version` without touching code.
 pub static SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -135,7 +135,7 @@ pub struct CliArgs {
     pub otlp_endpoint: Option<String>,
 }
 
-// RIL ISS-081: these args are `Option<T>` rather than defaulted so that
+// these args are `Option<T>` rather than defaulted so that
 // `to_app_config` can distinguish "operator passed a flag / set env" from
 // "operator left it alone". With hardcoded `default_value` strings, clap
 // always filled the struct and `to_app_config` unconditionally overwrote
@@ -168,7 +168,7 @@ struct ServerArgs {
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "model_args")]
 pub struct ModelArgs {
-    // RIL ISS-115: `--model` rendered with a blank help section — required
+    // `--model` rendered with a blank help section — required
     // for every run yet unexplained in `--help`. Also documents the
     // `VLLM_MODEL` env alias (clap already shows it in the env meta line).
     #[arg(
@@ -185,7 +185,7 @@ pub struct ModelArgs {
     pub allow_stub: bool,
 }
 
-// RIL ISS-081: `Option<T>` (see the note on `ServerArgs`) so YAML values
+// `Option<T>` (see the note on `ServerArgs`) so YAML values
 // survive unless the operator explicitly overrides via flag or env var.
 // NB: with Option fields the hardcoded defaults are gone, so
 // `enable_adaptive_speculative` is no longer forced to `false` — it now
@@ -230,7 +230,7 @@ struct EngineArgs {
     /// `max_position_embeddings` (if declared) in request context-length
     /// validation. When neither is set, request validation caps `max_tokens`
     /// at a hard ceiling so an unknown-context model cannot be driven into an
-    /// unbounded generation (RIL ISS-044).
+    /// unbounded generation.
     #[arg(long, env = "VLLM_MAX_MODEL_LEN", value_parser = validate_max_model_len)]
     pub max_model_len: Option<usize>,
 }
@@ -238,7 +238,7 @@ struct EngineArgs {
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "auth_args")]
 struct AuthArgs {
-    // RIL ISS-115: these two rendered blank in `--help`; the sources are the
+    // these two rendered blank in `--help`; the sources are the
     // whole point of the flags (repeated keys / key files) and the SEC-01
     // warning only fires alongside them.
     #[arg(
@@ -271,7 +271,7 @@ struct AuthArgs {
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "security_args")]
 pub struct SecurityArgs {
-    // RIL ISS-115: the bare flag rendered with no help; operators reading
+    // the bare flag rendered with no help; operators reading
     // `--help` could not tell what it silences (SEC-01) or why it exists.
     #[arg(
         long,
@@ -294,7 +294,7 @@ struct LoggingArgs {
     )]
     pub log_level: Option<LogLevel>,
 
-    // RIL ISS-115: blank help on `--log-dir` too — JSON log files are an
+    // blank help on `--log-dir` too — JSON log files are an
     // opt-in feature, so the flag alone does not hint that it exists.
     #[arg(
         long,
@@ -307,7 +307,7 @@ struct LoggingArgs {
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "config_args")]
 struct ConfigArgs {
-    // RIL ISS-115: `--config` is the entire YAML-config surface yet rendered
+    // `--config` is the entire YAML-config surface yet rendered
     // blank — an operator cannot discover it from `--help`.
     #[arg(
         long,
@@ -322,7 +322,7 @@ impl CliArgs {
     /// Fold CLI flags + env vars over the config source (defaults, a
     /// `--config` file, or `$VLLM_CONFIG_PATH` — which `AppConfig::load`
     /// strictly validates). Returns `Err` when an explicitly-requested
-    /// config cannot be honored (RIL ISS-132): the operator's deliberate
+    /// config cannot be honored: the operator's deliberate
     /// settings must not silently degrade to defaults.
     ///
     /// # Errors
@@ -332,7 +332,7 @@ impl CliArgs {
     pub fn to_app_config(&self) -> Result<AppConfig, ConfigLoadError> {
         let mut config = AppConfig::load(self.config.config.clone())?;
 
-        // RIL ISS-081: only override a field when the operator actually
+        // only override a field when the operator actually
         // specified it through a flag or env var (`Some`). The `Option<T>`
         // arg types make an unset value distinguishable from a defaulted one,
         // so values from the `--config` YAML (and `AppConfig::default()`)

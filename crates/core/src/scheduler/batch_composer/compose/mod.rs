@@ -1,4 +1,5 @@
-//! `BatchComposer` implementation: builds phase-specific batches (prefill, decode, mixed) from the running + waiting sequence lists.
+// ! `BatchComposer` implementation: builds phase-specific batches (prefill, decode, mixed) From the
+// running + waiting sequence lists.
 //!
 //! Runs every scheduler tick; the `compose` function is the entry
 //! point and is split into prefill-composition + decode-composition
@@ -26,7 +27,7 @@ mod prefill;
 pub struct BatchComposer {
     config: BatchCompositionConfig,
     packing_config: SequencePackingConfig,
-    // RIL ISS-051: carries the `prefill_chunk_size` cap used when a single
+    // carries the `prefill_chunk_size` cap used when a single
     // sequence overfills the token budget and must be chunked across
     // rounds. `target_chunk_size` is wired from `SchedulerConfig` at
     // engine construction; `compose_with_chunking` (test-only) reads it
@@ -70,7 +71,7 @@ impl BatchComposer {
     }
 
     /// Create a new batch composer with both packing and chunked-prefill
-    /// configuration (RIL ISS-051 — production path).
+    /// configuration (— production path).
     #[must_use]
     pub(crate) const fn with_packing_and_chunked(
         config: BatchCompositionConfig,

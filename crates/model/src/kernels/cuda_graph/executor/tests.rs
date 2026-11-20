@@ -87,7 +87,7 @@ fn test_capture_graph_increases_graph_count() {
     assert!(executor.has_graph(1));
 }
 
-/// Regression (RIL ISS-176): `execute` on a graph the executor captured
+/// Regression: `execute` on a graph the executor captured
 /// must NEVER return the fabricated `TokenId::default()` (0) placeholder
 /// output. `CudaGraph::capture` is a CPU-side stub that marks a graph
 /// cached without recording any kernels, so every graph

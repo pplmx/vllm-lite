@@ -539,7 +539,7 @@ fn apply_rope_with_inv_freq(query: &Tensor, positions: &[i64], inv_freq: &[f32])
     // x1 = first half, x2 = second half:
     //   x1' = x1·cos − x2·sin
     //   x2' = x2·cos + x1·sin
-    // RIL ISS-012: the signs were previously inverted (x1·cos + x2·sin,
+    // the signs were previously inverted (x1·cos + x2·sin,
     // x2·cos − x1·sin), which is the INVERSE rotation R(−θ). Because both q
     // and k pass through this same function, the relative-position term came
     // out as R(m−n) instead of R(n−m) — the positional encoding's direction

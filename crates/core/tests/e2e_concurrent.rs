@@ -216,8 +216,8 @@ fn test_batch_processing() {
     // Add multiple requests with total tokens = prompt + max_tokens
     let num_requests = 10;
 
-    // Hold every receiver in a Vec so no channel reports `Closed` (RIL
-    // ISS-110 — a dropped receiver now cancels the sequence, and these
+    // Hold every receiver in a Vec so no channel reports `Closed` — a
+    // dropped receiver now cancels the sequence, and these
     // requests must run to completion to produce their token budget).
     let mut receivers = Vec::new();
     for i in 0..num_requests {

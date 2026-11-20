@@ -908,7 +908,7 @@ fn test_compute_inv_freq_su_applies_boundary_and_factors() {
     }
 }
 
-/// Regression (RIL ISS-012): the rotation must match the standard `RoPE` /
+/// Regression: the rotation must match the standard `RoPE` /
 /// `HuggingFace` `apply_rotary_pos_emb` convention (Su et al. 2021), applied
 /// to pairs `(x1[i], x2[i])` where `x1` = first half, `x2` = second half:
 ///
@@ -949,7 +949,7 @@ fn test_apply_rope_matches_standard_rotation_convention() -> Result<()> {
         assert!(
             (got - want).abs() < 1e-5,
             "RoPE must match the standard rotation convention: got {got}, want {want} \
-             (full {v:?} vs {expected:?} — inverted signs => RIL ISS-012)"
+             (full {v:?} vs {expected:?} — inverted signs)"
         );
     }
     Ok(())

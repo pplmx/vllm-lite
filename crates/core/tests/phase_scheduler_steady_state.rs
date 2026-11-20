@@ -1,4 +1,4 @@
-//! Regression (RIL ISS-031): steady-state decode must not waste every other
+// Regression: steady-state decode must not waste every other
 //! step on an empty prefill batch.
 //!
 //! `PhaseScheduler::should_switch_to_prefill` used `decode_queue_len <
@@ -39,7 +39,7 @@ fn steady_state_decode_does_not_idle_steps() {
     assert_eq!(
         empty_steps, 0,
         "steady-state decode must not idle steps on empty prefill batches \
-         (got {empty_steps} empty steps) (RIL ISS-031)"
+         (got {empty_steps} empty steps)"
     );
     assert!(
         total_emitted >= 12,

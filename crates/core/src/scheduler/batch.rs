@@ -1,4 +1,5 @@
-//! `Batch` value type: the per-step plan handed to the model layer, with token ids, block ids, and per-sequence metadata.
+// ! `Batch` value type: the per-step plan handed to the model layer, with token ids, block ids, and
+// per-sequence metadata.
 //!
 //! Constructed by `BatchComposer` (`scheduler/batch_composer/`); the
 //! model layer's `forward` consumes it as-is.
@@ -119,7 +120,7 @@ impl crate::engine::Engine {
 
         let input_counts: Vec<usize> = batch.input_tokens.iter().map(std::vec::Vec::len).collect();
 
-        // RIL ISS-053: a mid-chunk prefill's predicted token is stale (the
+        // a mid-chunk prefill's predicted token is stale (the
         // real next prompt token is re-fed on the next chunk) — it must
         // reach neither the client response channel nor the step result.
         // Staleness is derived from the batch slice against the sequence's
@@ -148,7 +149,7 @@ impl crate::engine::Engine {
             &mut disconnected,
         );
 
-        // RIL ISS-110: cancel sequences whose response channel closed
+        // cancel sequences whose response channel closed
         // mid-step (client disconnect) so they don't burn the rest of their
         // `max_tokens` budget into a dead channel.
         self.cancel_on_closed_channels(&disconnected);
@@ -164,13 +165,13 @@ impl crate::engine::Engine {
     /// Send one sampled token to its sequence's response channel, watching
     /// for a full mailbox.
     ///
-    /// RIL ISS-074 / TASK-089: a `Full` channel means the consumer drains
+    /// a `Full` channel means the consumer drains
     /// slower than generation — the token is lost to the client stream.
     /// Pre-fix the `let _ = try_send(...)` ignored the error, so the gap was
     /// a permanent silent hole. Now it is logged AND counted so operators can
     /// detect the loss on `/metrics`.
     ///
-    /// RIL ISS-110: a `Closed` channel (receiver dropped — client gone) is
+    /// a `Closed` channel (receiver dropped — client gone) is
     /// the engine's ONLY disconnect signal on the non-streaming paths (they
     /// build no `CancelOnDrop` guard), so the sequence is recorded in
     /// `disconnected` and the caller cancels it — pre-fix it was a silent
@@ -209,7 +210,7 @@ impl crate::engine::Engine {
     /// the sequence was already finalized) the token is still returned.
     ///
     /// `stale[i] == true` marks a mid-chunk prefill whose predicted token is
-    /// NOT generated output (RIL ISS-053): it is neither sent to the channel
+    /// NOT generated output: it is neither sent to the channel
     /// nor included in the returned results, so the client stream, step
     /// results, and output-token metrics all see only real generated tokens.
     /// Send sampled tokens to each sequence's response channel and collect
@@ -217,11 +218,11 @@ impl crate::engine::Engine {
     /// the sequence was already finalized) the token is still returned.
     ///
     /// `stale[i] == true` marks a mid-chunk prefill whose predicted token is
-    /// NOT generated output (RIL ISS-053): it is neither sent to the channel
+    /// NOT generated output: it is neither sent to the channel
     /// nor included in the returned results, so the client stream, step
     /// results, and output-token metrics all see only real generated tokens.
     ///
-    /// RIL ISS-110: sequences whose channel returned `Closed` are appended
+    /// sequences whose channel returned `Closed` are appended
     /// to `disconnected` so the caller can cancel them (client disconnect).
     pub(crate) fn send_and_collect_results(
         &self,
@@ -255,7 +256,7 @@ impl crate::engine::Engine {
     /// `results` is the emitted per-sequence token list (stale mid-chunk
     /// prefill predictions already masked out) — its length is the number of
     /// tokens actually generated this step, which is what `tokens_total`
-    /// ("Total tokens generated") counts (RIL ISS-083). Pre-fix the
+    /// ("Total tokens generated") counts. Pre-fix the
     /// regular and speculative paths recorded the sum of *input* token
     /// lengths instead, so a prefill over-counted the metric by the full
     /// prompt length and the CUDA-graph path (which correctly counted
@@ -286,11 +287,11 @@ impl crate::engine::Engine {
         self.scheduler.clear_finished();
 
         if !batch.seq_ids.is_empty() {
-            // RIL ISS-083: count generated (output) tokens, not input tokens.
+            // count generated (output) tokens, not input tokens.
             self.scheduler
                 .metrics
                 .record_tokens(u64::try_from(results.len()).unwrap_or(0));
-            // RIL ISS-095: split the step into prefill (input positions
+            // split the step into prefill (input positions
             // processed) vs decode (1 token per decode seq) so the
             // prefill/decode throughput gauges are live, not pinned at 0.
             self.scheduler.metrics.record_batch_phase_tokens(batch);
@@ -331,7 +332,7 @@ impl crate::engine::Engine {
         } else {
             self.step_regular()
         };
-        // RIL ISS-045: a forward error propagates with `?` before
+        // a forward error propagates with `?` before
         // `update()` runs, leaving freshly-admitted Prefilling sequences
         // stranded in `running` (never re-scheduled, KV pinned, scheduler
         // spinning, client hang). Roll them back before surfacing the
@@ -345,8 +346,8 @@ impl crate::engine::Engine {
     }
 
     /// Record post-step observability so the `/metrics` snapshot reflects
-    /// current allocator state without a `GetMetrics` round-trip (RIL
-    /// ISS-100). `kv_cache_usage_percent` was pinned at 0.000 under a
+    /// current allocator state without a `GetMetrics` round-trip. `kv_cache_usage_percent` was
+    /// pinned at 0.000 under a
     /// /metrics-only scrape because the sole production writer
     /// (`record_kv_cache_usage`) lived inside the `EngineMessage::GetMetrics`
     /// arm of `run()` — the /metrics handler renders the snapshot directly.
@@ -355,8 +356,8 @@ impl crate::engine::Engine {
     /// speculative, and the CUDA-graph `step_with_graph`), on success and
     /// error alike — the allocator state is whatever the step left behind.
     ///
-    /// RIL ISS-120: `prefix_cache_nodes` had the SAME GetMetrics-only
-    /// writer (run.rs) and was omitted from the ISS-100 fix, so it pinned
+    /// `prefix_cache_nodes` had the SAME GetMetrics-only
+    /// writer (run.rs) and was omitted from the fix, so it pinned
     /// at 0 under a /metrics-/debug-metrics-only scrape. `RadixTree::len`
     /// is O(1) (a stored `entry_count` counter), so refreshing it every
     /// step is free too.

@@ -185,7 +185,7 @@ impl ModelBackend for CounterModel {
 
 /// `FakeModel` wrapper that records the `positions` passed to
 /// `forward_logits`. Used to verify the speculative verification path feeds
-/// the target model the TRUE sequence positions (RIL ISS-016), not a
+/// the target model the TRUE sequence positions, not a
 /// 0-based range.
 #[derive(Clone)]
 struct PositionRecordingModel {
@@ -271,7 +271,7 @@ impl ModelBackend for PositionRecordingModel {
     }
 }
 
-/// Regression (RIL ISS-016): the speculative verification forward pass must
+/// Regression: the speculative verification forward pass must
 /// feed the target model the TRUE sequence positions, not a 0-based range.
 /// `RoPE` uses absolute positions, so verifying drafts at positions [0,1,...]
 /// for a sequence already at decode position P>0 corrupts the target logits
@@ -306,13 +306,13 @@ fn test_verification_uses_true_sequence_positions() {
         for &pos in positions {
             assert!(
                 pos >= 2,
-                "verification must use true sequence positions (>= 2 after a                  2-token prefill); got {pos} in {positions:?} — 0-based positions                  corrupt RoPE (RIL ISS-016)"
+                "verification must use true sequence positions (>= 2 after a 2-token prefill); got {pos} in {positions:?} — 0-based positions corrupt RoPE"
             );
         }
     }
 }
 
-/// Regression (RIL ISS-017): the legacy BATCHED draft path must advance draft
+/// Regression: the legacy BATCHED draft path must advance draft
 /// positions as `last_pos + 1` from the true base, not push
 /// `current_positions.len()`. For a sequence decoding at position P the draft
 /// positions must be P, P+1, P+2, ... so the draft model applies `RoPE` at the
@@ -347,7 +347,7 @@ fn test_batched_draft_positions_advance_from_base() {
         for &pos in positions {
             assert!(
                 pos >= 2,
-                "batched draft positions must advance from the true decode base                  (>= 2 after a 2-token prefill); got {pos} in {positions:?} —                  positions.len() instead of last_pos+1 (RIL ISS-017)"
+                "batched draft positions must advance from the true decode base (>= 2 after a 2-token prefill); got {pos} in {positions:?} — positions.len instead of last_pos+1"
             );
         }
     }
@@ -388,13 +388,13 @@ fn test_warmup_draft_kv_invokes_draft_per_sequence() {
     );
 }
 
-/// RIL ISS-084: speculative metrics must report actual draft acceptance.
+/// speculative metrics must report actual draft acceptance.
 /// `speculative_acceptance_rate` must be accepted/drafted (all drafts
 /// accepted -> 1.0; the pre-fix draft/(draft+accepted) formula scored a
 /// perfect draft model 0.5 — an inverted metric where a worse draft model
 /// reports *higher* acceptance) and must have a live production recorder
 /// (pre-fix it was never written and stayed 0). The duplicated
-/// `speculative_efficiency` gauge is absent (RIL ISS-108).
+/// `speculative_efficiency` gauge is absent.
 #[test]
 fn test_speculative_metrics_all_drafts_accepted() {
     let target = FakeModel::new(42);
@@ -410,7 +410,7 @@ fn test_speculative_metrics_all_drafts_accepted() {
     let _ = engine.step().unwrap();
     let _ = engine.step().unwrap();
 
-    // RIL ISS-108: the accepted/drafted ratio has a single wire name —
+    // the accepted/drafted ratio has a single wire name —
     // `speculative_acceptance_rate` (the duplicate `speculative_efficiency`
     // gauge was removed; it was fed the identical value).
     // Gauges are fixed-point ratios × 100_000; accepted/drafted = 1.0.
@@ -425,7 +425,7 @@ fn test_speculative_metrics_all_drafts_accepted() {
     );
 }
 
-/// RIL ISS-110: the speculative emission path must cancel a sequence whose
+/// the speculative emission path must cancel a sequence whose
 /// response channel closed (client disconnect) instead of silently generating
 /// into the closed channel to `max_tokens` — same contract as the regular
 /// step's `try_send_token` (dispatch.rs `emit_verified_tokens` formerly
@@ -468,7 +468,7 @@ fn test_speculative_cancels_sequence_on_closed_response_channel() {
     );
 }
 
-/// RIL ISS-084: with every draft rejected, both speculative gauges must be 0 —
+/// with every draft rejected, both speculative gauges must be 0 —
 /// an inverted efficiency formula (draft/(draft+0) = 1.0) would falsely report
 /// "perfect efficiency" for a draft model that is never accepted.
 #[test]
@@ -635,9 +635,9 @@ fn test_speculative_step_produces_output() {
     assert_eq!(received.map(|s| s.token), Some(42));
 }
 
-/// Regression (RIL TASK-120): the speculative emission path
+/// Regression: the speculative emission path
 /// must count a Full token response channel in `dropped_tokens_total`, the
-/// same ISS-074 observability contract the regular path enforces. Pre-fix
+/// same observability contract the regular path enforces. Pre-fix
 /// `emit_verified_tokens` did `let _ = tx.try_send(...)` and swallowed
 /// `TrySendError::Full`, so a speculative decode (which bursts several
 /// accepted tokens per step) silently lost tokens to a slow consumer with
@@ -677,7 +677,7 @@ fn test_speculative_full_response_channel_records_dropped_token() {
     assert!(
         engine.scheduler.metrics.get_counter("dropped_tokens_total") >= 1,
         "a Full try_send on the speculative path must be counted as a dropped \
-         token (RIL ISS-074 contract); pre-fix emit_verified_tokens ignored \
+         token; pre-fix emit_verified_tokens ignored\
          TrySendError::Full"
     );
 }
@@ -691,7 +691,7 @@ fn test_speculative_full_response_channel_records_dropped_token() {
 /// left the sequence stuck in `Prefilling` and re-fed already-generated
 /// draft tokens back into subsequent prefill batches — re-processing the
 /// whole prompt every step until `num_computed_tokens` slowly crossed
-/// `prompt_len` (RIL hypothesis HYP-006).
+/// `prompt_len` (hypothesis HYP-006).
 #[test]
 fn test_speculative_prefill_long_prompt_advances_to_decode() {
     let target = FakeModel::new(42);
@@ -736,8 +736,8 @@ fn test_speculative_prefill_long_prompt_advances_to_decode() {
 /// single `seq_ids`/`sampled` vector but passes per-sequence `input_counts` —
 /// `scheduler.update` zips the three together, so the count vector truncates
 /// the loop to one iteration per sequence and every token after the first is
-/// streamed to the client without ever being recorded in the sequence (RIL
-/// hypothesis HYP-006).
+/// streamed to the client without ever being recorded in the sequence
+/// (hypothesis HYP-006).
 #[test]
 fn test_speculative_all_accepted_folds_every_token_into_sequence() {
     let target = FakeModel::new(42);
@@ -771,13 +771,13 @@ fn test_speculative_all_accepted_folds_every_token_into_sequence() {
 /// blocks or rewind `num_computed_tokens`.
 ///
 /// The verifier writes the draft KV into blocks pre-allocated for the
-/// verification span (RIL ISS-026 fix); the rejected drafts' KV simply sits
+/// verification span (fix); the rejected drafts' KV simply sits
 /// beyond `num_computed_tokens` and is never read. Calling `memory_rollback`
 /// on a prefill batch instead runs its block math against the pre-step
 /// `num_computed_tokens` — for a resumed prefill (start > 0) that frees the
 /// last computed-prefix block (possibly the prefix-cache matched block) and
 /// rewinds the count, so the next chunk never recomputes the freed region
-/// and the sequence reads garbage KV (RIL hypothesis HYP-008).
+/// and the sequence reads garbage KV (hypothesis HYP-008).
 #[test]
 fn test_speculative_resumed_prefill_rollback_does_not_release_prefix_blocks() {
     let target = FakeModel::new(42);
@@ -1255,7 +1255,7 @@ fn verifier_prefill_accepts_drafts_at_position_after_prompt() {
     );
 }
 
-// RIL ISS-057: a chunked prefill (prompt > max_num_batched_tokens) running
+// a chunked prefill (prompt > max_num_batched_tokens) running
 // in SPECULATIVE mode must not stream its mid-chunk "predicted next prompt
 // token" to the client. `step_speculative_inner` processes prefill chunks
 // too, and because drafts are generated even for a prefill entry (from the
@@ -1309,7 +1309,7 @@ fn speculative_chunked_prefill_never_streams_stale_midchunk_predictions() {
          no stale mid-chunk prefill predictions (got {received})"
     );
 
-    // RIL ISS-163: `tokens_total` must agree with the client stream — count
+    // `tokens_total` must agree with the client stream — count
     // only REAL generated output, not stale mid-chunk prefill predictions.
     // The regular path (`send_and_collect_results`, batch.rs) `continue`s
     // on stale so its `results.len()` excludes them, and the CUDA-graph
@@ -1447,7 +1447,7 @@ impl ModelBackend for RecordingModel {
     }
 }
 
-// RIL ISS-059: a chunked prefill running in SPECULATIVE mode must advance
+// a chunked prefill running in SPECULATIVE mode must advance
 // its computed frontier by the REAL chunk only — never past real prompt
 // tokens. Drafts ARE generated for prefill entries (drafts.rs is not
 // phase-gated), and the verifier accepts a draft when it equals the target
@@ -1455,7 +1455,7 @@ impl ModelBackend for RecordingModel {
 // position. `update_speculative` advanced `num_computed_tokens` by
 // `input_len + accepted`, so a mid-chunk prefill overshot into its
 // remaining prompt: verification wrote guessed-content KV at those
-// positions and `requeue_partial_prefills` (ISS-054) preserved the
+// positions and `requeue_partial_prefills` preserved the
 // inflated frontier, so the NEXT chunk composed from
 // `num_computed_tokens` and the real prompt tokens in between were NEVER
 // fed — the model attends to guesses, not the user's prompt (self-spec +
@@ -1538,7 +1538,7 @@ fn speculative_chunked_prefill_feeds_every_real_prompt_position() {
         missing.is_empty(),
         "speculative chunked prefill must feed every real prompt position exactly once; \
          missing positions {missing:?} (chunk starts {calls:?}) — the frontier overshot \
-         real prompt tokens via accepted drafts (ISS-059)"
+         real prompt tokens via accepted drafts"
     );
 
     let mut received = 0usize;

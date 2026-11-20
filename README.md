@@ -223,7 +223,7 @@ vLLM-lite 提供 5 级结构化日志，支持控制台美化输出和 JSON 文�
 {"timestamp":"2026-04-19T22:30:06.123Z","level":"INFO","target":"vllm_server::openai","message":"Request completed","request_id":"req_ABC123","output_tokens":42,"duration_ms":1234}
 ```
 
-> **优先级说明（RIL ISS-171）**：`RUST_LOG` 环境变量**覆盖** `--log-level` / `VLLM_LOG_LEVEL` / YAML `server.log_level`——它是 `tracing` 的全局过滤器,凡是设置了它就生效。上面"启用 debug 日志"其实是"用 `RUST_LOG` 强制开启 debug 日志";要按配置控制级别,不要导出 `RUST_LOG`,改用 `--log-level debug`(或 `VLLM_LOG_LEVEL` / YAML)。`/debug/trace` 端点报告当前实际生效的级别。
+> **优先级说明**：`RUST_LOG` 环境变量**覆盖** `--log-level` / `VLLM_LOG_LEVEL` / YAML `server.log_level`——它是 `tracing` 的全局过滤器,凡是设置了它就生效。上面"启用 debug 日志"其实是"用 `RUST_LOG` 强制开启 debug 日志";要按配置控制级别,不要导出 `RUST_LOG`,改用 `--log-level debug`(或 `VLLM_LOG_LEVEL` / YAML)。`/debug/trace` 端点报告当前实际生效的级别。
 
 **启用不同日志级别**：
 
@@ -327,27 +327,27 @@ export VLLM_API_KEY=your-secret-key
 
 <div align="center">
 
-| 变量                                 | 描述               | 默认值    | 说明                                                                                                  |
-| ------------------------------------ | ------------------ | --------- | ----------------------------------------------------------------------------------------------------- |
-| `VLLM_MODEL`                         | 模型目录路径       | -（必需） | 含 tokenizer.json 与权重；等价 `--model`                                                              |
-| `VLLM_HOST`                          | 服务 host          | `0.0.0.0` | 监听地址                                                                                              |
-| `VLLM_PORT`                          | 服务端口           | `8000`    | API 端口                                                                                              |
-| `VLLM_LOG_LEVEL`                     | 日志级别           | `info`    | trace/debug/info/warn/error                                                                           |
-| `VLLM_LOG_DIR`                       | 日志输出目录       | -         | 设置后启用 JSON 文件日志                                                                              |
-| `VLLM_KV_BLOCKS`                     | KV Block 数量      | `1024`    | 1-65536，显存相关                                                                                     |
-| `VLLM_KV_QUANTIZATION`               | KV Cache 量化开关  | `false`   | 启用 KV Cache 量化                                                                                    |
-| `VLLM_MAX_DRAFT_TOKENS`              | 最大投机 Token     | `8`       | 0-64，投机解码                                                                                        |
-| `VLLM_ADAPTIVE_SPECULATIVE`          | 自适应投机解码     | `true`    | 动态调整 draft 长度；默认 `true`（同 config），设 `false` 时退回普通投机解码                          |
-| `VLLM_TENSOR_PARALLEL_SIZE`          | 张量并行度         | `1`       | 1-64，GPU 数量                                                                                        |
-| `VLLM_MAX_BATCH_SIZE`                | 最大批大小         | `256`     | 1-8192                                                                                                |
-| `VLLM_MAX_WAITING_BATCHES`           | 最大等待批次       | `10`      | 1-100                                                                                                 |
-| `VLLM_MAX_MODEL_LEN`                 | 模型上下文长度     | -         | 覆盖 checkpoint 的 `max_position_embeddings`；模型无该字段时用于限制 `max_tokens` 上界（RIL ISS-044） |
-| `VLLM_ALLOW_STUB`                    | 允许加载 Stub 架构 | `false`   | 仅供开发/测试（StubArchitecture 不推理）                                                              |
-| `VLLM_API_KEY`                       | API 密钥           | -         | 可重复指定；认证必填                                                                                  |
-| `VLLM_API_KEYS_FILE`                 | API 密钥文件       | -         | 从文件加载密钥（与 `VLLM_API_KEY` 并用）                                                              |
-| `VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH` | 允许无认证公开访问 | `false`   | 仅限可信内网；否则启动时给出安全警告                                                                  |
-| `VLLM_CONFIG_PATH`                   | YAML 配置路径      | -         | 未传 `--config` 时使用；两者都设置时 `--config` 优先并告警（RIL ISS-169，CLI > env > YAML）           |
-| `VLLM_OTLP_ENDPOINT`                 | OTLP 收集器端点    | -         | 需 `opentelemetry` feature（如 `http://localhost:4317`）                                              |
+| 变量                                 | 描述               | 默认值    | 说明                                                                                   |
+| ------------------------------------ | ------------------ | --------- | -------------------------------------------------------------------------------------- |
+| `VLLM_MODEL`                         | 模型目录路径       | -（必需） | 含 tokenizer.json 与权重；等价 `--model`                                               |
+| `VLLM_HOST`                          | 服务 host          | `0.0.0.0` | 监听地址                                                                               |
+| `VLLM_PORT`                          | 服务端口           | `8000`    | API 端口                                                                               |
+| `VLLM_LOG_LEVEL`                     | 日志级别           | `info`    | trace/debug/info/warn/error                                                            |
+| `VLLM_LOG_DIR`                       | 日志输出目录       | -         | 设置后启用 JSON 文件日志                                                               |
+| `VLLM_KV_BLOCKS`                     | KV Block 数量      | `1024`    | 1-65536，显存相关                                                                      |
+| `VLLM_KV_QUANTIZATION`               | KV Cache 量化开关  | `false`   | 启用 KV Cache 量化                                                                     |
+| `VLLM_MAX_DRAFT_TOKENS`              | 最大投机 Token     | `8`       | 0-64，投机解码                                                                         |
+| `VLLM_ADAPTIVE_SPECULATIVE`          | 自适应投机解码     | `true`    | 动态调整 draft 长度；默认 `true`（同 config），设 `false` 时退回普通投机解码           |
+| `VLLM_TENSOR_PARALLEL_SIZE`          | 张量并行度         | `1`       | 1-64，GPU 数量                                                                         |
+| `VLLM_MAX_BATCH_SIZE`                | 最大批大小         | `256`     | 1-8192                                                                                 |
+| `VLLM_MAX_WAITING_BATCHES`           | 最大等待批次       | `10`      | 1-100                                                                                  |
+| `VLLM_MAX_MODEL_LEN`                 | 模型上下文长度     | -         | 覆盖 checkpoint 的 `max_position_embeddings`；模型无该字段时用于限制 `max_tokens` 上界 |
+| `VLLM_ALLOW_STUB`                    | 允许加载 Stub 架构 | `false`   | 仅供开发/测试（StubArchitecture 不推理）                                               |
+| `VLLM_API_KEY`                       | API 密钥           | -         | 可重复指定；认证必填                                                                   |
+| `VLLM_API_KEYS_FILE`                 | API 密钥文件       | -         | 从文件加载密钥（与 `VLLM_API_KEY` 并用）                                               |
+| `VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH` | 允许无认证公开访问 | `false`   | 仅限可信内网；否则启动时给出安全警告                                                   |
+| `VLLM_CONFIG_PATH`                   | YAML 配置路径      | -         | 未传 `--config` 时使用；两者都设置时 `--config` 优先并告警（CLI > env > YAML）         |
+| `VLLM_OTLP_ENDPOINT`                 | OTLP 收集器端点    | -         | 需 `opentelemetry` feature（如 `http://localhost:4317`）                               |
 
 </div>
 
@@ -381,11 +381,11 @@ auth:
       rate_limit_window_secs: 30
 ```
 
-> **配置优先级（RIL ISS-081）**：显式 CLI 标志 / 环境变量 > `--config`/`VLLM_CONFIG_PATH`
+> **配置优先级**：显式 CLI 标志 / 环境变量 > `--config`/`VLLM_CONFIG_PATH`
 > YAML 文件 > 内置默认值（`AppConfig::default()`）。YAML 中未指定的字段保持内置默认；
 > 当某个值同时出现在 YAML 与 CLI/env 中时，CLI/env 胜出。
 >
-> **完整示例（RIL ISS-116）**：覆盖 `AppConfig` 全部段（含 CORS、多节点、
+> **完整示例**：覆盖 `AppConfig` 全部段（含 CORS、多节点、
 > `engine_mailbox_capacity`、`draft_specs`、每 key 限流覆盖、OTLP）的带注释
 > 参考配置见仓库根目录 [`config/example.yaml`](config/example.yaml)，可直接以
 > `--config config/example.yaml` 启动；该文件由 CI 验证（`AppConfig::validate()`），
@@ -399,17 +399,17 @@ auth:
 > 粘贴此类片段会被静默忽略。需要调整时请使用 Rust API
 > （`SchedulerConfig::builder().with_*()`，见下文代码示例）。
 
-| 参数                                | 默认值      | 说明                                                            |
-| ----------------------------------- | ----------- | --------------------------------------------------------------- |
-| `max_num_seqs`                      | `256`       | 单批最大序列数                                                  |
-| `max_num_batched_tokens`            | `4096`      | 单批最大 Token 数（prompt+生成）                                |
-| `max_consecutive_decode`            | `10`        | 强制插入 prefill 前的连续 decode 轮                             |
-| `enable_pd_separation`              | `true`      | Prefill/Decode 分相调度（引擎当前恒为纯相批次，见 RIL ISS-043） |
-| `prefill_chunk_size`                | `512`       | 单次 prefill 的最大 prompt token（未生效，见 RIL ISS-043）      |
-| `decode_preference_ratio`           | `0.7`       | 混合批次中 decode 权重（未生效，见 RIL ISS-043）                |
-| `enable_priority_scheduling`        | `false`     | 优先级调度（已生效：构造引擎时安装 PriorityPolicy）             |
-| `enable_dynamic_batching`           | `true`      | 动态批处理（未生效，见 RIL ISS-043）                            |
-| `min_batch_size` / `max_batch_size` | `1` / `256` | 动态批处理的批大小边界                                          |
+| 参数                                | 默认值      | 说明                                                |
+| ----------------------------------- | ----------- | --------------------------------------------------- |
+| `max_num_seqs`                      | `256`       | 单批最大序列数                                      |
+| `max_num_batched_tokens`            | `4096`      | 单批最大 Token 数（prompt+生成）                    |
+| `max_consecutive_decode`            | `10`        | 强制插入 prefill 前的连续 decode 轮                 |
+| `enable_pd_separation`              | `true`      | Prefill/Decode 分相调度（引擎当前恒为纯相批次）     |
+| `prefill_chunk_size`                | `512`       | 单次 prefill 的最大 prompt token（未生效）          |
+| `decode_preference_ratio`           | `0.7`       | 混合批次中 decode 权重（未生效）                    |
+| `enable_priority_scheduling`        | `false`     | 优先级调度（已生效：构造引擎时安装 PriorityPolicy） |
+| `enable_dynamic_batching`           | `true`      | 动态批处理（未生效）                                |
+| `min_batch_size` / `max_batch_size` | `1` / `256` | 动态批处理的批大小边界                              |
 
 调度策略（FCFS / SJF / Priority）通过 Rust API 选择：
 `engine.set_policy(Box::new(SjfPolicy::new(0.3, 0.7)))`，见下方代码示例。

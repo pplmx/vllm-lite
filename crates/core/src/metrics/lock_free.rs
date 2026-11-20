@@ -7,21 +7,23 @@
 //! `snapshot()`, which **clones** the windows without draining them, so
 //! any number of consumers (the `/metrics` scrape, the engine's
 //! `GetMetrics` round-trip, a future OTLP exporter) all observe the same
-//! samples (RIL ISS-107).
+// samples.
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Snapshot of every observable engine metric at a single point in time. Fields cover throughput (tokens/sec), latency percentiles, scheduler queue depth, and KV-cache occupancy. Cloned and serialized on every metrics export.
+/// Snapshot of every observable engine metric at a single point in time. Fields cover throughput
+/// (tokens/sec), latency percentiles, scheduler queue depth, and KV-cache occupancy. Cloned and
+/// serialized on every metrics export.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct MetricsSnapshot {
     /// Cumulative tokens generated since process start.
     pub tokens_total: u64,
     /// Cumulative requests processed since process start.
     pub requests_total: u64,
-    // RIL ISS-134: these measure ONE engine scheduler step (record_latency
+    // these measure ONE engine scheduler step (record_latency
     // fires once per step from batch.rs/dispatch.rs/graph_step.rs), NOT
     // end-to-end request latency — labeled honestly to stop operators
     // misreading step time as request time.
@@ -58,7 +60,9 @@ pub struct MetricsSnapshot {
 }
 
 #[derive(Debug)]
-/// Lock-free metrics recorder. Producers update per-counter atomics; consumers snapshot a [`MetricsSnapshot`] via `snapshot()`. Used in the hot path where mutex contention would show up in latency.
+/// Lock-free metrics recorder. Producers update per-counter atomics; consumers snapshot a
+/// [`MetricsSnapshot`] via `snapshot()`. Used in the hot path where mutex contention would show up
+/// in latency.
 pub struct LockFreeMetrics {
     /// Cumulative tokens generated.
     tokens_total: Arc<AtomicU64>,
@@ -201,7 +205,7 @@ impl LockFreeMetrics {
     }
 
     /// Read atomics and the bounded rolling windows into a
-    /// [`MetricsSnapshot`]. **Non-destructive** (RIL ISS-107): the
+    /// [`MetricsSnapshot`]. **Non-destructive**: the
     /// latency / batch-size / wait-time windows are cloned, not drained,
     /// so any number of concurrent consumers observe the same samples —
     /// pre-fix `try_recv` drained the rings, so a second reader (a
@@ -328,7 +332,8 @@ impl Default for LockFreeMetrics {
     }
 }
 
-/// Trait implemented by every metrics backend (lock-free, enhanced, prometheus). Provides `snapshot()` and `reset()` for periodic export.
+/// Trait implemented by every metrics backend (lock-free, enhanced, prometheus). Provides
+/// `snapshot()` and `reset()` for periodic export.
 pub type MetricsCollector = LockFreeMetrics;
 
 impl LockFreeMetrics {
@@ -336,7 +341,7 @@ impl LockFreeMetrics {
     /// Wired into [`crate::engine::Engine::add_request`] (admitted
     /// requests only) so `requests_in_flight` is a live gauge instead of
     /// the pinned 0 it was stuck at when the only writers lived under
-    /// `#[cfg(test)]` (RIL ISS-082).
+    /// `#[cfg(test)]`.
     pub(crate) fn record_request_start(&self) {
         self.requests_in_flight.fetch_add(1, Ordering::Relaxed);
     }
@@ -345,7 +350,7 @@ impl LockFreeMetrics {
     /// **saturating at 0**. Pre-fix this was a raw `fetch_sub(1)`, so an
     /// unbalanced end (a sequence finalized twice, or cancelled without a
     /// recorded start) wrapped to `u64::MAX` (~1.8e19) and poisoned
-    /// dashboards (RIL ISS-082). Paired with
+    /// dashboards. Paired with
     /// [`Self::record_request_start`] via `finalize_finished`.
     pub(crate) fn record_request_end(&self) {
         let _ = self
@@ -356,7 +361,7 @@ impl LockFreeMetrics {
     }
 
     /// Add `count` to the lifetime prefill-tokens counter — the basis for
-    /// the `prefill_throughput_tps` gauge (RIL ISS-095). Production callers
+    /// the `prefill_throughput_tps` gauge. Production callers
     /// go through `EnhancedMetricsCollector::record_batch_phase_tokens`,
     /// which reads a scheduler `Batch`'s phase flags and input-token
     /// lengths to split a step's work into prefill vs decode.
@@ -365,7 +370,7 @@ impl LockFreeMetrics {
     }
 
     /// Add `count` to the lifetime decode-tokens counter — the basis for
-    /// the `decode_throughput_tps` gauge (RIL ISS-095).
+    /// the `decode_throughput_tps` gauge.
     pub(crate) fn record_decode_tokens(&self, count: u64) {
         self.decode_tokens.fetch_add(count, Ordering::Relaxed);
     }
@@ -374,13 +379,13 @@ impl LockFreeMetrics {
     /// delay). Pushed into the bounded rolling window (oldest evicted at
     /// capacity); never blocks for a meaningful duration.
     ///
-    /// RIL TASK-119: production callers are the two scheduler batch builders
+    /// production callers are the two scheduler batch builders
     /// (`build_batch` and `build_batch_with_graph`/`select_sequences_for_phase`),
     /// which now measure each drained sequence's `arrival_time`→now elapsed
     /// via `RequestQueue::drain_by_phase` and forward it here — previously the
     /// only recorder lived under `#[cfg(test)]`, so
     /// `avg_scheduler_wait_time_ms` was pinned at 0 in production (the
-    /// ISS-095 documented-follow-up is now closed).
+    /// documented-follow-up is now closed).
     pub(crate) fn record_scheduler_wait_time(&self, ms: f64) {
         Self::push_sample(&self.scheduler_wait_window, self.window_capacity, ms);
     }

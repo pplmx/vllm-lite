@@ -131,7 +131,7 @@ impl MRoPE {
         // half, second half),
         //   x1' = x1·cos − x2·sin
         //   x2' = x2·cos + x1·sin
-        // RIL ISS-013: the second half was previously emitted UNCHANGED (`x_odd`),
+        // the second half was previously emitted UNCHANGED (`x_odd`),
         // applying only half the rotation — the relative-position property
         // requires both halves to rotate.
         let first_cos = x_even.broadcast_mul(&freq_cos)?;
@@ -291,7 +291,7 @@ mod tests {
         );
     }
 
-    /// Regression (RIL ISS-013): `apply_rope_section` must rotate BOTH halves
+    /// Regression: `apply_rope_section` must rotate BOTH halves
     /// of each section per the standard `RoPE` convention. Pre-fix the second
     /// half was emitted unchanged (`x2`), applying only half the rotation.
     /// A single size-4 section is identical to standard `RoPE`, so the output
@@ -322,7 +322,7 @@ mod tests {
             assert!(
                 (got - want).abs() < 1e-5,
                 "MRoPE must rotate both halves: got {v:?}, want {expected:?} \
-                 (unchanged second half => RIL ISS-013)"
+                 (unchanged second half)"
             );
         }
     }

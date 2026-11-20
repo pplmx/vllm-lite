@@ -377,7 +377,7 @@ fn test_priority_scheduling_selects_highest_priority_under_limit() {
 }
 
 /// The `enable_priority_scheduling` config flag ALONE (no manual
-/// `set_policy`) must install `PriorityPolicy` (RIL ISS-043). The
+/// `set_policy`) must install `PriorityPolicy`. The
 /// constructor previously hardcoded `FcfsPolicy` and never read the flag,
 /// so the documented knob silently did nothing — the sibling tests above
 /// masked this by calling `set_policy` explicitly.

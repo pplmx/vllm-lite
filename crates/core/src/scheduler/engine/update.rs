@@ -82,7 +82,7 @@ impl SchedulerEngine {
     /// The regular [`Self::update`] signature assumes exactly one token per
     /// sequence; the speculative path emits several, and zipping a flattened
     /// token list against a per-sequence count vector silently truncates the
-    /// fold to one token per sequence (RIL ISS-025).
+    /// fold to one token per sequence.
     pub fn update_speculative(
         &mut self,
         seq_ids: &[SeqId],
@@ -100,7 +100,7 @@ impl SchedulerEngine {
             let Some(idx) = self.running.iter().position(|s| s.id == seq_id) else {
                 continue;
             };
-            // RIL ISS-057 (speculative counterpart of ISS-053): advance the
+            // (speculative counterpart of): advance the
             // computed frontier first, then only fold/emit tokens for a
             // sequence that is NOT a mid-chunk prefill (one left `Prefilling`
             // after the advance predicted a stale next-prompt-token that is
@@ -215,7 +215,7 @@ impl SchedulerEngine {
         let Some(seq) = self.running.get_mut(idx) else {
             return;
         };
-        // RIL ISS-051: only a completed-prefill (`Decoding`) sequence can
+        // only a completed-prefill (`Decoding`) sequence can
         // finish via `max_tokens`. A `Prefilling` sequence mid-chunk has
         // produced no output tokens yet — its per-chunk predicted token is
         // stale and trimmed on requeue, so checking here would "finish" it
@@ -255,7 +255,7 @@ impl SchedulerEngine {
             // replaced blocks. Release it so refcounts match live
             // owners — without this, every repeat completion inflated
             // the count, making the blocks unevictable and immune to
-            // drain (RIL ISS-003). For a same-block overwrite this
+            // drain. For a same-block overwrite this
             // nets to zero against the `record_blocks` above.
             if let Some(stale) = replaced {
                 self.memory.release_blocks(stale.as_ref());
@@ -268,7 +268,7 @@ impl SchedulerEngine {
     fn update_running_sequence(&mut self, idx: usize, token: u32, input_count: usize) {
         // Update status based on progress
         self.advance_computed_tokens(idx, input_count);
-        // RIL ISS-053: a sequence left `Prefilling` after the advance is a
+        // a sequence left `Prefilling` after the advance is a
         // mid-chunk prefill. Its predicted token is stale (re-derived on
         // the final chunk), so it must not be folded into `seq.tokens`,
         // dispatched as a `Decoding` observer event, or allocated a KV
@@ -286,7 +286,7 @@ impl SchedulerEngine {
     }
 
     /// Requeue sequences left in `Prefilling` after a successful step with
-    /// partial progress (RIL ISS-051 — chunked prefill).
+    /// partial progress (— chunked prefill).
     ///
     /// `build_batch` moves freshly-admitted prefills into `running` as
     /// `Prefilling`, and `advance_computed_tokens` transitions a sequence
@@ -294,7 +294,7 @@ impl SchedulerEngine {
     /// whose chunk was processed but whose prompt is not yet complete stays
     /// `Prefilling` — it must return to the waiting queue, NOT remain in
     /// `running` (which must not hold `Prefilling` across steps, the
-    /// ISS-045 invariant), so the next round resumes it via
+    /// invariant), so the next round resumes it via
     /// `forward_prefill_continue`. Its computed KV blocks and
     /// `num_computed_tokens` are preserved; only the chunk's stale predicted
     /// token (re-derived on the final chunk) is trimmed so `max_tokens`

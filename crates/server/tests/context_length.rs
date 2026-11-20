@@ -23,7 +23,7 @@
 //!    fail-open for bounded requests (stub models / GGUF
 //!    without the field still serve), but `max_tokens` above a
 //!    hard ceiling is rejected with `400 context_length_exceeded`
-//!    (RIL ISS-044) — previously such a request was admitted
+// — previously such a request was admitted
 //!    unconditionally and drove the engine into an unbounded
 //!    generation that held the scheduler thread and OOM'd.
 //!
@@ -222,7 +222,7 @@ async fn models_endpoint_exposes_max_model_len() {
         Some(4096),
         "configured max_model_len must surface on /v1/models"
     );
-    // RIL ISS-098: `created` must be the serving time (live epoch), not
+    // `created` must be the serving time (live epoch), not
     // the stale hardcoded 1_700_000_000 (2023-11-14) every deployment
     // previously reported for every model. 1_750_000_000 ~= 2025-06-25,
     // comfortably below any live serving time.
@@ -267,7 +267,7 @@ async fn models_endpoint_omits_max_model_len_when_unconfigured() {
 
 #[tokio::test]
 async fn chat_with_unconfigured_max_model_len_rejects_unbounded_max_tokens() {
-    // RIL ISS-044: with no max_position_embeddings and no --max-model-len,
+    // with no max_position_embeddings and no --max-model-len,
     // an unbounded max_tokens would drive the engine (single scheduler
     // thread) into a generation that never terminates — growing the
     // sequence's token list forever until OOM. It must now be rejected at

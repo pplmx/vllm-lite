@@ -73,7 +73,7 @@ impl Engine {
 
             if self.scheduler.has_pending() {
                 step_count += 1;
-                // RIL ISS-046: the engine thread is single-threaded; a panic
+                // the engine thread is single-threaded; a panic
                 // inside the target model's forward (a GPU kernel fault, an
                 // assert in an architecture impl, an aborted candle op) would
                 // otherwise unwind `run()` and kill the whole server. The
@@ -100,13 +100,13 @@ impl Engine {
                 });
                 if let Err(e) = result {
                     self.error_count += 1;
-                    // RIL ISS-090: surface the real error count to the
+                    // surface the real error count to the
                     // metrics collector — /debug/metrics `errors_total` was a
                     // fabricated `0` (collector fallback arm) before this.
                     self.scheduler.metrics.record_engine_error();
                     self.last_error = Some(e.to_string());
                     error!(step = step_count, error = %e, "Engine step error");
-                    // ISS-045: a panic bypasses `step()`'s own recovery, so
+                    // a panic bypasses `step()`'s own recovery, so
                     // the step may have stranded Prefilling/Waiting sequences
                     // in `running` — release and re-queue them (idempotent —
                     // a no-op when `step` already cleaned up).
@@ -114,12 +114,12 @@ impl Engine {
                 } else {
                     // A successful step clears the error backoff marker so a
                     // transient failure doesn't leave the loop sleeping at
-                    // the max interval forever (RIL ISS-046).
+                    // the max interval forever.
                     self.last_error = None;
                 }
             }
 
-            // RIL ISS-046: a step that errored (caught panic, or a model
+            // a step that errored (caught panic, or a model
             // forward that now returns LockPoisoned after its mutex was
             // poisoned by the panic) must not be re-attempted at the 1 ms
             // busy interval forever — that would hot-loop a dead model.
@@ -161,7 +161,7 @@ impl Engine {
         if seq_id != 0
             && let Some(tx) = finish_reason_tx
         {
-            // RIL ISS-076 / TASK-090: only track the finish-reason sender for
+            // only track the finish-reason sender for
             // ADMITTED sequences. `add_request` rejects empty prompts by
             // returning 0; no sequence is ever id 0, so an insert under key 0
             // would never be removed by `finalize_finished` — a permanent
@@ -214,7 +214,7 @@ mod tests {
     use tokio::sync::mpsc;
     use vllm_testing::StubModel;
 
-    /// RIL ISS-076 / TASK-090: an admission-rejected request (empty prompt
+    /// an admission-rejected request (empty prompt
     /// -> `add_request` returns `seq_id` 0) must NOT leave an orphaned
     /// `finish_reason_tx` in the engine's map. Pre-fix `handle_add_request`
     /// inserted it at key 0 unconditionally, and no sequence is ever id 0,
@@ -241,7 +241,7 @@ mod tests {
         assert!(
             engine.finish_reason_txs.is_empty(),
             "a rejected admission must not leave an orphaned finish_reason_tx \
-             under key 0 (RIL ISS-076)"
+             under key 0"
         );
     }
 }

@@ -35,7 +35,7 @@ pub struct PagedKvCache {
     block_size: usize,
     device: Device,
     pub quantized: bool,
-    /// Per-block quantization scale: `scales[layer][block]` (RIL ISS-020).
+    /// Per-block quantization scale: `scales[layer][block]`.
     /// A single per-layer scale cannot represent per-block quantization —
     /// each block is quantized with its own max-derived scale.
     pub scales: Vec<Vec<f32>>,

@@ -1,4 +1,4 @@
-//! RIL ISS-088: bounded timeouts on distributed-KV gRPC calls.
+// bounded timeouts on distributed-KV gRPC calls.
 //!
 //! A peer that completes the HTTP/2 handshake but never answers a `fetch`
 //! request must not stall `DistributedKVCache::fetch_block` forever. Pre-fix,
@@ -77,7 +77,7 @@ async fn fetch_block_is_bounded_against_a_hanging_peer() {
 
     assert!(
         bounded.is_ok(),
-        "fetch_block must not hang on a peer that never answers (RIL ISS-088); \
+        "fetch_block must not hang on a peer that never answers;\
          the peer RPC / fan-out needs a deadline"
     );
     match bounded.unwrap() {

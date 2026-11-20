@@ -374,7 +374,7 @@ fn test_mqa_flash_attention_deterministic() {
     assert!(max_diff < 1e-6);
 }
 
-/// Regression (RIL ISS-010 / TASK-010): the GQA flash-path `expand_kv`
+/// Regression: the GQA flash-path `expand_kv`
 /// (layout `[batch, heads, seq, dim]`) must produce BLOCKED grouping along
 /// the head axis (axis 1), not tiled. Pre-fix it used `Tensor::repeat`,
 /// pairing query head `h` with the wrong KV head `h % num_kv_heads`.
@@ -389,11 +389,11 @@ fn test_flash_gqa_expand_kv_blocked_grouping() {
     assert_eq!(
         vals,
         vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
-        "flash GQA expand_kv must be blocked [K0x4, K1x4]; got {vals:?} (RIL ISS-010)"
+        "flash GQA expand_kv must be blocked [K0x4, K1x4]; got {vals:?}"
     );
 }
 
-/// Regression (RIL ISS-010 / TASK-010): the MQA flash-path `expand_kv`
+/// Regression: the MQA flash-path `expand_kv`
 /// must also be blocked. MQA = single KV head shared by all query heads.
 #[test]
 fn test_flash_mqa_expand_kv_blocked_grouping() {

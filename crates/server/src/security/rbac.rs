@@ -1,9 +1,10 @@
-//! Role-based access control middleware: `Role` enum, `Permission` enum, and the axum extractor that gates endpoints behind the configured role set.
+// ! Role-based access control middleware: `Role` enum, `Permission` enum, and the axum extractor
+// that gates endpoints behind the configured role set.
 //!
 //! Default policy: `admin` > `operator` > `user` > `anonymous`. Roles and
 //! endpoint→role mappings are configured in [`AppConfig`](crate::config::AppConfig).
 //!
-//! ## IMPORTANT — not enforced in production (RIL ISS-071 / DEC-049)
+// ## IMPORTANT — not enforced in production
 //!
 //! This middleware is **declared but never mounted**: `app::build_app` does
 //! not install it, `auth_middleware` only ever inserts `AuthenticatedUser`

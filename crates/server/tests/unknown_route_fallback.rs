@@ -1,4 +1,4 @@
-//! Router-level 404 fallback (RIL ISS-125).
+// Router-level 404 fallback.
 //!
 //! Before the fix, an unmatched path (a typo'd route, an SDK pointed at
 //! the wrong URL, or a `curl` miss) reached axum's default fallback —
@@ -64,7 +64,7 @@ async fn unmatched_path_returns_openai_error_envelope() {
 #[tokio::test]
 async fn known_route_still_dispatches_normally() {
     // The fallback must not shadow real routes: GET /v1/models still
-    // answers 200 with the model list (RIL ISS-118 envelope).
+    // answers 200 with the model list (envelope).
     let state = api_state(Architecture::Qwen3);
     let app = build_app(
         state,
@@ -92,10 +92,10 @@ async fn known_route_still_dispatches_normally() {
     assert_eq!(json["object"], "list");
 }
 
-// RIL ISS-145: a wrong HTTP verb on a known path (e.g. `POST /v1/models`,
+// a wrong HTTP verb on a known path (e.g. `POST /v1/models`,
 // `GET /v1/chat/completions`) previously reached axum's default
 // `405 Method Not Allowed` — a **plain-text** body like the pre-fix 404
-// (RIL ISS-125) — which breaks the `{error: {...}}` parsing every OpenAI
+// — which breaks the `{error: {...}}` parsing every OpenAI
 // SDK performs on non-2xx responses. The envelope must be returned with
 // the `405` status just like the 404 fallback.
 #[tokio::test]

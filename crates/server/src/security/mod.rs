@@ -1,6 +1,7 @@
-//! Public API surface of the security subsystem: re-exports the JWT, RBAC, audit, TLS, CORS, and size-limit modules under one namespace.
+// ! Public API surface of the security subsystem: re-exports the JWT, RBAC, audit, TLS, CORS, and
+// size-limit modules under one namespace.
 //!
-//! ## What is actually mounted (RIL ISS-071 / DEC-049)
+// ## What is actually mounted
 //!
 //! The request-path middlewares installed by `app::build_app` are: CORS,
 //! correlation-id, audit logging, the body-size limit, and — when API keys
@@ -16,7 +17,7 @@
 //! `/metrics` — they do not; only API-key verification does. Treat these
 //! modules as the designed-but-deferred RBAC/JWT milestone, not as active
 //! controls. See `docs/technical-due-diligence/production-readiness.md` §2
-//! and RIL DEC-049 for the deferral rationale.
+// and for the deferral rationale.
 /// Structured audit logging: in-memory ring buffer + `/debug/audit` export.
 pub mod audit;
 /// Audit-logging request-layer middleware.

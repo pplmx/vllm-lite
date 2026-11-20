@@ -14,12 +14,13 @@ use std::time::Duration;
 
 /// Aggregate deadline for one peer fan-out (`fetch_from_peers`). A peer that
 /// completed the handshake but never answers must not stall the fetch past
-/// this (RIL ISS-088); remaining in-flight peers are aborted and the caller
+/// this; remaining in-flight peers are aborted and the caller
 /// falls through to the local source.
 const PEER_FETCH_DEADLINE: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
-/// Cache for `DistributedKV`. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
+/// Cache for `DistributedKV`. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO).
+/// Thread-safe.
 pub struct DistributedKVCache {
     /// Cache configuration (capacity, eviction policy, peer URLs).
     config: CacheConfig,
@@ -69,7 +70,8 @@ enum CacheState {
     Invalid,
 }
 
-/// Telemetry snapshot for Cache: counters, gauges, and percentile latencies. Cloned and serialized on every metrics export.
+/// Telemetry snapshot for Cache: counters, gauges, and percentile latencies. Cloned and serialized
+/// on every metrics export.
 #[derive(Debug, Default, Clone)]
 pub struct CacheStats {
     /// Cumulative cache hits.
@@ -437,7 +439,7 @@ impl DistributedKVCache {
             });
         }
 
-        // RIL ISS-088: bound the whole fan-out. A peer that handshook but
+        // bound the whole fan-out. A peer that handshook but
         // never answers must not stall the fetch past `PEER_FETCH_DEADLINE`;
         // the remaining in-flight peers are aborted and the caller falls
         // through to the local-source fallback / final error.
@@ -575,7 +577,7 @@ impl DistributedKVCache {
         };
         handle.spawn(async move {
             for client in clients.iter() {
-                // RIL ISS-088: cap each broadcast RPC so a wedged peer's
+                // cap each broadcast RPC so a wedged peer's
                 // fire-and-forget task terminates instead of leaking forever.
                 match tokio::time::timeout(PEER_RPC_TIMEOUT, client.put(key, value_hash)).await {
                     Ok(Ok(())) => {}
@@ -617,7 +619,7 @@ impl DistributedKVCache {
         };
         handle.spawn(async move {
             for client in clients.iter() {
-                // RIL ISS-088: cap each broadcast RPC (see `broadcast_put`).
+                // cap each broadcast RPC (see `broadcast_put`).
                 match tokio::time::timeout(PEER_RPC_TIMEOUT, client.invalidate(key)).await {
                     Ok(Ok(())) => {}
                     Ok(Err(status)) => {

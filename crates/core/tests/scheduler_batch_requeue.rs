@@ -1,15 +1,15 @@
-//! `build_batch` admission regressions (RIL TASK-046, ISS-041/ISS-042).
+// `build_batch` admission regressions.
 //!
 //! Two failure modes guarded here:
-//! - **ISS-041** — `build_batch` drains *every* waiting prefill into `running`,
+//! ** ** — `build_batch` drains *every* waiting prefill into `running`,
 //!   but the composer only serves `max_batch_size` / breaks on the token
 //!   budget. Without the fix the un-composed overflow stays `Status::Prefilling`
 //!   in `running` forever (running is only re-included for `Decoding`), pinning
 //!   its pre-allocated KV blocks. The fix releases and re-queues it.
-//! - **ISS-042** — when `preallocate_kv_blocks` cannot obtain the full KV
+//! ** ** — when `preallocate_kv_blocks` cannot obtain the full KV
 //!   table (pool exhausted even after the preemption gate), the under-allocated
 //!   prefill was still admitted, so `write_prefill_kv` falls back to block 0 and
-//!   corrupts the cache (ISS-026/028 elsewhere). The fix re-queues such
+// corrupts the cache (elsewhere). The fix re-queues such
 //!   sequences instead of admitting them.
 
 use std::sync::Arc;

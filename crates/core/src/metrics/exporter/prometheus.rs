@@ -79,7 +79,7 @@ impl PrometheusExporter {
             self.collector.get_counter("dropped_tokens_total")
         );
 
-        // RIL ISS-133: engine step errors must surface on the PRIMARY
+        // engine step errors must surface on the PRIMARY
         // observability surface — pre-fix errors_total lived only on the
         // admin-gated /debug/metrics, so /metrics scrapes showed zero
         // step-error signal while the engine was silently failing steps.
@@ -150,7 +150,7 @@ impl PrometheusExporter {
         let rate = self.collector.get_gauge("speculative_acceptance_rate") as f64 / 100_000.0;
         let _ = write!(output, "speculative_acceptance_rate {rate:.3}\n");
 
-        // RIL ISS-108: the duplicated `speculative_efficiency` gauge (same
+        // the duplicated `speculative_efficiency` gauge (same
         // value, same HELP text) is intentionally NOT exported — the
         // accepted/drafted ratio has the single name
         // `speculative_acceptance_rate`.
@@ -200,7 +200,7 @@ impl PrometheusExporter {
         output.push_str("# TYPE tokens_total counter\n");
         let _ = write!(output, "tokens_total {}\n", snap.tokens_total);
 
-        // RIL ISS-134: honest HELP — the recorded value is ONE engine
+        // honest HELP — the recorded value is ONE engine
         // scheduler step (batch.rs/dispatch.rs/graph_step.rs call
         // record_latency once per step), NOT end-to-end request latency
         // or TTFT. Operators misread step time as request time.
@@ -339,7 +339,7 @@ mod tests {
         assert!(out.contains("kv_cache_usage_percent 0.000\n"));
     }
 
-    /// RIL ISS-108: the accepted/drafted ratio must appear exactly once on
+    /// the accepted/drafted ratio must appear exactly once on
     /// the wire — `speculative_acceptance_rate`. The duplicate
     /// `speculative_efficiency` gauge (same value, same HELP text) must not
     /// be emitted at all, so dashboards keyed on the duplicated name stop

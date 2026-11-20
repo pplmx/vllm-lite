@@ -214,7 +214,7 @@ impl DraftModelRegistry {
     }
 
     /// Notify every loaded draft backend that `seq_id` finished so it can
-    /// release per-sequence state (RIL ISS-034). Best-effort: poisoned locks
+    /// release per-sequence state. Best-effort: poisoned locks
     /// are skipped.
     ///
     /// Lock order: registry read lock → backend mutex, the same order the

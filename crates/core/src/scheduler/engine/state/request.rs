@@ -21,7 +21,7 @@ impl SchedulerEngine {
         self.add_request_inner(req, true)
     }
 
-    /// Add a request WITHOUT consulting the prefix cache (RIL ISS-038).
+    /// Add a request WITHOUT consulting the prefix cache.
     ///
     /// Stateful backends whose recurrent hidden state is not stored in the
     /// KV cache (Qwen3.5 hybrid GDN layers) cannot safely resume from a
@@ -90,7 +90,7 @@ impl SchedulerEngine {
             // it does for a freshly prefilled sequence. Leaving a
             // full hit in `Waiting` stalls it forever — the prefill
             // composer skips sequences with no new tokens, and decode
-            // batches only admit `Decoding` sequences (RIL ISS-005).
+            // batches only admit `Decoding` sequences.
             // Empty prompts never hit the cache and keep the normal
             // prefill path (a `Decoding` sequence with no tokens
             // would decode from a phantom token).
@@ -156,7 +156,7 @@ impl SchedulerEngine {
         &mut self,
         req: &Request,
     ) -> (Vec<u32>, Arc<Vec<vllm_traits::BlockId>>, usize) {
-        // RIL ISS-006: the hit-rate counters were wired to the metrics
+        // the hit-rate counters were wired to the metrics
         // collector but never recorded, so `prefix_cache_hit_rate()`
         // always reported 0. Count every lookup, then every hit.
         self.metrics.record_prefix_cache_request();

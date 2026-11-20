@@ -20,7 +20,7 @@ impl EnhancedMetricsCollector {
     }
 
     /// Split a scheduler `Batch` into prefill vs decode token counts and
-    /// record both (RIL ISS-095).
+    /// record both.
     ///
     /// **Prefill tokens** = Σ input-token lengths of the sequences in the
     /// prefill phase (the vLLM convention: "prefill throughput" counts the
@@ -62,7 +62,7 @@ impl EnhancedMetricsCollector {
     }
 
     /// Record a scheduler queue→admission wait sample in milliseconds
-    /// (RIL TASK-119). Called by the scheduler's batch builders for every
+    /// Called by the scheduler's batch builders for every
     /// sequence freshly drained from the request queue, so the exported
     /// `avg_scheduler_wait_time_ms` gauge reflects real admission delay.
     pub fn record_scheduler_wait_time(&self, ms: f64) {
@@ -109,7 +109,7 @@ impl EnhancedMetricsCollector {
         self.cuda_graph_misses.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// Increment the dropped-token counter (RIL ISS-074 / TASK-089).
+    /// Increment the dropped-token counter.
     ///
     /// Called when the engine's `try_send` of a sampled token into the
     /// bounded response channel returns `TrySendError::Full` — the token is
@@ -120,7 +120,7 @@ impl EnhancedMetricsCollector {
         self.dropped_tokens_total.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// Increment the engine step-error counter (RIL ISS-090).
+    /// Increment the engine step-error counter.
     ///
     /// Called from the run loop's single error site (where
     /// `Engine::error_count` is incremented), so `/debug/metrics`

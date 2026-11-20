@@ -1,4 +1,5 @@
-//! `OpenAI` legacy Completions endpoint: `POST /v1/completions`. Prompt-string in, completion string out.
+// ! `OpenAI` legacy Completions endpoint: `POST /v1/completions`. Prompt-string in, completion
+// string out.
 use axum::{
     Extension, Json,
     extract::State,
@@ -35,11 +36,11 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
 /// `OpenAI`'s streaming-completions contract requires every `choices[]`
 /// entry to carry a `text` field (even an empty string) so clients that
 /// concatenate chunk texts never hit a missing key. The token chunks all
-/// emit `text`; the finish events must too (RIL ISS-047).
+/// emit `text`; the finish events must too.
 fn parallel_finish_choice(index: usize, finish_reason: &str, text: &str) -> serde_json::Value {
     serde_json::json!({
         "index": index,
-        // RIL ISS-105: `text` carries a candidate's held-back tail (or "")
+        // `text` carries a candidate's held-back tail (or "")
         // so buffered partial bytes are not dropped at finish.
         "text": text,
         "finish_reason": finish_reason,
@@ -370,7 +371,7 @@ pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> O
 /// # Errors
 ///
 /// Returns `400 invalid_request_error` when EVERY stop string tokenizes
-/// to zero tokens (RIL ISS-164): the chat twin
+/// to zero tokens: the chat twin
 /// (`tokenize_chat_stop_sequences`) refuses the same input, and silently
 /// disabling a user's stop strings can emit output they explicitly asked
 /// to halt. Shared by all three completion spawn paths (single-shot,
@@ -448,7 +449,6 @@ fn tokenize_stop_sequences(
 /// cancel — adds significant complexity for a corner case).
 ///
 /// Resolve the model id reported on a `/v1/completions` response
-/// (RIL ISS-094).
 ///
 /// The legacy endpoint's `model` field is optional by design (see the
 /// [`CompletionRequest`] field doc), but a missing value must NOT echo
@@ -650,19 +650,19 @@ enum NParallelSseEvent {
 struct NParallelStreamingState {
     rx: mpsc::Receiver<NParallelSseEvent>,
     tokenizer: std::sync::Arc<vllm_model::tokenizer::Tokenizer>,
-    /// Model id echoed on every chunk (RIL ISS-122) — the non-streaming
+    /// Model id echoed on every chunk — the non-streaming
     /// response and `OpenAI` streaming chunks both carry it.
     model: String,
     /// One `created` epoch captured at stream start, stamped on every
-    /// chunk so they agree (RIL ISS-122).
+    /// chunk so they agree.
     created: i64,
-    /// One completion id per stream (RIL ISS-175) — mirrors `model` /
+    /// One completion id per stream — mirrors `model` /
     /// `created` so every chunk of this n > 1 response carries the same
     /// per-request `cmpl-<uuid>` instead of the old shared `"cmpl-stream"`
     /// constant, which made clients deduping/correlating by `id` collide
     /// across streams.
     id: String,
-    /// Per-candidate incremental UTF-8-safe stream decoders (RIL ISS-105).
+    /// Per-candidate incremental UTF-8-safe stream decoders.
     decoders: Vec<vllm_model::tokenizer::StreamingDecoder>,
     /// `finish_reasons[i]` = `Some(reason)` once candidate `i` has
     /// emitted its `Finished` event; `None` while still active.
@@ -1088,11 +1088,11 @@ async fn stream_n_parallel_completions(
     // (every candidate contributes its `index` + tokens across the
     // stream; final event carries `finish_reason` per index).
     let tokenizer = state.tokenizer.clone();
-    // RIL ISS-122: stamp one model + created per stream, shared by every
+    // stamp one model + created per stream, shared by every
     // chunk (the non-streaming response already echoes the model).
     let model = response_model(&req, &state);
     let created = crate::util::time::unix_now_secs();
-    // RIL ISS-175: per-request completion id (matches the non-streaming
+    // per-request completion id (matches the non-streaming
     // `cmpl-<uuid>` convention); the n > 1 candidates merge into one
     // response so a single id identifies the whole stream.
     let completion_id = format!("cmpl-{}", uuid::Uuid::new_v4());
@@ -1143,7 +1143,7 @@ async fn stream_n_parallel_completions(
                         let chunk = serde_json::json!({
                             "id": &state.id,
                             "object": "text_completion",
-                            // RIL ISS-122: carry model + created on every
+                            // carry model + created on every
                             // chunk (was missing → schema-invalid).
                             "model": &state.model,
                             "created": state.created,
@@ -1161,7 +1161,7 @@ async fn stream_n_parallel_completions(
                         // finish event or the consolidated final
                         // event (all N finish_reasons).
                         state.finish_reasons[index] = Some(finish_reason);
-                        // RIL ISS-105: flush this candidate's held-back
+                        // flush this candidate's held-back
                         // tail so it is not dropped at finish.
                         let tail = state.decoders[index].flush(&state.tokenizer);
                         let all_done = state.finish_reasons.iter().all(Option::is_some);
@@ -1199,7 +1199,7 @@ async fn stream_n_parallel_completions(
                                         vllm_traits::FinishReason::Stop
                                         | vllm_traits::FinishReason::Cancelled => "stop",
                                     };
-                                    // RIL ISS-121: the candidate that just
+                                    // the candidate that just
                                     // finalized (which made all_done true)
                                     // was ALREADY flushed into `tail` above —
                                     // `flush()` clears pending, so re-flushing
@@ -1217,7 +1217,7 @@ async fn stream_n_parallel_completions(
                             let chunk = serde_json::json!({
                                 "id": &state.id,
                                 "object": "text_completion",
-                                // RIL ISS-122: consolidated final chunk must
+                                // consolidated final chunk must
                                 // carry the same model + created.
                                 "model": &state.model,
                                 "created": state.created,
@@ -1240,7 +1240,7 @@ async fn stream_n_parallel_completions(
                             let chunk = serde_json::json!({
                                 "id": &state.id,
                                 "object": "text_completion",
-                                // RIL ISS-122: intermediate finish chunk too.
+                                // intermediate finish chunk too.
                                 "model": &state.model,
                                 "created": state.created,
                                 "choices": [parallel_finish_choice(index, reason_string, &tail)],
@@ -1266,7 +1266,7 @@ async fn stream_n_parallel_completions(
         },
     );
 
-    // RIL TASK: SSE keepalive — emit an empty comment every 15s of idle so
+    // SSE keepalive — emit an empty comment every 15s of idle so
     // proxies / load balancers with an inactivity timeout don't drop a
     // long-running stream between tokens (a multi-second prefill or a
     // reasoning-model pause produces no data events). axum's KeepAliveStream
@@ -1420,7 +1420,7 @@ async fn run_best_of(
         usage,
     );
 
-    // RIL ISS-155: completion lifecycle parity with chat's
+    // completion lifecycle parity with chat's
     // "Request completed" — `model` + output tokens so a best_of
     // completion is attributable in logs. The best_of path is
     // `run_best_of`, which has no shared timer, so latency is left to
@@ -1510,16 +1510,16 @@ pub async fn completions(
     // `validate_chat_request_fields`. Honest 400 > silent degradation.
     validate_completion_request_fields(&req)?;
 
-    // RIL ISS-152: never serve a request for a model that isn't loaded
+    // never serve a request for a model that isn't loaded
     // — a mismatched id previously ran the loaded model and echoed the
     // wrong id back with 200 (silent wrong-model; the completions
     // "echo verbatim" proxy convention was superseded by strict
-    // conformance — see DEC-059). `None` stays the legacy server-default
+    // conformance. `None` stays the legacy server-default
     // path (fills the loaded model); strict only when the tokenizer can
     // name the loaded model.
     validate_model_conformance(req.model.as_deref(), state.tokenizer.model_name())?;
 
-    // RIL ISS-139: whitespace-only input parity — embeddings (and, in this
+    // whitespace-only input parity — embeddings (and, in this
     // batch, chat + batch) reject whitespace-only input; a blank prompt
     // would otherwise encode to a degenerate zero-token prefill.
     if req.prompt.trim().is_empty() {
@@ -1542,7 +1542,7 @@ pub async fn completions(
     let prompt_tokens_len = prompt_tokens.len();
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
 
-    // RIL ISS-155: log every `/v1/completions` request start with the
+    // log every `/v1/completions` request start with the
     // same structured fields as the chat handler — `model` (the most
     // important field for attributing output), the correlation id, and
     // the prompt-token count. Pre-fix the legacy endpoint had ZERO
@@ -1753,11 +1753,11 @@ pub async fn completions(
         let prompt_text = prompt.clone();
         let echo_flag = req.echo;
         let suffix_text = req.suffix.clone();
-        // RIL ISS-122: stamp one model + created per stream, shared by
+        // stamp one model + created per stream, shared by
         // every chunk (the non-streaming response already echoes the model).
         let model = response_model(&req, &state);
         let created = crate::util::time::unix_now_secs();
-        // RIL ISS-175: one `cmpl-<uuid>` per stream (was the shared
+        // one `cmpl-<uuid>` per stream (was the shared
         // `"cmpl-stream"` constant → clients deduping/correlating by id
         // collided across streams). Cloned inside the closure like `model`
         // so every chunk of this completion carries the same id.
@@ -1769,7 +1769,7 @@ pub async fn completions(
                 Some(finish_reason_rx),
                 Terminal::Streaming,
                 false, // first_chunk_sent
-                // RIL ISS-105: incremental UTF-8-safe decoder for this stream.
+                // incremental UTF-8-safe decoder for this stream.
                 vllm_model::tokenizer::StreamingDecoder::new(),
             ),
             move |(
@@ -1807,7 +1807,7 @@ pub async fn completions(
                             if let Some(sampled) = rx.recv().await {
                                 let text = decoder.push(&tokenizer, sampled.token);
                                 if should_skip_token_text(&tokenizer, &text) {
-                                    // RIL ISS-035: emit a well-formed chunk
+                                    // emit a well-formed chunk
                                     // with empty text instead of a bare
                                     // `data: ` SSE event (the n>1 path emits
                                     // `{"text": ""}`; strict OpenAI clients
@@ -1815,7 +1815,7 @@ pub async fn completions(
                                     let chunk = serde_json::json!({
                                         "id": completion_id.clone(),
                                         "object": "text_completion",
-                                        // RIL ISS-122: carry model + created on every chunk (was missing).
+                                        // carry model + created on every chunk (was missing).
                                         "model": &model,
                                         "created": created,
                                         "choices": [{
@@ -1855,7 +1855,7 @@ pub async fn completions(
                                 let chunk = serde_json::json!({
                                     "id": completion_id.clone(),
                                     "object": "text_completion",
-                                    // RIL ISS-122: carry model + created on every chunk (was missing).
+                                    // carry model + created on every chunk (was missing).
                                     "model": &model,
                                     "created": created,
                                     "choices": [{
@@ -1876,7 +1876,7 @@ pub async fn completions(
                                     ),
                                 ))
                             } else {
-                                // RIL ISS-105: flush any held-back bytes
+                                // flush any held-back bytes
                                 // (a partial char) before the finish chunk
                                 // so they are not dropped at channel close.
                                 let tail = decoder.flush(&tokenizer);
@@ -1884,7 +1884,7 @@ pub async fn completions(
                                     let tail_chunk = serde_json::json!({
                                         "id": completion_id.clone(),
                                         "object": "text_completion",
-                                        // RIL ISS-122: carry model + created on every chunk (was missing).
+                                        // carry model + created on every chunk (was missing).
                                         "model": &model,
                                         "created": created,
                                         "choices": [{
@@ -1930,7 +1930,7 @@ pub async fn completions(
                                 let chunk = serde_json::json!({
                                     "id": completion_id.clone(),
                                     "object": "text_completion",
-                                    // RIL ISS-122: carry model + created on every chunk (was missing).
+                                    // carry model + created on every chunk (was missing).
                                     "model": &model,
                                     "created": created,
                                     "choices": [{
@@ -2015,7 +2015,7 @@ pub async fn completions(
         usage,
     );
 
-    // RIL ISS-155: single-shot non-streaming completion lifecycle log
+    // single-shot non-streaming completion lifecycle log
     // (parity with chat's "Request completed").
     tracing::info!(
         request_id = %correlation_id.0,

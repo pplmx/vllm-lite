@@ -164,7 +164,7 @@ fn test_prefill_decode_parity() {
     );
 }
 
-/// Regression (RIL ISS-010 family): `repeat_kv_heads` must use **blocked**
+/// Regression (family): `repeat_kv_heads` must use **blocked**
 /// grouping (repeat-interleave), matching `HuggingFace`'s canonical
 /// `repeat_kv`. V head `v` shares K/Q head `v / group`; the tiled
 /// `Tensor::repeat` instead pairs V head `v` with K/Q head
@@ -180,6 +180,6 @@ fn test_repeat_kv_heads_blocked_grouping() {
     assert_eq!(
         vals,
         vec![0.0, 0.0, 1.0, 1.0],
-        "repeat_kv_heads must be blocked [K0x2, K1x2]; got {vals:?} (tiled => RIL ISS-010)"
+        "repeat_kv_heads must be blocked [K0x2, K1x2]; got {vals:?} (tiled)"
     );
 }

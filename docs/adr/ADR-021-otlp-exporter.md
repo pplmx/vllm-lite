@@ -26,7 +26,7 @@ Add an opt-in `opentelemetry` feature on `vllm-core` (and propagate through
    `EnhancedMetricsCollector` every `metrics_export_interval_secs` (default 30s)
    and ships via `opentelemetry-otlp` `grpc-tonic`. A 29-entry schema map
    (`SCHEMA_MAP`) translates Prometheus metric names to OTel instrument
-   names. RIL ISS-103 fixed the map to mirror the **full** `/metrics`
+   names. The map mirrors the **full** `/metrics`
    surface: the headline engine metrics (tokens_total, avg/p50/p90/p99
    latency, kv_cache_usage_percent, prefix_cache_hit_rate,
    prefill/decode_throughput_tps, avg/current_batch_size, requests_in_flight,

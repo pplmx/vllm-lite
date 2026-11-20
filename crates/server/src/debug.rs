@@ -70,7 +70,7 @@ fn require_admin(state: &ApiState, headers: &HeaderMap) -> Result<(), Response> 
         .and_then(|v| v.to_str().ok())
         .and_then(|h| h.strip_prefix("Bearer "));
     match api_key {
-        // RIL ISS-049: constant-time comparison (see security::timing).
+        // constant-time comparison (see security::timing).
         Some(key)
             if auth
                 .api_keys()
@@ -89,7 +89,8 @@ fn require_admin(state: &ApiState, headers: &HeaderMap) -> Result<(), Response> 
     }
 }
 
-/// Response payload for `MetricsSnapshot`. Returned from handlers, serialized to JSON for the HTTP boundary.
+/// Response payload for `MetricsSnapshot`. Returned from handlers, serialized to JSON for the HTTP
+/// boundary.
 #[derive(Debug, Serialize)]
 pub struct MetricsSnapshotResponse {
     /// Monotonic counters (events since process start).
@@ -110,17 +111,17 @@ pub struct MetricsSnapshotResponse {
 /// snapshot. The divisor must match the storage scale: `/debug/metrics`
 /// previously divided by 1000, inflating every ratio gauge 100×
 /// (0.85 recorded → 85.0 shown) while the Prometheus exporter correctly
-/// divides by `100_000` (RIL ISS-079).
+/// divides by `100_000`.
 fn fixed_ratio_to_f64(fixed: u64) -> f64 {
     fixed as f64 / 100_000.0
 }
 
 /// The counters surfaced by `/debug/metrics`. Every name here must have a
 /// real storage arm in `EnhancedMetricsCollector::get_counter` — a name with
-/// no writer would fabricate a permanent `0` (RIL ISS-101 removed
+/// no writer would fabricate a permanent `0` (removed
 /// `packing_sequences_total`: it had no storage arm, no writer anywhere, and
-/// was pinned at 0 forever; same class as ISS-090 `errors_total` /
-/// ISS-093 `spans_active`).
+/// was pinned at 0 forever; same class as `errors_total` /
+/// `spans_active`).
 fn snapshot_counter_entries(
     metrics: &vllm_core::metrics::EnhancedMetricsCollector,
 ) -> HashMap<String, u64> {
@@ -211,7 +212,8 @@ pub async fn metrics_snapshot(
     .into_response()
 }
 
-/// Response payload for `KvCacheDump`. Returned from handlers, serialized to JSON for the HTTP boundary.
+/// Response payload for `KvCacheDump`. Returned from handlers, serialized to JSON for the HTTP
+/// boundary.
 #[derive(Debug, Serialize)]
 pub struct KvCacheDumpResponse {
     pub total_blocks: usize,
@@ -248,7 +250,7 @@ pub async fn kv_cache_dump(
         .flatten()
         .unwrap_or_default();
 
-    // RIL ISS-039: report the REAL KV-block accounting from the engine
+    // report the REAL KV-block accounting from the engine
     // metrics snapshot. Pre-fix the dump fabricated `total_blocks = 1024`
     // (wrong for any non-default block count) and used `current_batch_size`
     // as "available blocks" — a category error that made the endpoint
@@ -269,9 +271,10 @@ pub async fn kv_cache_dump(
     .into_response()
 }
 
-/// Response payload for `TraceStatus`. Returned from handlers, serialized to JSON for the HTTP boundary.
+/// Response payload for `TraceStatus`. Returned from handlers, serialized to JSON for the HTTP
+/// boundary.
 ///
-/// Only fields with real backing data are reported (RIL ISS-093): the former
+/// Only fields with real backing data are reported: the former
 /// `spans_active` was hardcoded `0` — the engine does create
 /// `tracing::info_span!`s on its worker thread, and nothing tracks the live
 /// count — and is removed rather than fabricated. `tracing_enabled` says
@@ -288,7 +291,8 @@ pub struct TraceStatusResponse {
     pub log_level: String,
 }
 
-/// Response payload for `AuditDump`. Returned from handlers, serialized to JSON for the HTTP boundary.
+/// Response payload for `AuditDump`. Returned from handlers, serialized to JSON for the HTTP
+/// boundary.
 #[derive(Debug, Serialize)]
 pub struct AuditDumpResponse {
     /// Total number of audit events currently in the in-memory
@@ -382,11 +386,11 @@ mod tests {
 
     #[test]
     fn test_snapshot_counters_have_no_fabricated_zero() {
-        // RIL ISS-101: `/debug/metrics` previously reported a permanent
+        // `/debug/metrics` previously reported a permanent
         // `packing_sequences_total: 0` counter — `get_counter` has no
         // storage arm for that name (falls through to `_ => 0`) and no
         // writer exists anywhere, so the snapshot fabricated a value that
-        // could never change. Same class as the ISS-090 / ISS-093
+        // could never change. Same class as the
         // removals. The snapshot must only surface counters with real
         // backing storage.
         use vllm_core::metrics::EnhancedMetricsCollector;
@@ -418,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_ratio_gauges_use_the_prometheus_scale() {
-        // RIL ISS-079 regression: `/debug/metrics` restored the
+        // regression: `/debug/metrics` restored the
         // fixed-point ratio gauges (stored ×100_000 by the sampler) by
         // dividing by 1000.0, so every recorded ratio showed 100× too
         // large on the debug snapshot (0.85 → 85.0) while the Prometheus
@@ -461,7 +465,7 @@ mod tests {
         assert!(json.contains("prefix_cache_hit_rate"));
     }
 
-    /// RIL ISS-093: `/debug/trace` must not fabricate tracing state. The
+    /// `/debug/trace` must not fabricate tracing state. The
     /// pre-fix response carried `spans_active: 0` (hardcoded; the engine
     /// creates `info_span!`s on its worker thread and nothing tracks the
     /// live count) — that field is removed rather than perpetuated.
@@ -480,7 +484,7 @@ mod tests {
         );
     }
 
-    /// RIL ISS-093: `effective_log_level` falls back to the configured
+    /// `effective_log_level` falls back to the configured
     /// (captured) log level when `RUST_LOG` is unset, never to a bare
     /// hardcoded "info" that ignores a `--log-level debug` launch.
     #[test]

@@ -15,7 +15,7 @@ impl EnhancedMetricsCollector {
         clippy::cast_sign_loss
     )]
     /// Records the batch-aggregated draft acceptance rate
-    /// `accepted / total` (× `100_000` fixed-point). RIL ISS-084: this is the
+    /// `accepted / total` (× `100_000` fixed-point). this is the
     /// only production caller of the `speculative_acceptance_rate` gauge —
     /// before the fix no caller existed and the gauge stayed 0.
     pub(crate) fn record_speculative_acceptance(&self, accepted: usize, total: usize) {
@@ -32,7 +32,7 @@ impl EnhancedMetricsCollector {
 
     /// Records the spec-vs-non-spec throughput speedup ratio (1.0 = same).
     ///
-    /// RIL ISS-089: no production caller exists. MTRC-03 documents this as
+    /// no production caller exists. MTRC-03 documents this as
     /// "throughput speedup vs non-speculative baseline", which requires an
     /// A/B baseline run — deferred as feature-sized. The gauge is pinned at
     /// 0 on /metrics and OTLP; keep it exposed for the metric contract.

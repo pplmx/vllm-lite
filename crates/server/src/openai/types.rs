@@ -1,4 +1,5 @@
-//! OpenAI-API wire types: request bodies, response bodies, streaming SSE chunks, and the OpenAI-specific batch endpoint types.
+// ! OpenAI-API wire types: request bodies, response bodies, streaming SSE chunks, and the
+// OpenAI-specific batch endpoint types.
 //!
 //! These mirror the public `OpenAI` Chat Completions / Completions / Embeddings
 //! / Batch schemas 1:1. Field names and JSON casing match the upstream spec;
@@ -98,7 +99,7 @@ pub struct ChatMessage {
     pub content: String,
     /// Optional author name (rare; supported for multi-user logs).
     ///
-    /// RIL ISS-130: `OpenAI`'s response `message` schema has no `name`
+    /// `OpenAI`'s response `message` schema has no `name`
     /// field, so `None` is OMITTED from the wire instead of emitting a
     /// `"name": null` lie on every message. Requests legitimately carry
     /// names, and serde still parses a present key.
@@ -329,7 +330,7 @@ pub struct ChatRequest {
     /// declaration-only PR doesn't regress to "rejected by serde".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<i64>,
-    /// `OpenAI` streaming extras (RIL ISS-111 follow-up). Only
+    /// `OpenAI` streaming extras. Only
     /// `include_usage` is modelled today; see [`StreamOptions`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_options: Option<StreamOptions>,
@@ -637,7 +638,7 @@ impl ChatResponse {
 /// completion token counts, before the `[DONE]` sentinel (the
 /// `OpenAI` streaming-usage contract). Pre-fix a client sending
 /// `stream_options.include_usage = true` got the field silently dropped —
-/// no usage, and the final chunk kept a non-empty `choices` (RIL ISS-111
+/// no usage, and the final chunk kept a non-empty `choices` (
 /// follow-up). Honored on both the `n == 1` and `n > 1` chat streaming
 /// paths (for `n > 1`, `completion_tokens` aggregates across all choices).
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
@@ -655,7 +656,8 @@ pub struct StreamOptions {
 pub struct ChatChunkChoice {
     /// Choice index (0-based; constant across stream chunks).
     pub index: i32,
-    /// Streaming delta — partial message, usually only `role` on first chunk and `content` on subsequent chunks.
+    /// Streaming delta — partial message, usually only `role` on first chunk and `content` on
+    /// subsequent chunks.
     pub delta: ChatMessage,
     /// Set on the final chunk; `None` on intermediate deltas.
     pub finish_reason: Option<String>,
@@ -685,10 +687,10 @@ pub struct ChatChunk {
     /// Echo of the requested model id.
     pub model: String,
     /// Streaming choices (typically one per request). Empty array on the
-    /// final `include_usage` chunk (RIL ISS-111 follow-up).
+    /// final `include_usage` chunk.
     pub choices: Vec<ChatChunkChoice>,
     /// Token usage on the final `include_usage` chunk — `None` otherwise
-    /// (RIL ISS-111 follow-up).
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
 }
@@ -700,7 +702,7 @@ impl ChatChunk {
     /// `created` MUST be the epoch captured once at the start of the
     /// stream (see the field's doc) — the constructor no longer stamps a
     /// per-chunk `unix_now_secs()` so every chunk on one stream reports
-    /// the same timestamp (RIL ISS-123).
+    /// the same timestamp.
     #[must_use]
     pub fn new(id: String, model: String, created: i64, choice: ChatChunkChoice) -> Self {
         Self {
@@ -714,10 +716,10 @@ impl ChatChunk {
     }
 
     /// Streaming token-usage chunk: `choices: []` + a real [`Usage`]
-    /// (the `OpenAI` `stream_options.include_usage` contract, RIL
-    /// ISS-111 follow-up). Emitted AFTER the `finish_reason` chunk and
-    /// BEFORE `[DONE]`. `created` follows the same stream-start rule as
-    /// [`ChatChunk::new`] (RIL ISS-123).
+    /// (the `OpenAI` `stream_options.include_usage` contract). Emitted
+    /// AFTER the `finish_reason` chunk and BEFORE `[DONE]`. `created`
+    /// follows the same stream-start rule as
+    /// [`ChatChunk::new`].
     #[must_use]
     pub fn new_usage_chunk(id: String, model: String, created: i64, usage: Usage) -> Self {
         Self {
@@ -1011,20 +1013,20 @@ pub struct EmbeddingsRequest {
     /// one-element list at the boundary. The `deserialize_with` keeps the
     /// Rust field as `Vec<String>` (array semantics everywhere in the
     /// handler) while accepting the wire-level single-string form
-    /// (RIL ISS-144).
+
     #[serde(default, deserialize_with = "deserialize_embedding_input")]
     pub input: Vec<String>,
     /// `OpenAI` `encoding_format` field: `"float"` (default) or
     /// `"base64"`. Declared at the boundary so the handler can explicitly
     /// reject the unsupported `"base64"` form with a 400 rather than
-    /// silently returning plain floats (RIL ISS-161) — a base64 client
+    /// silently returning plain floats — a base64 client
     /// would otherwise decode garbage with a 200.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoding_format: Option<String>,
 }
 
 /// Accept `OpenAI`'s `string | array<string>` `input` field, normalizing the
-/// single-string form into a one-element list (RIL ISS-144). Non-string
+/// single-string form into a one-element list. Non-string
 /// array elements are rejected by serde's array path with the usual
 /// `Deserialize` error.
 pub(crate) fn deserialize_embedding_input<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
@@ -1074,8 +1076,8 @@ impl EmbeddingsResponse {
     /// `prompt_tokens` MUST be the true input token count for the request
     /// (Σ of the tokenizer-encoded lengths), which the caller computes
     /// before sending the embed forward — the constructor can't derive it
-    /// from the vectors, whose length is the embedding DIMENSION (RIL
-    /// ISS-131). `completion_tokens` is always `0` since embeddings have
+    /// from the vectors, whose length is the embedding DIMENSION. `completion_tokens` is always `0`
+    /// since embeddings have
     /// no autoregressive output.
     #[must_use]
     pub fn new(embeddings: Vec<Vec<f32>>, model: String, prompt_tokens: usize) -> Self {
@@ -1149,7 +1151,7 @@ mod tests {
 
     #[test]
     fn chat_message_name_none_is_omitted_from_json() {
-        // RIL ISS-130: OpenAI's chat message schema has no `name` field —
+        // OpenAI's chat message schema has no `name` field —
         // a response-side `name: None` must serialize to NO name key (the
         // pre-fix JSON carried a `"name": null` lie on every message, both
         // non-streaming choices and stream deltas). Requests legitimately
@@ -1178,7 +1180,7 @@ mod tests {
 
     #[test]
     fn embeddings_response_usage_reports_input_tokens() {
-        // RIL ISS-131: `usage.prompt_tokens` must be the REAL input token
+        // `usage.prompt_tokens` must be the REAL input token
         // count, not the sum of embedding-vector dimensions (pre-fix the
         // constructor derived usage from `embedding.len()`, so a 4-dim
         // model reported 4× the true tokens to strict client accounting).
@@ -1313,7 +1315,7 @@ mod tests {
     #[test]
     fn embeddings_response_new_constructs_correctly() {
         let embeddings = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
-        // RIL ISS-131: prompt_tokens is the real input token count, NOT
+        // prompt_tokens is the real input token count, NOT
         // the vector dimension sum (pre-fix this was 6 from two 3-dim
         // vectors) — the caller passes it explicitly.
         let resp = EmbeddingsResponse::new(embeddings, "test-model".to_string(), 4);
@@ -1348,7 +1350,7 @@ mod tests {
         assert_eq!(req.input[1], "second");
     }
 
-    // RIL ISS-144: OpenAI's `input` field is `string | array<string>`; a
+    // OpenAI's `input` field is `string | array<string>`; a
     // single string (`"input": "the quick brown fox"` — one of the most
     // common embeddings calls) must deserialize into a one-element input
     // list instead of failing the whole request. Guards the
@@ -1365,7 +1367,7 @@ mod tests {
         assert_eq!(req.input[0], "the quick brown fox");
     }
 
-    // RIL ISS-144: the array form still works and the string form is not
+    // the array form still works and the string form is not
     // accidentally accepted where an array of strings is meant (e.g. a
     // JSON array keeps its element order verbatim).
     #[test]

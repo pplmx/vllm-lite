@@ -6,7 +6,7 @@ use vllm_core::scheduler::RadixTree;
 use vllm_core::types::{Request, SchedulerConfig, SeqId, TokenId};
 use vllm_testing::StubModel;
 
-// RIL ISS-110: a response channel whose receiver has been dropped reports
+// a response channel whose receiver has been dropped reports
 // `Closed` on the next `try_send`, and the engine now treats that as a client
 // disconnect and CANCELS the sequence. These tests only care that KV/prefix
 // cache entries get written, not that tokens are collected, so each request's
@@ -301,7 +301,7 @@ fn test_prefix_cache_high_volume() {
     let mut engine = Engine::with_config(StubModel::default(), None, config, 4, 200);
 
     // Add 50 different requests with different tokens. Hold every receiver
-    // in a Vec so no channel reports `Closed` (RIL ISS-110) — the sequences
+    // in a Vec so no channel reports `Closed` — the sequences
     // must run to completion to commit their KV to the prefix cache.
     let mut receivers = Vec::new();
     for i in 0..50 {
@@ -323,7 +323,7 @@ fn test_prefix_cache_high_volume() {
     }
 
     // All 50 requests should have completed; the receivers were held only to
-    // keep the channels open (RIL ISS-110) — assert the count to mark the
+    // keep the channels open — assert the count to mark the
     // collection as intentionally read.
     assert_eq!(receivers.len(), 50, "one held receiver per request");
     let cache = engine.scheduler.prefix_cache();
@@ -353,7 +353,7 @@ fn test_prefix_cache_many_sequences_same_prefix() {
     let common_prefix = vec![100, 200, 300];
 
     // First request: populate cache with common prefix. Hold the receiver so
-    // the channel never reports `Closed` (RIL ISS-110).
+    // the channel never reports `Closed`.
     let (tx0, _rx0) = mpsc::channel(64);
     engine.add_request(Request::new(0, common_prefix.clone(), 3), tx0);
     while engine.has_pending() {

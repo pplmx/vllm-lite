@@ -19,14 +19,13 @@ spec:
           ports:
             # `/metrics` is served by the same axum router on the main HTTP
             # server port — there is no separate metrics listener (the old
-            # `9090` containerPort pointed at a port nothing bound, RIL
-            # ISS-102).
+            # `9090` containerPort pointed at a port nothing bound).
             - containerPort: 8000
               name: http
           env:
             # Make the mounted configmap actually take effect — without this
             # the file was mounted but never read, so the whole ConfigMap was
-            # dead weight (RIL ISS-102).
+            # dead weight.
             - name: VLLM_CONFIG_PATH
               value: /app/config/production.yaml
             # REQUIRED for startup: the server refuses to start without a
@@ -38,8 +37,7 @@ spec:
             # (engine.engine_mailbox_capacity in config/engine.rs) with NO
             # env var — the previously-advertised VLLM_ENGINE_MAILBOX_CAPACITY
             # was never read by the server, so tuning it here had zero
-            # effect silently. Set it via the mounted ConfigMap's YAML
-            # (RIL ISS-166).
+            # effect silently (engine.engine_mailbox_capacity).
           volumeMounts:
             - name: config
               mountPath: /app/config

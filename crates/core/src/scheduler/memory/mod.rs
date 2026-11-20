@@ -81,7 +81,8 @@ pub struct DistributedPrefixMatch {
 }
 
 #[derive(Debug)]
-/// Top-level KV-cache memory coordinator. Composes a [`BlockAllocator`] and an [`EvictionPolicy`], and exposes the high-level `allocate` / `free` API the scheduler calls.
+/// Top-level KV-cache memory coordinator. Composes a [`BlockAllocator`] and an [`EvictionPolicy`],
+/// and exposes the high-level `allocate` / `free` API the scheduler calls.
 pub struct MemoryManager {
     allocator: BlockAllocator,
     eviction_policy: EvictionPolicy,
@@ -138,7 +139,7 @@ impl MemoryManager {
             distributed_kv: None,
             #[cfg(feature = "multi-node")]
             block_data_source: None,
-            // RIL ISS-086: the default hasher must be a real content
+            // the default hasher must be a real content
             // mixer. `IdentityHasher` (the pre-fix default) collapsed
             // every block to its parent hash, so two different token
             // streams under the same parent collided on the same
@@ -302,7 +303,7 @@ impl MemoryManager {
         tokens: &[TokenId],
     ) -> u64 {
         let hash = self.hasher.hash_block(parent_hash, tokens);
-        // RIL ISS-087: do NOT write `self.chain_cursor` here. The manager-wide
+        // do NOT write `self.chain_cursor` here. The manager-wide
         // cursor is the *allocate* chain (it advances only on `Self::allocate`,
         // per the field's documented invariant); this method's `parent_hash`
         // is a per-sequence cursor supplied by the scheduler. Writing it used
@@ -541,7 +542,7 @@ impl MemoryManager {
         // and silently stops allocating on OOM, so `kv_blocks` can be
         // shorter than `blocks_before`. Without the clamp the slice
         // below would panic on a later rollback of such a sequence
-        // (RIL ISS-004).
+
         let held = seq.kv_blocks.len();
         let blocks_after = blocks_after.min(held);
         let blocks_before = blocks_before.min(held);

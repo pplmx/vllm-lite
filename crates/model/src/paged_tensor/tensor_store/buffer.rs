@@ -174,7 +174,7 @@ impl PagedKvCache {
         let mut k_block_3d: Vec<Vec<Vec<f32>>> = key_block.to_vec3()?;
         let mut v_block_3d: Vec<Vec<Vec<f32>>> = value_block.to_vec3()?;
 
-        // RIL ISS-020: the block is stored quantized (int8 values held in f32).
+        // the block is stored quantized (int8 values held in f32).
         // To modify one slot and re-quantize the whole block correctly, first
         // dequantize the existing contents with THIS block's scale so the
         // read-modify-write operates on real values. Without this, the stored
@@ -298,7 +298,7 @@ impl PagedKvCache {
             // The table may legitimately hold headroom blocks beyond the
             // sequence's computed length (speculative verification
             // pre-allocates `num_computed + input_len + max_draft` blocks,
-            // RIL ISS-026); there is nothing to read past `seq_len`.
+            //); there is nothing to read past `seq_len`.
             if start_token >= seq_len {
                 break;
             }
@@ -317,7 +317,7 @@ impl PagedKvCache {
                 .narrow(2, 0, block_len)?
                 .squeeze(0)?;
 
-            // RIL ISS-020: dequantize each block with ITS OWN scale (the scale
+            // dequantize each block with ITS OWN scale (the scale
             // recorded when that block was quantized). A single per-layer scale
             // cannot represent per-block quantization — dequantizing the whole
             // concatenated tensor with one scale corrupted every block except

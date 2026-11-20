@@ -359,7 +359,7 @@ fn test_draft_spec_estimated_total_bytes() {
     assert_eq!(spec.estimated_total_bytes(), expected);
 }
 
-/// Regression (RIL ISS-034 draft side): `notify_sequence_finished` must
+/// Regression (draft side): `notify_sequence_finished` must
 /// forward the notification to every LOADED draft backend so stateful
 /// drafts (e.g. a Qwen3.5 hybrid used as a draft) can release per-sequence
 /// state. Unloaded specs are skipped.
@@ -428,6 +428,6 @@ fn test_notify_sequence_finished_reaches_loaded_backends() {
     assert_eq!(
         *finished.lock().unwrap(),
         vec![42],
-        "loaded draft backends must receive on_sequence_finished (RIL ISS-034)"
+        "loaded draft backends must receive on_sequence_finished"
     );
 }

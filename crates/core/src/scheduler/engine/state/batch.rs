@@ -51,7 +51,7 @@ impl SchedulerEngine {
         };
 
         // Get sequences for this phase from the queue, paired with each
-        // one's queue→admission wait (RIL TASK-119). Record the waits so
+        // one's queue→admission wait. Record the waits so
         // `avg_scheduler_wait_time_ms` is live in production; every sample
         // is a real delay before an admission attempt.
         let (mut new_sequences, waits): (Vec<crate::types::Sequence>, Vec<std::time::Duration>) =
@@ -74,9 +74,9 @@ impl SchedulerEngine {
         // sequences' KV blocks below). Considers both the running decode
         // sequences and the newly-admitted ones.
         //
-        // RIL ISS-055: demand only the ADDITIONAL blocks a sequence still
+        // demand only the ADDITIONAL blocks a sequence still
         // needs, not its full-prompt block count. A re-admitted chunked
-        // prefill (TASK-055/058) already HOLDS its whole prompt table, so
+        // prefill already HOLDS its whole prompt table, so
         // the old full count double-counted its own held blocks and
         // needlessly preempted running decode sequences to "free" space the
         // sequence already owned. Fresh admissions (kv_blocks empty before
@@ -89,7 +89,7 @@ impl SchedulerEngine {
             }
         }
 
-        // RIL ISS-022: allocate the KV blocks for newly-admitted sequences
+        // allocate the KV blocks for newly-admitted sequences
         // BEFORE the forward pass writes their KV. The model's prefill writes
         // KV to `seq.kv_blocks`; if blocks are not allocated yet, the write
         // falls back to block 0 and corrupts the cache. (Previously blocks
@@ -98,11 +98,11 @@ impl SchedulerEngine {
         // grow incrementally in `update()` as they cross block boundaries.
         self.preallocate_kv_blocks(&mut new_sequences);
 
-        // ISS-042: do not admit a sequence whose KV block table could not be
+        // do not admit a sequence whose KV block table could not be
         // fully pre-allocated (see the helper for the full rationale).
         new_sequences = self.filter_fully_allocated_prefills(new_sequences, phase);
 
-        // RIL ISS-052: for a Decode round, grow each running `Decoding`
+        // for a Decode round, grow each running `Decoding`
         // sequence's KV table to cover its current tokens — the preemption
         // gate above freed blocks, but freeing alone doesn't extend the
         // sequence's OWN table (growth in `update()` runs only AFTER a
@@ -142,7 +142,7 @@ impl SchedulerEngine {
         // Build the batch
         let batch = self.batch_composer.compose(sequences.clone(), phase);
 
-        // ISS-041: `compose` only serves `max_batch_size` / the token budget;
+        // `compose` only serves `max_batch_size` / the token budget;
         // requeue the admitted-but-uncomposed prefill overflow (see the
         // helper for the full rationale).
         self.requeue_uncomposed_prefills(&admitted, &batch, phase);
@@ -180,14 +180,14 @@ impl SchedulerEngine {
 
 impl SchedulerEngine {
     /// Allocate KV blocks for freshly-admitted sequences BEFORE the forward
-    /// pass writes their KV (RIL ISS-022).
+    /// pass writes their KV.
     ///
     /// Shared by both batch builders (`build_batch` and
     /// `build_batch_with_graph`): the model's prefill writes KV to
     /// `seq.kv_blocks`, and if blocks are not allocated yet, `write_prefill_kv`
     /// falls back to block 0 and corrupts the cache. The CUDA-Graph batch
     /// builder previously skipped this step, corrupting every prefill on
-    /// `cuda-graph` builds (RIL ISS-028).
+    /// `cuda-graph` builds.
     pub(crate) fn preallocate_kv_blocks(&mut self, seqs: &mut [Sequence]) {
         for seq in seqs.iter_mut() {
             let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
@@ -221,10 +221,10 @@ impl SchedulerEngine {
         }
     }
 
-    /// ISS-042: drop any prefill sequence whose KV block table could not be
+    /// drop any prefill sequence whose KV block table could not be
     /// fully pre-allocated. With the pool exhausted even after the preemption
     /// gate, serving such a sequence would let `write_prefill_kv` fall back to
-    /// block 0 and corrupt the cache (see ISS-026/028). Defer: release the
+    /// block 0 and corrupt the cache. Defer: release the
     /// partial blocks, reset to Waiting-Prefill, and re-queue so it retries
     /// once memory frees. Only prefill needs the whole table up front; decode
     /// sequences grow blocks incrementally in `update()`.
@@ -248,7 +248,7 @@ impl SchedulerEngine {
         admissible
     }
 
-    /// ISS-041: `compose` includes at most `max_batch_size` sequences and
+    /// `compose` includes at most `max_batch_size` sequences and
     /// breaks once the token budget is exceeded, but every drained prefill was
     /// already moved into `running` above. A freshly-admitted prefill that was
     /// NOT composed would be left `Status::Prefilling` in `running`, where it
@@ -279,7 +279,7 @@ impl SchedulerEngine {
         }
     }
 
-    /// Recovery after a step error (RIL ISS-045): roll back any sequence
+    /// Recovery after a step error: roll back any sequence
     /// left stranded in `running` before its prefill completed.
     ///
     /// A model-forward error in the engine's step propagates with `?`
@@ -309,7 +309,7 @@ impl SchedulerEngine {
         }
     }
 
-    /// RIL ISS-052: select the `Decoding` sequences for this round's batch,
+    /// select the `Decoding` sequences for this round's batch,
     /// ensuring each one's KV table covers its current `tokens` first.
     ///
     /// A decode sequence's table grows in `update()` *after* a successful
@@ -389,17 +389,17 @@ impl SchedulerEngine {
     /// Release a freshly-admitted (never-forwarded) sequence's pre-allocated KV
     /// blocks and return it to the waiting queue as `Waiting::Prefill` so it is
     /// retried on a later round instead of stalling in `running` or serving a
-    /// corrupt KV table. Used for prefill overflow (ISS-041), partial-block
-    /// OOM admission (ISS-042), and forward-error recovery (ISS-045) — all
+    /// corrupt KV table. Used for prefill overflow, partial-block
+    /// OOM admission, and forward-error recovery — all
     /// of which only ever requeue sequences that have not been advanced.
     ///
-    /// RIL ISS-054: an ADVANCED sequence (a chunked prefill that made partial
+    /// an ADVANCED sequence (a chunked prefill that made partial
     /// progress before being requeued) must keep its frontier +
     /// already-computed KV blocks — its block table is the full prompt table
     /// from admission, so it is complete and safe to resume. The old
     /// unconditional reset recomputed a long prompt from scratch on every
-    /// contention round (ISS-041 overflow) or every transient forward error
-    /// (ISS-045) — work-loss thrashing under load. Only never-advanced
+    /// contention round (overflow) or every transient forward error
+    /// — work-loss thrashing under load. Only never-advanced
     /// sequences (fresh admission whose preallocation failed) are reset.
     pub(crate) fn requeue_seq(&mut self, mut seq: Sequence) {
         if seq.num_computed_tokens > 0 {

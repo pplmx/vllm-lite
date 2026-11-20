@@ -167,7 +167,7 @@ async fn request_id_still_propagates_on_success_path() {
     let _ = BodyExt::collect(body).await.unwrap().to_bytes();
 }
 
-/// Regression (RIL ISS-018): K8s liveness/readiness probes are
+/// Regression: K8s liveness/readiness probes are
 /// unauthenticated GETs (the Helm chart's probes carry no Authorization
 /// header). When API-key auth is configured, the health/readiness paths
 /// must be EXEMPT from auth so probes return 200 — otherwise every probe
@@ -190,7 +190,7 @@ async fn health_probes_are_exempt_from_api_key_auth() {
             resp.status(),
             StatusCode::OK,
             "{path} must be reachable WITHOUT auth so unauthenticated K8s \
-             probes work (got {} => RIL ISS-018)",
+             probes work (got {})",
             resp.status()
         );
     }

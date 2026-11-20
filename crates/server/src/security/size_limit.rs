@@ -7,8 +7,8 @@
 //! count with HTTP 413 Payload Too Large — and that 413 is rewritten
 //! into the `OpenAI` error envelope (`{error:{message,type,code}}`) so an
 //! `OpenAI` SDK client that parses `error.message` sees a structured error
-//! instead of tower-http's plain-text `"length limit exceeded"` (RIL
-//! ISS-118). The rewrite runs OUTSIDE the limit layer (so it sees the
+// instead of tower-http's plain-text `"length limit exceeded"`. The rewrite runs OUTSIDE the limit
+// layer (so it sees the
 //! 413 response), inside correlation/audit (so rejected requests still
 //! carry `X-Request-ID` and are audited).
 
@@ -45,7 +45,7 @@ pub fn with_body_size_limit(router: Router, limit_bytes: usize) -> Router {
 /// and a `text/plain; charset=utf-8` body `"length limit exceeded"`.
 /// Clients speaking the `OpenAI` contract parse `{error:{message,...}}`
 /// and treat the plain body as opaque, so the 413 mirrors the envelope
-/// the other error paths emit (RIL ISS-118). Headers from the inner
+/// the other error paths emit. Headers from the inner
 /// layers (e.g. `X-Request-ID`, added outside this layer) are preserved
 /// by rebuilding the parts.
 async fn size_limit_413_envelope(request: Request, next: Next) -> Response {

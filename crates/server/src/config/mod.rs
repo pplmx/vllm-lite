@@ -30,7 +30,8 @@ mod server;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// Error type for `ConfigValidation`. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Error type for `ConfigValidation`. Returned from every fallible public API; covers I/O,
+/// validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ConfigValidationError {
     #[error("server.port must be > 0")]
@@ -133,7 +134,7 @@ impl Default for AppConfig {
 /// (e.g. `engin:` vs `engine:`) is silently ignored by the lenient serde
 /// parse — every section carries `#[serde(default)]` — so without this
 /// check an operator's typo runs the server on built-in defaults with
-/// zero signal (RIL ISS-097). `observability` is a recognised section only
+/// zero signal. `observability` is a recognised section only
 /// when the `opentelemetry` feature is compiled in; without it, a config
 /// declaring `observability` is ignored and now warned about.
 #[cfg(not(feature = "opentelemetry"))]
@@ -141,7 +142,7 @@ const KNOWN_SECTIONS: &[&str] = &["server", "engine", "auth", "cors"];
 #[cfg(feature = "opentelemetry")]
 const KNOWN_SECTIONS: &[&str] = &["server", "engine", "auth", "cors", "observability"];
 
-/// Best-effort detection of unknown top-level config keys (RIL ISS-097).
+/// Best-effort detection of unknown top-level config keys.
 ///
 /// Re-parses the raw YAML as `serde_json::Value` and returns any top-level
 /// key outside [`KNOWN_SECTIONS`]. The re-parse is **best-effort**: exotic
@@ -160,12 +161,12 @@ fn unknown_top_level_keys(contents: &str) -> Vec<String> {
         .collect()
 }
 
-/// Recognised field names per top-level section (RIL ISS-168).
+/// Recognised field names per top-level section.
 ///
 /// `unknown_top_level_keys` only detects top-level typos; a nested typo
 /// like `engine: { num_kv_blcks: 4096 }` was silently dropped by the
 /// lenient serde parse with zero warning while the server ran on
-/// defaults — the exact config-honesty failure ISS-097 exists to surface.
+/// defaults — the exact config-honesty failure exists to surface.
 /// Mirrors the field lists of the config structs
 /// (`server.rs` / `engine.rs` / `auth.rs` / `cors.rs` /
 /// `observability.rs`). Maintained by hand like `KNOWN_SECTIONS`; the
@@ -223,7 +224,7 @@ const SECTION_FIELDS: &[(&str, &[&str])] = &[
 ];
 
 /// Best-effort detection of unknown keys *nested* inside known sections
-/// (RIL ISS-168). Returns `(section, key)` pairs for every key in a
+/// Returns `(section, key)` pairs for every key in a
 /// recognised section's object that is not in that section's field list.
 /// Skips non-object sections (e.g. `cors.allow_origins` is a list) and
 /// non-scalar known sub-objects (e.g. `engine.draft_specs`,
@@ -251,10 +252,10 @@ fn unknown_nested_keys(contents: &str) -> Vec<(String, String)> {
 }
 
 /// Error when an EXPLICITLY-requested config source (`--config` or
-/// `$VLLM_CONFIG_PATH`) cannot be honored. Pre-fix (RIL TASK-107) a
+/// `$VLLM_CONFIG_PATH`) cannot be honored. Pre-fix a
 /// missing or unparseable config degraded silently to built-in defaults,
 /// booting a healthy-looking server on the WRONG settings for an operator
-/// who deliberately pointed at a config (RIL ISS-132). Load now fails
+/// who deliberately pointed at a config. Load now fails
 /// fast with the path and reason; a genuinely unconfigured server (no
 /// `--config`, no env var) still uses defaults.
 #[derive(Debug, thiserror::Error)]
@@ -267,11 +268,11 @@ pub enum ConfigLoadError {
     Parse(PathBuf, String),
 }
 
-/// Read and parse a config file strictly (RIL ISS-132): every failure is
+/// Read and parse a config file strictly: every failure is
 /// an [`Err`] naming the path and reason — an explicitly-referenced
 /// config must never silently degrade to defaults.
 ///
-/// Unknown top-level keys still only `WARN` (RIL ISS-097): the lenient
+/// Unknown top-level keys still only `WARN`: the lenient
 /// `AppConfig` parse is authoritative, so misspelled sections surface as
 /// warnings rather than hard failures.
 fn load_config_file(path: &Path) -> Result<AppConfig, ConfigLoadError> {
@@ -308,14 +309,14 @@ impl AppConfig {
     /// Load an [`AppConfig`] starting from `Self::default()` and layering
     /// optional overrides from an explicitly-requested source:
     ///   1. YAML file at `--config` `path` (if given; takes precedence
-    ///      over the env var — RIL ISS-169, matches the documented
+    /// over the env var —, matches the documented
     ///      `CLI flags > env > YAML` order, OPERATIONS.md:125).
     ///   2. YAML file at `$VLLM_CONFIG_PATH` (if the env var is set).
     ///
     /// When NO source is requested (`None` / env unset), `Ok(defaults)`.
     /// A source that IS requested but cannot be honored — missing,
-    /// unreadable, or unparseable — is an **error** (RIL ISS-132 /
-    /// DEC-057): the operator's deliberate settings must not silently
+    /// unreadable, or unparseable — is an **error** (/
+    ///): the operator's deliberate settings must not silently
     /// vanish behind a defaults boot. Use [`AppConfig::validate`] after
     /// loading to surface semantically invalid configs.
     ///
@@ -329,7 +330,7 @@ impl AppConfig {
         // `--config` (the most explicit, single-run intent) takes
         // precedence over the `$VLLM_CONFIG_PATH` deployment default, so
         // an operator typing `--config X` is never silently overridden by
-        // a service-layer env var (RIL ISS-169). Both are documented
+        // a service-layer env var. Both are documented
         // deliberate sources; warn so the ambiguity is surfaced.
         let env = std::env::var("VLLM_CONFIG_PATH").ok().map(PathBuf::from);
         if path.is_some() && env.is_some() {
@@ -397,7 +398,7 @@ impl AppConfig {
         if self.engine.max_batch_size == 0 {
             errors.push(ConfigValidationError::MaxBatchSizeZero);
         }
-        // RIL ISS-154: the CLI `--max-batch-size` parser caps at 8192
+        // the CLI `--max-batch-size` parser caps at 8192
         // (args.rs validate_max_batch_size); the YAML path previously
         // accepted any > 0 value (e.g. 20000) and wired it straight into
         // SchedulerConfig — a rate the CLI would refuse. Mirror the flag
@@ -409,27 +410,27 @@ impl AppConfig {
         if self.engine.tensor_parallel_size == 0 {
             errors.push(ConfigValidationError::TensorParallelSizeZero);
         }
-        // RIL ISS-154: CLI `--tensor-parallel-size` caps at 64; the YAML
+        // CLI `--tensor-parallel-size` caps at 64; the YAML
         // path accepted any > 0 value and silently no-oped beyond the
         // supported degree.
         if self.engine.tensor_parallel_size > 64 {
             errors.push(ConfigValidationError::TensorParallelSizeTooLarge);
         }
 
-        // RIL ISS-154: CLI `--max-waiting-batches` restricts to 1..=100;
+        // CLI `--max-waiting-batches` restricts to 1..=100;
         // the YAML path had NO check at all (0 or 1000 both slipped
         // through).
         if !(1..=100).contains(&self.engine.max_waiting_batches) {
             errors.push(ConfigValidationError::MaxWaitingBatchesOutOfRange);
         }
 
-        // RIL ISS-154: CLI `--max-model-len` caps at 4_000_000; the YAML
+        // CLI `--max-model-len` caps at 4_000_000; the YAML
         // path had no upper bound so a typo (an extra zero) produced an
         // unbounded context-length allowance.
         if self.engine.max_model_len.is_some_and(|m| m > 4_000_000) {
             errors.push(ConfigValidationError::MaxModelLenTooLarge);
         }
-        // RIL ISS-167: CLI `--max-model-len` range is 1..=4_000_000 (0 is
+        // CLI `--max-model-len` range is 1..=4_000_000 (0 is
         // rejected); the YAML path only checked the upper bound, so a
         // `max_model_len: 0` passed validation, overrode the checkpoint's
         // real `max_position_embeddings` in `main.rs`, and

@@ -47,14 +47,15 @@ impl Ord for ScheduledSequence {
 }
 
 #[derive(Debug)]
-/// Thread-safe FIFO queue of pending inference requests. New requests are pushed on arrival and popped by the scheduler.
+/// Thread-safe FIFO queue of pending inference requests. New requests are pushed on arrival and
+/// popped by the scheduler.
 pub struct RequestQueue {
     sequences: HashMap<SeqId, Sequence>,
     priority_queue: BinaryHeap<ScheduledSequence>,
     phase_index: HashMap<Phase, HashSet<SeqId>>,
     in_queue: HashSet<SeqId>,
     /// Per-sequence arrival instant (parallel to the priority heap), so the
-    /// admission path can measure queue→admission wait (RIL TASK-119).
+    /// admission path can measure queue→admission wait.
     arrivals: HashMap<SeqId, Instant>,
 }
 
@@ -156,7 +157,7 @@ impl RequestQueue {
 
     /// Remove and return every sequence currently in `phase`, in arbitrary
     /// order, paired with the wall-clock time it spent waiting in the queue
-    /// (`arrival_time` → now, the admission-wait sample; RIL TASK-119).
+    /// (`arrival_time` → now, the admission-wait sample).
     /// Lazy-cleans the priority heap afterwards to reclaim stale entries.
     pub fn drain_by_phase(&mut self, phase: Phase) -> Vec<(Sequence, std::time::Duration)> {
         let ids: Vec<_> = self

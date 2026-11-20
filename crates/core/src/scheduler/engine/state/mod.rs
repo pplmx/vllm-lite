@@ -7,7 +7,8 @@
 //!
 //! Module layout:
 //!
-//! - [`self`] (`mod.rs`) — struct + `Debug` + `Default` + `new()` + `set_policy` + small getters + observer registration
+// ! - [`self`] (`mod.rs`) — struct + `Debug` + `Default` + `new()` + `set_policy` + small getters +
+// observer registration
 //! - `request` — `add_request` (enqueue + prefix-cache check + metrics + observer dispatch)
 //! - `batch` — `build_batch` + `schedule` (phase selection + composition + preemption trigger)
 
@@ -108,7 +109,7 @@ impl SchedulerEngine {
             enable_similarity_grouping: false,
         };
 
-        // RIL ISS-051: wire the documented `prefill_chunk_size` into the
+        // wire the documented `prefill_chunk_size` into the
         // composer so a prompt that overfills the token budget is chunked
         // across rounds (and `advance_computed_tokens` resumes it) instead
         // of being left unservable.
@@ -131,7 +132,7 @@ impl SchedulerEngine {
         // Priority scheduling is opt-in via SchedulerConfig. The constructor
         // used to hardcode FcfsPolicy and never read
         // `enable_priority_scheduling`, so the documented flag silently did
-        // nothing and priority-tier users got FCFS (RIL ISS-043). Honor it
+        // nothing and priority-tier users got FCFS. Honor it
         // here; `set_policy` can still override after construction.
         let policy: Box<dyn SchedulingPolicy> = if config.enable_priority_scheduling {
             Box::new(PriorityPolicy::default())

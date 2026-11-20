@@ -26,7 +26,7 @@ use clap::{CommandFactory, Parser};
 
 #[test]
 fn test_cli_defaults() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -34,7 +34,7 @@ fn test_cli_defaults() {
     let _env_guard = crate::test_fixtures::ENV_TEST_LOCK
         .lock()
         .expect("env lock");
-    // RIL ISS-081: unset CLI args are `None` (no hardcoded clap defaults), so
+    // unset CLI args are `None` (no hardcoded clap defaults), so
     // `to_app_config` can tell "operator left it alone" from "operator
     // overrode it" and preserve `--config` YAML / built-in defaults.
     let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
@@ -57,7 +57,7 @@ fn test_cli_defaults() {
 
 #[test]
 fn test_cli_with_long_args() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -98,7 +98,7 @@ fn test_cli_with_long_args() {
 
 #[test]
 fn test_cli_short_args() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -114,7 +114,7 @@ fn test_cli_short_args() {
 
 #[test]
 fn test_cli_required_model() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -128,14 +128,14 @@ fn test_cli_required_model() {
     assert!(err_msg.contains("--model"));
 }
 
-/// RIL TASK-107: the missing-`--model` message must not render
+/// the missing-`--model` message must not render
 /// `--allow-stub` as an alternative to `--model` in the usage line
 /// (`<--model <MODEL>|--allow-stub>` made it look like running with only
 /// `--allow-stub`, no model, was valid). `--model` is required; `--allow-stub`
 /// is an optional flag.
 #[test]
 fn test_cli_required_model_usage_does_not_offer_allow_stub_alternative() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -158,7 +158,7 @@ fn test_cli_required_model_usage_does_not_offer_allow_stub_alternative() {
 
 #[test]
 fn test_cli_api_key_vec() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -183,7 +183,7 @@ fn test_cli_api_key_vec() {
 
 #[test]
 fn test_cli_log_level() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -198,7 +198,7 @@ fn test_cli_log_level() {
 
 #[test]
 fn test_cli_log_level_case_insensitive() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -213,7 +213,7 @@ fn test_cli_log_level_case_insensitive() {
 
 #[test]
 fn test_cli_log_level_valid_values() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -229,7 +229,7 @@ fn test_cli_log_level_valid_values() {
 
 #[test]
 fn test_to_app_config_basic() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -246,7 +246,7 @@ fn test_to_app_config_basic() {
 
 #[test]
 fn test_to_app_config_all_fields() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -290,11 +290,11 @@ fn test_to_app_config_all_fields() {
     assert_eq!(config.server.log_level, "debug");
 }
 
-/// RIL ISS-044: `--max-model-len` must flow from CLI into
+/// `--max-model-len` must flow from CLI into
 /// `EngineConfig.max_model_len` (absent the flag, it stays `None`).
 #[test]
 fn test_to_app_config_max_model_len() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -322,7 +322,7 @@ fn test_to_app_config_max_model_len() {
 
 #[test]
 fn test_to_app_config_with_api_keys() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -346,7 +346,7 @@ fn test_to_app_config_with_api_keys() {
 
 #[test]
 fn test_cli_version() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -360,7 +360,7 @@ fn test_cli_version() {
 
 #[test]
 fn test_cli_help() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -374,7 +374,7 @@ fn test_cli_help() {
 
 #[test]
 fn test_cli_config_file() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -388,7 +388,7 @@ fn test_cli_config_file() {
 
 #[test]
 fn test_model_path_is_pathbuf() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -405,7 +405,7 @@ fn test_model_path_is_pathbuf() {
 
 #[test]
 fn test_port_range_validation() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -425,7 +425,7 @@ fn test_port_range_validation() {
 
 #[test]
 fn test_kv_blocks_range_validation() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -445,7 +445,7 @@ fn test_kv_blocks_range_validation() {
 
 #[test]
 fn test_max_batch_size_range_validation() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -467,7 +467,7 @@ fn test_max_batch_size_range_validation() {
 
 #[test]
 fn test_max_waiting_batches_range_validation() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -490,7 +490,7 @@ fn test_max_waiting_batches_range_validation() {
 
 #[test]
 fn test_max_draft_tokens_range_validation() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -514,7 +514,7 @@ fn test_max_draft_tokens_range_validation() {
 
 #[test]
 fn test_tensor_parallel_size_range_validation() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -537,7 +537,7 @@ fn test_tensor_parallel_size_range_validation() {
 
 #[test]
 fn test_cli_api_key_file() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -562,7 +562,7 @@ fn test_cli_api_key_file() {
 
 #[test]
 fn test_to_app_config_with_log_dir() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -583,7 +583,7 @@ fn test_to_app_config_with_log_dir() {
     assert_eq!(config.server.log_dir, Some("/var/log/vllm".to_string()));
 }
 
-// ───────────────── RIL ISS-081: YAML-preservation regressions ─────────────────
+// ───────────────── YAML-preservation regressions ─────────────────
 //
 // Every clap arg below carries a hardcoded `default_value`, so clap always fills
 // the struct and `to_app_config` unconditionally overwrote the YAML-loaded
@@ -593,11 +593,11 @@ fn test_to_app_config_with_log_dir() {
 // These two tests lock the corrected precedence: explicit CLI/env wins, YAML
 // survives, and built-in defaults win otherwise.
 
-/// RIL ISS-081: values set in the `--config` YAML file must survive
+/// values set in the `--config` YAML file must survive
 /// `to_app_config()` when no CLI flag overrides them.
 #[test]
 fn test_to_app_config_preserves_yaml_values() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -644,13 +644,13 @@ engine:
     );
 }
 
-/// RIL ISS-081: an explicit CLI flag must STILL win over the `--config` YAML
+/// an explicit CLI flag must STILL win over the `--config` YAML
 /// value (precedence: CLI/env > YAML > defaults). This guards the override
 /// direction after the clobber fix — removing the clobber must not also remove
 /// legitimate flag-overrides-config behavior.
 #[test]
 fn test_to_app_config_flag_overrides_yaml() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -689,13 +689,13 @@ fn test_to_app_config_flag_overrides_yaml() {
     );
 }
 
-/// RIL ISS-081: a bare `--enable-adaptive-speculative` flag still means
+/// a bare `--enable-adaptive-speculative` flag still means
 /// `true`, and `--enable-adaptive-speculative=false` still means `false`
 /// (the `default_missing_value`/`num_args=0..=1` bool-flag pattern must not
 /// have changed flag semantics).
 #[test]
 fn test_adaptive_speculative_bool_flag_semantics() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -723,13 +723,13 @@ fn test_adaptive_speculative_bool_flag_semantics() {
     assert!(unset.engine.enable_adaptive_speculative.is_none());
 }
 
-/// RIL ISS-081: with neither a config file nor CLI overrides, the resolved
+/// with neither a config file nor CLI overrides, the resolved
 /// config must equal `AppConfig::default()`. In particular
 /// `engine.enable_adaptive_speculative` keeps its documented default (`true`),
 /// not the clap flag's inverted `false`.
 #[test]
 fn test_to_app_config_keeps_config_defaults_when_unset() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -763,7 +763,7 @@ fn test_to_app_config_keeps_config_defaults_when_unset() {
 #[cfg(feature = "opentelemetry")]
 #[test]
 fn test_otlp_endpoint_defaults_to_none() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -778,7 +778,7 @@ fn test_otlp_endpoint_defaults_to_none() {
 #[cfg(feature = "opentelemetry")]
 #[test]
 fn test_otlp_endpoint_long_flag() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -802,7 +802,7 @@ fn test_otlp_endpoint_long_flag() {
 #[cfg(feature = "opentelemetry")]
 #[test]
 fn test_to_app_config_otlp_endpoint_overrides_yaml() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -830,7 +830,7 @@ fn test_to_app_config_otlp_endpoint_overrides_yaml() {
 #[cfg(feature = "opentelemetry")]
 #[test]
 fn test_to_app_config_otlp_endpoint_no_override_when_not_set() {
-    // RIL ISS-109: serialize against sibling tests that read/write VLLM_*
+    // serialize against sibling tests that read/write VLLM_*
     // env vars (config/tests.rs etc.) — clap `env = "VLLM_*"` args read
     // std::env at parse time, so a concurrent set_var races this reader
     // under `cargo test` (single process). Shared crate-wide lock; nextest
@@ -847,7 +847,7 @@ fn test_to_app_config_otlp_endpoint_no_override_when_not_set() {
 
 #[test]
 fn version_flag_reports_cargo_version() {
-    // RIL ISS-119: `--version` must report `CARGO_PKG_VERSION` (the
+    // `--version` must report `CARGO_PKG_VERSION` (the
     // workspace-package version) — previously hardcoded "0.1.0", which
     // would go stale the moment the crate version is bumped.
     assert_eq!(
@@ -864,7 +864,7 @@ fn version_flag_reports_cargo_version() {
 
 #[test]
 fn every_help_visible_cli_arg_has_help_text() {
-    // RIL ISS-115: `--help` is an operator-facing contract — a flag that
+    // `--help` is an operator-facing contract — a flag that
     // renders with a blank help section (pre-fix: `--model`, `--api-key`,
     // `--api-key-file`, `--insecure-allow-public-no-auth`, `--log-dir`,
     // `--config`) is effectively undocumented. Walk the flattened clap

@@ -1,4 +1,4 @@
-//! Regression (RIL ISS-034): the engine must notify the target model when a
+// Regression: the engine must notify the target model when a
 //! sequence finishes (`max_tokens` / stop / cancel) so stateful backends (e.g.
 //! the Qwen3.5 hybrid GDN recurrent-state map) can release per-sequence
 //! state. Pre-fix, `gdn_states` grew one entry per finished request for the
@@ -109,7 +109,7 @@ fn engine_notifies_model_when_sequence_finishes_by_max_tokens() {
 
     assert!(
         finished.lock().unwrap().contains(&seq_id),
-        "engine must notify the model when the sequence finishes (RIL ISS-034)"
+        "engine must notify the model when the sequence finishes"
     );
 }
 
@@ -128,6 +128,6 @@ fn engine_notifies_model_when_sequence_is_cancelled() {
     );
     assert!(
         finished.lock().unwrap().contains(&seq_id),
-        "engine must notify the model on cancel (RIL ISS-034)"
+        "engine must notify the model on cancel"
     );
 }

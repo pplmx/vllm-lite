@@ -7,7 +7,7 @@ use crate::types::sequence_packing::SequencePackingConfig;
 ///
 /// Controls batching behavior, prefill/decode separation, and priority handling.
 ///
-/// **Not-yet-effective flags (RIL ISS-043):** the engine currently builds
+/// **Not-yet-effective flags:** the engine currently builds
 /// only pure-phase (`Prefill`/`Decode`) batches on the FCFS policy by
 /// default. [`Self::enable_pd_separation`], [`Self::enable_dynamic_batching`],
 /// [`Self::prefill_chunk_size`] and [`Self::decode_preference_ratio`] are

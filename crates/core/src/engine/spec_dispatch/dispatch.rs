@@ -66,9 +66,9 @@ impl crate::engine::Engine {
         let (verified, accepted_counts) =
             self.verify_draft_tokens_logits(&batch, &draft_outputs)?;
 
-        // RIL ISS-027: rejected-draft KV blocks are NOT rolled back here.
+        // rejected-draft KV blocks are NOT rolled back here.
         // The verification span's blocks are pre-allocated
-        // (`ensure_verification_blocks`, RIL ISS-026) and the rejected
+        // (`ensure_verification_blocks`) and the rejected
         // drafts' KV simply sits beyond `num_computed_tokens` — it is never
         // read and gets overwritten as the sequence grows. The old
         // `memory_rollback(rejected)` ran its block math against the
@@ -80,7 +80,7 @@ impl crate::engine::Engine {
 
         // H-16 (PERF-05): pre-size `results` to the verified-sequence
         // count so the per-iteration push below does not reallocate.
-        // RIL ISS-057: a mid-chunk prefill's predicted token(s) are stale —
+        // a mid-chunk prefill's predicted token(s) are stale —
         // the real next prompt token is re-fed on the next chunk, so nothing
         // produced while the sequence is still mid-prompt may reach the
         // client stream. `verified` is a flat token list (a sequence can
@@ -104,17 +104,17 @@ impl crate::engine::Engine {
             .collect();
 
         // Emit verified tokens to their client channels (gating stale
-        // mid-chunk prefill predictions, RIL ISS-057) — `results` still
+        // mid-chunk prefill predictions) — `results` still
         // carries every entry so the fold below can advance frontiers.
         let mut disconnected = Vec::new();
         let results = self.emit_verified_tokens(&verified, &stale_by_seq, &mut disconnected);
         // Multi-token scheduler input tracking (Plan 17.1-E): fold the
         // emitted tokens into the scheduler per sequence, advancing
         // `num_computed_tokens` by the tokens whose KV was computed
-        // (RIL ISS-025 / ISS-059).
+
         self.fold_speculative_update(&batch, &results, &accepted_counts, &stale_by_seq);
 
-        // RIL ISS-110: cancel sequences whose response channel closed
+        // cancel sequences whose response channel closed
         // (client disconnect) — after the fold, so the fold's per-sequence
         // frontier updates already ran; they must not keep burning the rest
         // of their `max_tokens` budget into a dead channel.
@@ -136,12 +136,12 @@ impl crate::engine::Engine {
         }
 
         // Record the batch-aggregated accepted/drafted ratio (Plan 17.4-F /
-        // MTRC-02). RIL ISS-084: acceptance is accepted/drafted (draft
+        // MTRC-02). acceptance is accepted/drafted (draft
         // quality — a perfect draft model scores 1.0, a never-accepted one
         // 0.0); the pre-fix draft/(draft+accepted) scored perfect drafts
         // 0.5 — an inverted metric where worse drafts report *higher*
         // acceptance. The duplicated `speculative_efficiency` gauge was
-        // removed (RIL ISS-108): it was fed this same ratio under a second
+        // removed: it was fed this same ratio under a second
         // name, so `speculative_acceptance_rate` is the single wire name.
         if total_draft > 0 {
             self.scheduler
@@ -171,12 +171,12 @@ impl crate::engine::Engine {
         self.scheduler.clear_finished();
 
         if !batch.seq_ids.is_empty() {
-            // RIL ISS-083: count generated (output) tokens — the emitted
+            // count generated (output) tokens — the emitted
             // verified results — not the input token sum. `tokens_total`
             // ("Total tokens generated") must agree with the regular and
             // CUDA-graph step paths, which both count emitted results.
             //
-            // RIL ISS-163: exclude stale mid-chunk prefill predictions.
+            // exclude stale mid-chunk prefill predictions.
             // `record_tokens` counts REAL generated output only; the
             // pre-fix `results.len()` counted every verified entry
             // including stale ones (a mid-chunk prefill's draft + bonus
@@ -195,7 +195,7 @@ impl crate::engine::Engine {
             self.scheduler
                 .metrics
                 .record_tokens(u64::try_from(generated).unwrap_or(0));
-            // RIL ISS-095: prefill/decode phase split so the throughput
+            // prefill/decode phase split so the throughput
             // gauges are live on the speculative path too.
             self.scheduler.metrics.record_batch_phase_tokens(&batch);
             self.scheduler
@@ -214,7 +214,7 @@ impl crate::engine::Engine {
     }
 
     /// Send each verified token to its sequence's client channel, gating out
-    /// stale mid-chunk prefill predictions (RIL ISS-057). `verified` is a
+    /// stale mid-chunk prefill predictions. `verified` is a
     /// flat token list — a sequence can contribute several entries (accepted
     /// drafts + bonus/rejection) — and staleness is keyed by `seq_id` via its
     /// batch entry (start + chunk < `prompt_len`).
@@ -240,9 +240,9 @@ impl crate::engine::Engine {
             } else if let Some(tx) = self.response_txs.get(seq_id) {
                 // Shares the regular path's `try_send_token` contract
                 // (scheduler/batch.rs): `Full` (consumer drains slower than
-                // the speculative path bursts — RIL TASK-120) logs a WARN +
+                // the speculative path bursts) logs a WARN +
                 // counts `dropped_tokens_total`; `Closed` (receiver dropped =
-                // client disconnect — RIL ISS-110) records the sequence in
+                // client disconnect) records the sequence in
                 // `disconnected` so the caller cancels it. Pre-fix both were
                 // silent no-ops and an aborted request generated into a
                 // closed channel for its whole `max_tokens` budget.
@@ -260,7 +260,7 @@ impl crate::engine::Engine {
     /// number of tokens whose KV the target model actually computed during
     /// verification (`input_len + accepted`).
     ///
-    /// RIL ISS-025: the old code flattened `results` into per-token
+    /// the old code flattened `results` into per-token
     /// `seq_ids`/`sampled` vectors but passed a per-sequence
     /// `input_counts` vector. `scheduler.update` zips the two together, so
     /// the fold truncated to one token per sequence — tokens after the first
@@ -293,12 +293,12 @@ impl crate::engine::Engine {
                 continue;
             };
             let chunk_len = batch.input_tokens.get(i).map_or(1, std::vec::Vec::len);
-            // RIL ISS-059: a MID-chunk prefill's accepted drafts occupy real
+            // a MID-chunk prefill's accepted drafts occupy real
             // upcoming prompt positions — the verifier only checked them
             // against the target model's continuation guess, never against
             // the prompt itself, so their KV is guessed content and the real
             // prompt tokens would be SKIPPED if the frontier advanced past
-            // them (`requeue_partial_prefills`/ISS-054 preserves the inflated
+            // them (`requeue_partial_prefills`/ preserves the inflated
             // frontier, so the next chunk composes from it). Advance the
             // frontier by the REAL chunk only; the final chunk (completes the
             // prompt) and decode sequences keep the full
@@ -321,7 +321,7 @@ impl crate::engine::Engine {
 
     /// Grow each batch sequence's block table to cover the full speculative
     /// verification span (`num_computed + input_len + max_draft` tokens)
-    /// BEFORE the draft/target forward writes KV (RIL ISS-026).
+    /// BEFORE the draft/target forward writes KV.
     ///
     /// The batch composer pre-allocates blocks for `input_len` only; the
     /// verifier then processes `input_len + drafts` tokens, and
@@ -331,7 +331,7 @@ impl crate::engine::Engine {
     /// whenever the draft span crossed a block boundary (verified by a
     /// real-model regression test). The extra blocks stay owned by the
     /// sequence (released on finish); rejected-draft blocks are simply
-    /// unused capacity beyond `num_computed_tokens` (RIL ISS-027 — the old
+    /// unused capacity beyond `num_computed_tokens` (— the old
     /// post-verification `memory_rollback` is no longer needed and was
     /// actively harmful for resumed prefill / boundary-crossing decode).
     fn ensure_verification_blocks(&mut self, batch: &mut vllm_traits::Batch, max_draft: usize) {

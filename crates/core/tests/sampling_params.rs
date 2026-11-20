@@ -490,7 +490,7 @@ fn arch_02_seed_determinism_end_to_end() {
 /// independent RNG streams — the engine must not share RNG state
 /// across sequences.
 ///
-/// Pinned robustly (RIL ISS-007): a flat 256-token distribution makes
+/// Pinned robustly: a flat 256-token distribution makes
 /// the sampled token a near-injective function of the random threshold
 /// (token ≈ threshold × 256), so independent streams yield varied
 /// tokens. If RNG state were shared, every sequence would draw the SAME

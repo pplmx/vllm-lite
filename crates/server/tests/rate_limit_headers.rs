@@ -196,7 +196,7 @@ async fn test_unauthorized_request_has_no_rate_limit_headers() {
     assert!(response.headers().get("x-ratelimit-remaining").is_none());
     assert!(response.headers().get("x-ratelimit-limit").is_none());
 
-    // RIL ISS-118: an auth rejection must carry the OpenAI error envelope
+    // an auth rejection must carry the OpenAI error envelope
     // (previously an EMPTY body — OpenAI SDKs parsed error.message and got
     // nothing, raising a generic/none error).
     assert_eq!(
@@ -349,7 +349,7 @@ async fn test_small_body_costs_one_token() {
 
 #[tokio::test]
 async fn test_rate_limited_response_uses_openai_envelope() {
-    // RIL ISS-118: a 429 (bucket exhausted) must carry the OpenAI error
+    // a 429 (bucket exhausted) must carry the OpenAI error
     // envelope — previously the body was EMPTY, so OpenAI SDKs raised a
     // generic error with no message/type/code to branch on.
     let auth = Arc::new(AuthMiddleware::new(vec!["test_key".to_string()], 1, 60));

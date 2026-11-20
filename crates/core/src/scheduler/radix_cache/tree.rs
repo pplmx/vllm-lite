@@ -161,7 +161,7 @@ mod tests {
         assert_eq!(result.blocks.as_ref(), &vec![10, 20, 30]);
     }
 
-    /// RIL TASK-003 / ISS-003: overwriting an existing entry must
+    /// overwriting an existing entry must
     /// return the replaced block list (so the caller can release the
     /// stale cache refcount) and must not double-count the entry.
     #[test]

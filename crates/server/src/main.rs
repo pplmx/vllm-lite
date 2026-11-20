@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 
     let cli = cli::CliArgs::parse();
     let app_config = cli.to_app_config().unwrap_or_else(|err| {
-        // RIL ISS-132: fail fast when an explicitly-requested config
+        // fail fast when an explicitly-requested config
         // (`--config` / `$VLLM_CONFIG_PATH`) can't be honored — never boot
         // a healthy-looking server on defaults that silently discard the
         // operator's settings. Tracing isn't initialized yet, so stderr is
@@ -36,12 +36,12 @@ async fn main() -> Result<()> {
     });
 
     if let Err(errors) = app_config.validate() {
-        // RIL ISS-148: this runs BEFORE `logging::init_logging` installs a
+        // this runs BEFORE `logging::init_logging` installs a
         // subscriber (main.rs init_logging is below the validate gate), so
         // `tracing::error!` would drop the messages — the operator saw a
         // bare exit code 78 with no diagnostic. stderr is the actionable
         // channel here, mirroring the `--config` load-error branch above
-        // (ISS-132): print the violations the way `vllm config validate`
+        // print the violations the way `vllm config validate`
         // does, then exit the config-error family.
         for err in &errors.0 {
             eprintln!("invalid: {err}");
@@ -91,16 +91,16 @@ async fn main() -> Result<()> {
     #[cfg(not(feature = "opentelemetry"))]
     logging::init_logging(log_dir, &app_config.server.log_level);
 
-    // RIL ISS-119: stamp the version on the startup log — log-shredders
+    // stamp the version on the startup log — log-shredders
     // and fleet inventories key on it when triaging --version mismatches.
     tracing::info!(
         version = vllm_server::cli::SERVER_VERSION,
         "Starting vllm-lite"
     );
 
-    // RIL ISS-091: warn (once, at startup) for documented engine knobs this
+    // warn (once, at startup) for documented engine knobs this
     // build does not apply — a silent no-op config is a config-honesty trap
-    // (mirrors the ISS-097 unknown-key WARN pattern). Non-default values
+    // (mirrors the unknown-key WARN pattern). Non-default values
     // only, so default configs start quiet.
     for warning in bootstrap::engine::inert_engine_knob_warnings(&app_config) {
         tracing::warn!("{warning}");
@@ -247,7 +247,7 @@ async fn main() -> Result<()> {
     let tokenizer = bootstrap::tokenizer::load_tokenizer(cli.model_path());
     let batch_manager = Arc::new(BatchManager::new());
 
-    // RIL ISS-080: enforce auth from ALL resolved key sources (inline +
+    // enforce auth from ALL resolved key sources (inline +
     // env + file), matching the SEC-01 posture computed above. Pre-fix this
     // gated on the inline `api_keys` list only, so `--api-key-file` /
     // `VLLM_API_KEYS_FILE` deployments saw no startup warning while the
@@ -273,7 +273,7 @@ async fn main() -> Result<()> {
     // blocks on an over-budget prompt. The field name follows
     // the HuggingFace convention (`max_position_embeddings`),
     // which the Qwen3 / Llama / Mistral checkpoints all carry.
-    // An explicit `--max-model-len` (RIL ISS-044) overrides the
+    // An explicit `--max-model-len` overrides the
     // checkpoint value. For architectures that declare neither
     // (stub models, GGUF variants, etc.) the value stays `None`
     // and request validation falls back to a hard `max_tokens`

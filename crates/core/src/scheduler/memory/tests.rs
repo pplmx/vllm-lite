@@ -192,7 +192,7 @@ fn test_memory_manager_oom() {
 #[cfg(feature = "multi-node")]
 #[test]
 fn test_allocate_chain_not_poisoned_by_record_block_tokens() {
-    // RIL ISS-087: `record_block_tokens` used to write the manager-wide
+    // `record_block_tokens` used to write the manager-wide
     // `chain_cursor`, so a subsequent `allocate` chained its placeholder
     // hashes off the last recorded *content* hash instead of the previous
     // allocate's hash — mixing two independent chains and producing
@@ -289,7 +289,7 @@ fn test_memory_manager_without_cache_is_a_no_op() {
 #[cfg(feature = "multi-node")]
 #[test]
 fn test_memory_manager_default_hasher_distinguishes_content() {
-    // RIL ISS-086: the default hasher must be a real content mixer, not
+    // the default hasher must be a real content mixer, not
     // `IdentityHasher` (which collapses every block to its parent hash, so
     // two different token streams under the same parent collide on hash 0 —
     // the distributed prefix-cache then wrong-hits the first recorded block).
@@ -645,7 +645,7 @@ fn memory_manager_block_data_source_clone_is_independent() {
     );
 }
 
-/// Regression (RIL TASK-004 / ISS-004): `rollback` must tolerate a
+/// Regression: `rollback` must tolerate a
 /// sequence whose `kv_blocks` is shorter than `num_computed_tokens`
 /// implies — the update path increments `num_computed_tokens` before
 /// allocating and silently stops on OOM. Before the fix the slice

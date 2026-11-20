@@ -11,7 +11,7 @@ async fn test_models_handler_returns_list() {
     let response = models_handler(axum::extract::State(state)).await;
 
     assert_eq!(response.status(), StatusCode::OK);
-    // RIL ISS-118: /v1/models must be uncacheable (OpenAI sends
+    // /v1/models must be uncacheable (OpenAI sends
     // cache-control: no-cache) so proxies don't serve a stale model list.
     assert_eq!(
         response
@@ -31,12 +31,12 @@ async fn test_models_handler_returns_list() {
     assert!(json_str.contains("\"model\""));
 }
 
-/// RIL ISS-106: `GET /v1/models/{id}` must resolve the id the list
+/// `GET /v1/models/{id}` must resolve the id the list
 /// endpoint advertises and return a clean OpenAI `404 model_not_found`
 /// for unknown ids — the route was missing entirely, so SDKs that follow
 /// a model list with a per-model lookup hit axum's default empty 404.
 ///
-/// RIL ISS-129: OpenAI's `GET /v1/models/{model}` returns the BARE model
+/// OpenAI's `GET /v1/models/{model}` returns the BARE model
 /// object (`object: "model"` with `id`/`owned_by` at top level), not the
 /// list envelope — `client.models.retrieve(id)` parses `object` against
 /// `"model"` and reads top-level `id`.
@@ -57,7 +57,7 @@ async fn test_model_by_id_returns_served_model() {
     .await;
 
     assert_eq!(response.status(), StatusCode::OK);
-    // RIL ISS-118: by-id lookup is also uncacheable (mirrors the list).
+    // by-id lookup is also uncacheable (mirrors the list).
     assert_eq!(
         response
             .headers()
@@ -82,7 +82,7 @@ async fn test_model_by_id_returns_served_model() {
     );
     assert!(
         parsed.get("data").is_none(),
-        "by-id payload must NOT be a list envelope (RIL ISS-129): {json_str}"
+        "by-id payload must NOT be a list envelope: {json_str}"
     );
 }
 

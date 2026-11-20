@@ -76,11 +76,11 @@ async fn test_chat_completions_rejects_empty_model() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-/// RIL ISS-152: a chat request naming a model that is NOT the loaded one
+/// a chat request naming a model that is NOT the loaded one
 /// must 404 `model_not_found` at the HTTP boundary instead of silently
 /// running the loaded model and echoing the wrong id back (silent
 /// wrong-model). Uses a real tokenizer from disk — which derives its
-/// model id from the dir name (RIL ISS-147) — for the loaded name, so
+/// model id from the dir name — for the loaded name, so
 /// the conformance check fires. Mirrors the `/models`-guarded test
 /// pattern used throughout `tokenizer.rs` (skipped when no checkpoint is
 /// present, e.g. fresh CI without the model cache).
@@ -102,7 +102,7 @@ async fn test_chat_completions_rejects_model_that_is_not_loaded() {
     assert_eq!(
         state.tokenizer.model_name().as_deref(),
         Some(loaded_name.as_str()),
-        "on-disk tokenizer must report the dir name as its model id (RIL ISS-147)"
+        "on-disk tokenizer must report the dir name as its model id"
     );
     let app = router(state);
 
@@ -133,9 +133,9 @@ async fn test_chat_completions_rejects_model_that_is_not_loaded() {
     assert_eq!(json["error"]["type"], "invalid_request_error");
 }
 
-/// RIL ISS-152 companion: the SAME conformance gate applies to the
+/// companion: the SAME conformance gate applies to the
 /// streaming SSE path (the pre-fix `validate_chat_request` ran only on
-/// the non-stream path for `n = 1` — ISS-069 fixed that for structural
+/// the non-stream path for `n = 1` —fixed that for structural
 /// validation; this pins the model-conformance gate also fires on
 /// `stream: true`).
 #[tokio::test]
@@ -185,7 +185,7 @@ async fn test_chat_stream_rejects_model_that_is_not_loaded() {
     assert_eq!(json["error"]["code"], "model_not_found");
 }
 
-/// RIL ISS-069 / TASK-082: `stream=true` must apply the same
+/// `stream=true` must apply the same
 /// model/messages non-empty validation as the non-streaming path. Pre-fix
 /// `validate_chat_request` ran only in `handle_chat` (the n=1 non-stream
 /// path); the streaming dispatch never validated, so `messages: []` with
@@ -220,7 +220,7 @@ async fn test_chat_streaming_rejects_empty_messages() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-/// RIL ISS-069 / TASK-082: same streaming validation-parity gap for an
+/// same streaming validation-parity gap for an
 /// empty model id — `stream: true` with `model: ""` must 400.
 #[tokio::test]
 async fn test_chat_streaming_rejects_empty_model() {
@@ -249,7 +249,7 @@ async fn test_chat_streaming_rejects_empty_model() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-/// RIL ISS-069 / TASK-082: stream=true with an empty message content must
+/// stream=true with an empty message content must
 /// 400 (parity with the sync completions empty-prompt contract), not emit a
 /// clean-looking 200 SSE of nothing.
 #[tokio::test]
@@ -279,7 +279,7 @@ async fn test_chat_streaming_rejects_empty_message_content() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-/// RIL ISS-139: whitespace-only message content must 400, matching the
+/// whitespace-only message content must 400, matching the
 /// embeddings element contract (which rejects whitespace-only and claims
 /// every sibling does — chat previously accepted it), not render an
 /// all-whitespace prompt onto the chat template.
@@ -333,14 +333,14 @@ async fn test_chat_completions_non_streaming_with_mock_engine() {
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(json["object"], "chat.completion");
     assert!(json["choices"][0]["message"]["content"].is_string());
-    // RIL ISS-130: OpenAI's chat response `message` schema has no `name`
+    // OpenAI's chat response `message` schema has no `name`
     // field — a declared-but-unset `name` must be OMITTED, not serialized
     // as a `"name": null` key that strict wire-diffing clients flag.
     assert!(
         !json["choices"][0]["message"]
             .as_object()
             .is_some_and(|m| m.contains_key("name")),
-        "non-streaming message must not carry a null name key (RIL ISS-130)"
+        "non-streaming message must not carry a null name key"
     );
 }
 
@@ -486,7 +486,7 @@ async fn test_chat_streaming_done_is_separate_event() {
     );
 }
 
-/// Regression (RIL ISS-175): OpenAI's SSE contract treats the chunk `id`
+/// Regression: OpenAI's SSE contract treats the chunk `id`
 /// as the identifier of ONE completion — a client correlates/dedupes a
 /// stream by it. The n = 1 streaming handler hardcoded `"chatcmpl-stream"`,
 /// so every streamed completion in the process shared the identical id and
@@ -556,7 +556,7 @@ async fn test_chat_streaming_chunks_carry_unique_id() {
     );
 }
 
-/// RIL ISS-126: OpenAI emits `role: "assistant"` only on the stream's
+/// OpenAI emits `role: "assistant"` only on the stream's
 /// FIRST delta chunk; subsequent chunks carry an empty role. The n > 1
 /// path already applied this via `first_emitted`, but the n = 1 path
 /// stamped `"assistant"` on every chunk (4 `ChatChunk` construction
@@ -625,17 +625,17 @@ async fn test_chat_streaming_role_only_on_first_chunk() {
         assert_eq!(
             delta["role"],
             serde_json::Value::String(String::new()),
-            "delta #{i} must carry an empty role (RIL ISS-126), got: {delta:?}"
+            "delta #{i} must carry an empty role, got: {delta:?}"
         );
     }
 }
 
-/// RIL ISS-123: every chunk on one chat SSE stream must report the SAME
+/// every chunk on one chat SSE stream must report the SAME
 /// stream-start `created`. The `ChatChunk` constructors previously stamped
 /// a fresh `unix_now_secs()` per chunk, contradicting their own
 /// stream-start doc — finish/usage chunks could drift from the canonical
 /// stream-epoch value across a second boundary (and diverged from the n >
-/// 1 consolidated chunk that already captured one `created`, ISS-122).
+/// 1 consolidated chunk that already captured one `created`).
 /// They now REQUIRE the value, so no call site can reintroduce per-chunk
 /// timestamps. Regression: walk a real n = 1 stream and assert every JSON
 /// chunk's `created` is present and identical.
@@ -699,7 +699,7 @@ async fn test_chat_streaming_created_constant_across_stream() {
     );
 }
 
-/// RIL ISS-126 (n > 1 follow-up): a candidate that finalizes with ZERO
+/// (n > 1 follow-up): a candidate that finalizes with ZERO
 /// token chunks never emits a `role` marker — its finish delta is its
 /// first (and only) delta, and pre-fix the intermediate-finish chunk and
 /// the consolidated final chunk both carried `role: ""` for it. Clients
@@ -789,12 +789,12 @@ async fn test_chat_streaming_n_gt_one_zero_token_candidates_carry_role_marker() 
             .unwrap_or_else(|| panic!("candidate {index} never appeared in the stream"));
         assert!(
             roles.contains(&"assistant".to_string()),
-            "candidate {index}'s first (and only) delta must carry role=assistant (RIL ISS-126), got: {roles:?}"
+            "candidate {index}'s first (and only) delta must carry role=assistant, got: {roles:?}"
         );
     }
 }
 
-/// RIL ISS-111 follow-up: the OpenAI streaming-usage contract
+/// the OpenAI streaming-usage contract
 /// (`stream_options.include_usage`). When `include_usage: true`, the
 /// stream must emit one extra final chunk — immediately BEFORE `[DONE]` —
 /// whose `choices` is an empty array and whose `usage` carries the real
@@ -890,7 +890,7 @@ async fn test_chat_streaming_include_usage_emits_usage_chunk() {
     );
 }
 
-/// RIL ISS-111 follow-up: `stream_options.include_usage` is honored on the
+/// `stream_options.include_usage` is honored on the
 /// `n > 1` chat streaming path too — the usage chunk (`choices: []` + real
 /// usage, `completion_tokens` aggregated across ALL choices) must appear
 /// between the consolidated final chunk and `[DONE]`. Pre-fix a client
@@ -1859,7 +1859,7 @@ async fn test_chat_with_response_format_json_schema_rejected() {
         status.is_client_error(),
         "json_schema must be rejected with 4xx; got {status} (v0.3 work; not yet implemented in v0.2)",
     );
-    // RIL ISS-104: the OpenAI wire contract maps deserialization
+    // the OpenAI wire contract maps deserialization
     // failures (unknown enum variant, wrong shape, malformed JSON) to
     // 400 invalid_request_error — not axum's default 422 plain-text
     // body, which OpenAI clients treat as opaque.
@@ -5751,7 +5751,7 @@ async fn test_completions_best_of_above_twenty_returns_400() {
 
 #[tokio::test]
 async fn test_completions_best_of_with_stream_rejected() {
-    // RIL ISS-158: stream = true + best_of > 1 must be REJECTED with 400,
+    // stream = true + best_of > 1 must be REJECTED with 400,
     // not silently downgraded to a non-streaming JSON document. best_of
     // requires ranking N candidates before returning ONE, which cannot
     // stream — the pre-fix behavior returned a single JSON object while a
@@ -5808,7 +5808,7 @@ async fn test_completions_best_of_with_stream_rejected() {
 #[tokio::test]
 async fn test_completions_stream_with_best_of_one_still_streams() {
     // best_of = 1 (the default) with stream:true remains valid — a single
-    // candidate is genuinely streamable. Regression guard for the ISS-158
+    // candidate is genuinely streamable. Regression guard for the
     // cross-field reject: it must only fire for best_of > 1.
     use vllm_server::openai::completions::completions;
     let (state, _captured, _handle) = state_with_best_of_mock_engine();
@@ -7836,7 +7836,7 @@ async fn test_completions_n_two_streaming_wire_shape() {
     //     `index`, an empty `text`, and `finish_reason` — every
     //     `choices[]` entry must carry `text` per the OpenAI
     //     contract so clients concatenating chunk texts never hit
-    //     a missing key (RIL ISS-047). For `n = 2` with
+    // a missing key. For `n = 2` with
     //     candidates finishing at different rates, up to N-1 such
     //     intermediate events may appear before the final
     //     consolidated event. (Note: the mock engine emits all
@@ -7962,7 +7962,7 @@ async fn test_completions_n_two_streaming_wire_shape() {
         // Final consolidated choices carry an EMPTY `text` field — every
         // `choices[]` entry must carry `text` per the OpenAI streaming
         // contract so clients concatenating chunk texts never hit a
-        // missing key (RIL ISS-047).
+        // missing key.
         assert_eq!(
             c["text"],
             serde_json::Value::String(String::new()),
@@ -8011,7 +8011,7 @@ async fn test_completions_n_two_streaming_wire_shape() {
     // appear (single-choice with `finish_reason`), each must carry
     // ONLY the finished candidate's choice, with a string
     // `finish_reason` AND the always-present empty `text` field
-    // (RIL ISS-047).
+
     for (i, event) in json_events.iter().enumerate() {
         if i == final_event_idx {
             continue;
@@ -8698,8 +8698,7 @@ async fn test_chat_n_above_one_streaming_final_event_has_finish_reason_per_index
 /// Byte-level BPE whose vocab holds the raw bytes of U+4F60 (你, E4 BD A0)
 /// as three separate tokens (no merge ever combined them) — mirrors the
 /// vllm-model `split_char_tokenizer` fixture so the production streaming
-/// decode path sees a multi-byte char split across consecutive tokens
-/// (RIL ISS-105/ISS-121).
+/// decode path sees a multi-byte char split across consecutive tokens.
 fn split_char_tokenizer() -> vllm_model::tokenizer::Tokenizer {
     use tokenizers::decoders::byte_level::ByteLevel as ByteLevelDecoder;
     use tokenizers::models::bpe::BPE;
@@ -8738,12 +8737,12 @@ fn split_char_tokenizer() -> vllm_model::tokenizer::Tokenizer {
     vllm_model::tokenizer::Tokenizer::from_hf_tokenizer(hf)
 }
 
-/// RIL ISS-121 regression: on the n > 1 chat stream, the LAST-finishing
+/// regression: on the n > 1 chat stream, the LAST-finishing
 /// candidate had its held-back partial UTF-8 bytes flushed into `tail` at
 /// its own `Finished` event, but the consolidated all_done chunk then
 /// RE-flushed every candidate — `StreamingDecoder::flush` clears pending,
 /// so that candidate's tail came back "" and was dropped (defeating
-/// ISS-105's guarantee exactly at stream end). Each candidate generates
+/// 's guarantee exactly at stream end). Each candidate generates
 /// [2, 3] = the first two bytes of 你; the last-finishing candidate's
 /// consolidated delta must carry the non-empty held-back tail.
 #[tokio::test]

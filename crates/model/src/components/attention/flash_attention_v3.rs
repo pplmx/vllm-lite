@@ -34,7 +34,8 @@ pub struct FlashAttentionV3 {
     window_size: Option<(i32, i32)>,
 }
 
-/// Configuration for `FlashAttentionV3`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `FlashAttentionV3`. Constructed via the `builder()` associated function or by
+/// deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FlashAttentionV3Config {
     /// Number of attention heads.
@@ -64,7 +65,8 @@ impl FlashAttentionV3 {
     /// Run the layer forward pass over the input.
     /// # Errors
     ///
-    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype
+    /// incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         trace!(
             batch = ?q.dims()[0],
@@ -195,7 +197,8 @@ impl MqaFlashAttention {
     /// Run the layer forward pass over the input.
     /// # Errors
     ///
-    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype
+    /// incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (_batch_size, num_heads_q, seq_q, _) = q.dims4()?;
         debug_assert_eq!(num_heads_q, self.num_heads);
@@ -224,7 +227,7 @@ impl MqaFlashAttention {
         if num_kv_heads == num_q_heads {
             return Ok(kv.clone());
         }
-        // BLOCKED GQA expansion (RIL ISS-010): see `util::expand_kv` for
+        // BLOCKED GQA expansion: see `util::expand_kv` for
         // the grouping rationale. Layout is `[batch, heads, seq, dim]`,
         // so the group axis is inserted at position 2 (after heads).
         let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
@@ -274,7 +277,8 @@ impl GqaFlashAttention {
     /// Run the layer forward pass over the input.
     /// # Errors
     ///
-    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype
+    /// incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (_batch_size, num_heads_q, seq_q, _) = q.dims4()?;
         debug_assert_eq!(num_heads_q, self.num_heads);
@@ -312,7 +316,7 @@ impl GqaFlashAttention {
         }
         debug_assert_eq!(num_kv_heads, self.num_kv_heads);
 
-        // BLOCKED GQA expansion (RIL ISS-010): see `util::expand_kv`.
+        // BLOCKED GQA expansion: see `util::expand_kv`.
         let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
         let (batch, seq, dim) = (kv.dims()[0], kv.dims()[2], kv.dims()[3]);
         kv.reshape((batch, num_kv_heads, 1, seq, dim))?

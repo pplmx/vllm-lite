@@ -69,7 +69,7 @@ pub struct Engine {
     /// log/diagnostics; the structured error chain is on the originating
     /// request, this is just a convenience field for quick inspection.
     pub last_error: Option<String>,
-    /// The model's end-of-sentence token id (RIL ISS-075). When set, a
+    /// The model's end-of-sentence token id. When set, a
     /// sequence whose last generated token equals this id is finalized with
     /// `FinishReason::Stop` (in `finalize_stop_sequences`) instead of burning
     /// the remaining `max_tokens` budget and reporting `Length`. Wired by the

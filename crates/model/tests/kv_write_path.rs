@@ -1,7 +1,7 @@
 //! Integration test: a REAL model (`LlamaModel` with KV-writing
 //! `RopeGqaDecoderBlock`) writes its prefill KV into the blocks it is given —
 //! the data path that `StubModel`'s passthrough block skips entirely. This is
-//! a regression guard for the KV-write path (RIL ISS-019/ISS-022 class): if
+// a regression guard for the KV-write path (class): if
 //! `write_prefill_kv` or the block indexing regresses, the KV would land in
 //! the wrong blocks (or stay zero) and this fails.
 

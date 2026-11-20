@@ -1,4 +1,5 @@
-//! `OpenAI` Batch API request lifecycle: enqueue, dispatch to engine, poll status, cancel, collect results.
+// ! `OpenAI` Batch API request lifecycle: enqueue, dispatch to engine, poll status, cancel, collect
+// results.
 //!
 //! `BatchManager` owns the per-batch state machine (`Pending` →
 //! `InProgress` → `Completed`/`Failed`/`Cancelled`) and is shared across
@@ -12,10 +13,11 @@ use uuid::Uuid;
 use super::types::{BatchEndpoint, BatchJob, BatchResultItem, BatchStatus};
 
 #[derive(Debug)]
-/// Manager for Batch. Owns the underlying resource, coordinates concurrent access, and exposes a thread-safe public API.
+/// Manager for Batch. Owns the underlying resource, coordinates concurrent access, and exposes a
+/// thread-safe public API.
 pub struct BatchManager {
     jobs: Arc<RwLock<HashMap<String, BatchJob>>>,
-    /// Monotonic creation counter (RIL ISS-146): assigns each job a
+    /// Monotonic creation counter: assigns each job a
     /// `created_seq` so newest-first iteration is deterministic even when
     /// several batches land in the same `created_at` second.
     next_seq: std::sync::atomic::AtomicU64,
@@ -31,8 +33,8 @@ impl BatchManager {
     }
 
     /// Evict terminal jobs whose `expires_at` has passed, bounding the
-    /// in-memory job map to ~one retention window (RIL ISS-066 / TASK-079,
-    /// DEC-046). Called from every public access point so an expired batch
+    /// in-memory job map to ~one retention window (
+    ///). Called from every public access point so an expired batch
     /// reliably returns `None` (404) rather than lingering forever.
     ///
     /// Only **terminal** (`Completed`/`Failed`/`Cancelled`) jobs are
@@ -61,7 +63,7 @@ impl BatchManager {
             max_tokens,
             temperature,
         );
-        // RIL ISS-146: assign a monotonic creation sequence so newest-first
+        // assign a monotonic creation sequence so newest-first
         // iteration is deterministic even for same-second batches (`crate`
         // field lives in `types`; the sequence is owned by the manager).
         let seq = self
@@ -83,7 +85,7 @@ impl BatchManager {
     }
 
     pub async fn get_all_jobs(&self) -> Vec<BatchJob> {
-        // RIL ISS-146: newest-first, deterministic. `created_at` is
+        // newest-first, deterministic. `created_at` is
         // second-precision (same-second batches tie); `created_seq` (the
         // manager's monotonic counter, assigned at creation) breaks the
         // tie so iteration is fully ordered instead of HashMap-arbitrary.
@@ -118,7 +120,8 @@ impl BatchManager {
     /// Set completed.
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    /// Panics if a required invariant is violated (e.g. A `None` value is force-unwrapped or an
+    /// out-of-bounds index is used).
     pub async fn set_completed(&self, job_id: &str) {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.get_mut(job_id) {
@@ -166,7 +169,8 @@ impl BatchManager {
     ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    /// Panics if a required invariant is violated (e.g. A `None` value is force-unwrapped or an
+    /// out-of-bounds index is used).
     pub async fn set_failed(&self, job_id: &str) {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.get_mut(job_id) {
@@ -307,7 +311,7 @@ mod tests {
         assert!(ids.contains(&id2.as_str()));
     }
 
-    // RIL ISS-146: `get_all_jobs` must return jobs newest-first
+    // `get_all_jobs` must return jobs newest-first
     // deterministically — the `BatchListResponse.data` doc promises
     // "newest first", but the pre-fix implementation returned HashMap
     // iteration order (arbitrary, and even varying across calls as the
@@ -522,7 +526,7 @@ mod tests {
         assert!(!rt.block_on(mgr.is_cancelled("nonexistent")));
     }
 
-    // RIL ISS-066 / TASK-079: the in-memory job map must not grow without
+    // the in-memory job map must not grow without
     // bound. Every job carries a fixed `expires_at` (created_at +
     // DEFAULT_BATCH_RETENTION_SECS); terminal (Completed/Failed/Cancelled)
     // jobs past expiry are evicted lazily on every manager access. In-flight

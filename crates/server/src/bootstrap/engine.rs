@@ -184,7 +184,7 @@ fn build_engine_legacy(
             app_config.engine.num_kv_blocks,
         )
     } else {
-        // RIL ISS-081: the legacy fallback previously called
+        // the legacy fallback previously called
         // `Engine::new_boxed` which hardcodes max_draft_tokens=4 and
         // kv_blocks=1024, ignoring the configured values. Route it through
         // `with_config_boxed` so `--kv-blocks` / `--max-draft-tokens` /
@@ -207,7 +207,7 @@ fn build_engine_legacy(
 /// Build the `SchedulerConfig` used by every engine-construction path from
 /// the server's `AppConfig` instead of `SchedulerConfig::default()`.
 ///
-/// RIL ISS-081: `--max-batch-size` / `engine.max_batch_size` was parsed,
+/// `--max-batch-size` / `engine.max_batch_size` was parsed,
 /// validated (1-8192) and stored but never consumed — every `build_engine*`
 /// path passed `SchedulerConfig::default()`, so the knob changed nothing at
 /// runtime. The engine's per-batch sequence cap is wired from
@@ -223,7 +223,7 @@ fn scheduler_config_from_app_config(app_config: &AppConfig) -> SchedulerConfig {
 }
 
 /// Return startup warnings for engine knobs that are **documented but not
-/// applied** by this build (RIL ISS-091) — an operator setting them today
+/// applied** by this build — an operator setting them today
 /// gets a silent no-op, which is a config-honesty trap. Each returned
 /// message is logged at `WARN` once at startup, before any traffic.
 ///
@@ -244,7 +244,7 @@ pub fn inert_engine_knob_warnings(app_config: &AppConfig) -> Vec<String> {
         warnings.push(format!(
             "engine.tensor_parallel_size = {} is NOT applied: this build runs a single \
              model worker on one device; tensor-parallel sharding (vllm-dist / multi-node) \
-             is not wired, so the knob changes nothing (RIL ISS-091)",
+             is not wired, so the knob changes nothing",
             app_config.engine.tensor_parallel_size
         ));
     }
@@ -252,14 +252,14 @@ pub fn inert_engine_knob_warnings(app_config: &AppConfig) -> Vec<String> {
         warnings.push(format!(
             "engine.max_waiting_batches = {} is NOT applied: the scheduler admits every \
              queued request up to the KV/memory budget and has no waiting-batch backpressure \
-             in this build, so the knob changes nothing (RIL ISS-091)",
+             in this build, so the knob changes nothing",
             app_config.engine.max_waiting_batches
         ));
     }
     warnings
 }
 
-/// Wire the checkpoint's end-of-sentence token into the engine (RIL ISS-075)
+/// Wire the checkpoint's end-of-sentence token into the engine
 /// so a sequence stops as soon as the model emits it — `FinishReason::Stop`
 /// instead of burning the remaining `max_tokens` budget.
 ///
@@ -285,7 +285,7 @@ fn read_eos_token_id(config: &serde_json::Value) -> Option<u32> {
     })
 }
 
-/// Wire the checkpoint's end-of-sentence token into the engine (RIL ISS-075)
+/// Wire the checkpoint's end-of-sentence token into the engine
 /// so a sequence stops as soon as the model emits it — `FinishReason::Stop`
 /// instead of burning the remaining `max_tokens` budget.
 ///
@@ -334,14 +334,14 @@ pub fn configure_speculative(app_config: &AppConfig, engine: &mut Engine) {
 mod tests {
     use super::*;
 
-    /// RIL ISS-091: the default configproduces no inert-knob warnings.
+    /// the default configproduces no inert-knob warnings.
     #[test]
     fn inert_engine_knob_warnings_none_for_defaults() {
         let app = AppConfig::default();
         assert!(inert_engine_knob_warnings(&app).is_empty());
     }
 
-    /// RIL ISS-091: `tensor_parallel_size > 1` is documented-but-inert and
+    /// `tensor_parallel_size > 1` is documented-but-inert and
     /// must warn at startup instead of silently doing nothing.
     #[test]
     fn inert_engine_knob_warnings_flags_tensor_parallel() {
@@ -352,7 +352,7 @@ mod tests {
         assert!(warnings[0].contains("tensor_parallel_size"));
     }
 
-    /// RIL ISS-091: a non-default `max_waiting_batches` is documented-but-
+    /// a non-default `max_waiting_batches` is documented-but-
     /// inert and must warn at startup.
     #[test]
     fn inert_engine_knob_warnings_flags_max_waiting_batches() {
@@ -367,7 +367,7 @@ mod tests {
         assert!(warnings[0].contains("max_waiting_batches"));
     }
 
-    /// RIL ISS-091: both inert knobs set → two warnings.
+    /// both inert knobs set → two warnings.
     #[test]
     fn inert_engine_knob_warnings_flags_both() {
         let mut app = AppConfig::default();
@@ -377,7 +377,7 @@ mod tests {
         assert_eq!(warnings.len(), 2, "{warnings:?}");
     }
 
-    /// RIL ISS-075: the `eos_token_id` parser accepts the single-int
+    /// the `eos_token_id` parser accepts the single-int
     /// `HuggingFace` form.
     #[test]
     fn read_eos_token_id_accepts_single_id() {
@@ -385,7 +385,7 @@ mod tests {
         assert_eq!(read_eos_token_id(&cfg), Some(151_645));
     }
 
-    /// RIL ISS-075: some checkpoints declare `eos_token_id` as a list — the
+    /// some checkpoints declare `eos_token_id` as a list — the
     /// first parseable entry wins.
     #[test]
     fn read_eos_token_id_accepts_list_form() {
@@ -393,7 +393,7 @@ mod tests {
         assert_eq!(read_eos_token_id(&cfg), Some(151_645));
     }
 
-    /// RIL ISS-075: absent / non-numeric ids keep EOS-stop disabled (stub or
+    /// absent / non-numeric ids keep EOS-stop disabled (stub or
     /// GGUF checkpoints without `eos_token_id` — mirrors `max_model_len`'s
     /// `None`-when-undeclared contract).
     #[test]
@@ -409,7 +409,7 @@ mod tests {
         );
     }
 
-    /// RIL ISS-081: `engine.max_batch_size` must reach the engine's
+    /// `engine.max_batch_size` must reach the engine's
     /// scheduler (as `max_num_seqs`, the cap the batch composer is wired
     /// from). Pre-fix every construction path passed
     /// `SchedulerConfig::default()`, so the knob was inert.
@@ -425,7 +425,7 @@ mod tests {
         );
     }
 
-    /// RIL ISS-081: lowering the knob must be honored; untouched scheduler
+    /// lowering the knob must be honored; untouched scheduler
     /// knobs keep their documented defaults (not re-derived or zeroed).
     #[test]
     fn scheduler_config_preserves_defaults_and_honors_lowering() {

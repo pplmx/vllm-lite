@@ -71,7 +71,7 @@ pub(crate) fn greedy_sample_token(logits: &Tensor, is_prefill: bool) -> Result<T
 }
 
 pub(crate) fn logits_to_vector(logits: &Tensor, _is_prefill: bool) -> Result<Vec<f32>> {
-    // RIL ISS-023 / TASK-027: return the logits for ALL positions (flattened
+    // return the logits for ALL positions (flattened
     // [seq * vocab]), not just the last position. The speculative-decoding
     // verifier needs per-position logits to verify each draft; callers that
     // want only the last position (step_regular / graph_step) take the last

@@ -1,4 +1,4 @@
-//! Engine-loop panic guard (RIL TASK-050, ISS-046).
+// Engine-loop panic guard.
 //!
 //! The engine runs on a single dedicated thread. A panic inside the target
 //! model's forward (a GPU kernel fault, an `assert!` in an architecture
@@ -9,7 +9,7 @@
 //! draft guard was a no-op in production.
 //!
 //! `Engine::run` now wraps the step in `catch_unwind` (converting a panic to
-//! a step error: `error_count`++, ISS-045 orphan recovery), and the release
+// a step error: `error_count`++, orphan recovery), and the release
 //! profile unwinds so the guard is effective in production.
 //!
 //! This test drives the real `run()` loop on a thread with a backend that
@@ -94,7 +94,7 @@ fn model_forward_panic_does_not_kill_the_engine_loop() {
     });
 
     // Add a generation request; the loop drains it and steps (panic →
-    // caught → ISS-045 requeue → retry).
+    // caught → requeue → retry).
     let (response_tx, _response_rx) = tokio::sync::mpsc::channel(64);
     tx.blocking_send(EngineMessage::AddRequest {
         request: Box::new(Request::new(7, vec![1, 2, 3], 5)),

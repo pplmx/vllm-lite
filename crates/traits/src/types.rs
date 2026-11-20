@@ -11,11 +11,14 @@ use crate::sampling::SamplingParams;
 
 /// Compile-time constant: `size`. Tune via feature flags or env vars in production.
 pub const BLOCK_SIZE: usize = 16;
-/// Opaque newtype identifier for a block. Hashable, comparable, serializable; use this rather than the raw integer.
+/// Opaque newtype identifier for a block. Hashable, comparable, serializable; use this rather than
+/// the raw integer.
 pub type BlockId = usize;
-/// Opaque newtype identifier for a token. Hashable, comparable, serializable; use this rather than the raw integer.
+/// Opaque newtype identifier for a token. Hashable, comparable, serializable; use this rather than
+/// the raw integer.
 pub type TokenId = u32;
-/// Opaque newtype identifier for a seq. Hashable, comparable, serializable; use this rather than the raw integer.
+/// Opaque newtype identifier for a seq. Hashable, comparable, serializable; use this rather than
+/// the raw integer.
 pub type SeqId = u64;
 
 /// Batch phase classification for mixed prefill/decode scheduling.
@@ -52,8 +55,8 @@ pub enum FinishReason {
     /// Generation stopped because the engine judged the sequence
     /// complete *before* hitting `max_tokens` — via a configured `stop`
     /// sequence match (`SamplingParams::stop_token_sequences`) or because
-    /// the model emitted its end-of-sentence token (EOS-stop, RIL
-    /// ISS-075 / TASK-109; implemented in `Engine::finalize_stop_sequences`
+    /// the model emitted its end-of-sentence token (EOS-stop; implemented
+    /// in `Engine::finalize_stop_sequences`
     /// when the engine's `eos_token_id` is set — the server wires it from
     /// the checkpoint's `config.json`).
     Stop,
@@ -171,7 +174,8 @@ pub struct BatchOutput {
     pub next_tokens: Vec<SampledToken>,
 }
 
-/// Error type for `TensorParallel`. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Error type for `TensorParallel`. Returned from every fallible public API; covers I/O,
+/// validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum TensorParallelError {
     #[error("World size must be > 0")]

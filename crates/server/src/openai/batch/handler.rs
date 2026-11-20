@@ -1,4 +1,5 @@
-//! `OpenAI` Batch API axum handlers: `POST /v1/batches`, `GET /v1/batches/{id}`, `POST /v1/batches/{id}/cancel`, `GET /v1/batches/{id}/results`.
+// ! `OpenAI` Batch API axum handlers: `POST /v1/batches`, `GET /v1/batches/{id}`, `POST
+// /v1/batches/{id}/cancel`, `GET /v1/batches/{id}/results`.
 //!
 //! Each handler is a thin wrapper over `BatchManager` plus RBAC + rate-limit middleware.
 use axum::{Json, extract::State};
@@ -15,7 +16,7 @@ use crate::openai::sampling_validation::validate_temperature;
 use crate::openai::types::ErrorResponse;
 
 /// Hard cap on the number of prompts a single `create_batch` request may
-/// carry (RIL ISS-070 / TASK-083).
+/// carry.
 ///
 /// Each prompt is a full engine generation, so an unbounded inline
 /// `prompts` array packs N× work into one request (sync completions: 1
@@ -36,7 +37,7 @@ const MAX_BATCH_PROMPTS: usize = 10_000;
 /// handler persists the job, spawns the worker, and returns the
 /// `202 Accepted` batch object immediately.
 ///
-/// **202 vs 200 (RIL ISS-124):** `OpenAI`'s Batch API documents
+/// **202 vs 200:** `OpenAI`'s Batch API documents
 /// `POST /v1/batches` as `202 Accepted` — the job is queued for
 /// asynchronous execution, not synchronously completed. The pre-fix
 /// contract returned a plain `200 OK`, which matches neither the
@@ -70,14 +71,14 @@ pub async fn create_batch(
         ));
     }
 
-    // RIL ISS-067 / TASK-080: inherit the sync `/v1/completions`
+    // inherit the sync `/v1/completions`
     // empty-prompt contract (`req.prompt.is_empty()` → 400 "prompt is
     // required"). An empty batch prompt would reach the worker as a
     // zero-token prefill the sync endpoint explicitly forbids, so reject
     // any empty string in the list before persisting (a single empty
     // prompt poisons the whole batch).
     //
-    // RIL ISS-139: whitespace-only prompts follow the same contract —
+    // whitespace-only prompts follow the same contract —
     // embeddings rejects whitespace-only while its comment claims every
     // sibling does; batch must mirror the trim.
     if req.prompts.iter().any(|p| p.trim().is_empty()) {
@@ -90,7 +91,7 @@ pub async fn create_batch(
         ));
     }
 
-    // RIL ISS-140: empty model-id parity — chat + embeddings reject
+    // empty model-id parity — chat + embeddings reject
     // `model: ""`; batch previously ignored it entirely. `None` stays the
     // server default.
     if req.model.as_deref().is_some_and(str::is_empty) {
@@ -103,18 +104,18 @@ pub async fn create_batch(
         ));
     }
 
-    // RIL ISS-159: model-conformance parity — chat, completions, and
+    // model-conformance parity — chat, completions, and
     // embeddings reject a requested `model` that isn't the one actually
-    // serving (`404 model_not_found`, RIL ISS-152); batch previously
+    // serving (`404 model_not_found`); batch previously
     // accepted ANY non-empty id and silently ran the loaded model, so a
     // `model: "gpt-4o"` batch against a Qwen deployment served Qwen
-    // output with a 202 — the exact wrong-model class ISS-152 closed on
+    // output with a 202 — the exact wrong-model class closed on
     // the sibling endpoints. Enforce the same conformance check here.
     // Mirrors the sibling endpoints' leniency for fallback/stub
     // tokenizers (no name to conform against) and `None`.
     validate_model_conformance(req.model.as_deref(), state.tokenizer.model_name())?;
 
-    // RIL ISS-070 / TASK-083: bound the batch size. Each prompt is a full
+    // bound the batch size. Each prompt is a full
     // engine generation; without a cap a single request packs unbounded
     // work (and unbounded in-memory job/results retention) and the
     // rate-limit clamp makes prompts past the ~1,000-prompt saturation
@@ -130,13 +131,13 @@ pub async fn create_batch(
         ));
     }
 
-    // RIL ISS-065 / TASK-078: inherit the same sampling-param boundary
+    // inherit the same sampling-param boundary
     // validation the chat + completions endpoints enforce. `temperature`
     // is forwarded verbatim into `SamplingParams` by the worker, so NaN /
     // ±inf / out-of-[0,2] values would silently corrupt sampling
-    // (ISS-048); `max_tokens` is coerced with `unwrap_or(100)` in the
+    // `max_tokens` is coerced with `unwrap_or(100)` in the
     // worker, so `0` would still emit one token and a negative value
-    // would silently become 100 (ISS-033). Reject before persisting so an
+    // would silently become 100. Reject before persisting so an
     // invalid batch never spawns a worker over garbage params.
     validate_temperature(req.temperature)?;
     if let Some(max_tokens) = req.max_tokens
@@ -314,7 +315,8 @@ pub async fn get_batch_results(
 /// Run the operation (see signature for params and return type).
 /// # Panics
 ///
-/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+/// Panics if a required invariant is violated (e.g. A `None` value is force-unwrapped or an
+/// out-of-bounds index is used).
 pub async fn list_batches(State(state): State<ApiState>) -> Json<BatchListResponse> {
     let jobs = state.batch_manager.get_all_jobs().await;
 
@@ -331,7 +333,7 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<BatchListRespon
                 created_at: job.created_at,
                 // Report the stored (fixed-at-creation) expiry, not a
                 // recomputed `now + window` that would extend retention on
-                // every read (RIL ISS-066 / TASK-079).
+                // every read.
                 expires_at: job.expires_at,
                 completed_at: job.completed_at,
                 request_counts: Some(RequestCounts {
@@ -343,7 +345,7 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<BatchListRespon
         })
         .collect();
 
-    // RIL ISS-118: OpenAI's `GET /v1/batches` returns
+    // OpenAI's `GET /v1/batches` returns
     // `{"object":"list","data":[...]}` — a bare array broke SDKs that
     // read `parsed["data"]`.
     Json(BatchListResponse {
@@ -371,8 +373,7 @@ where
         endpoint: job.endpoint,
         status,
         created_at: job.created_at,
-        // Stored expiry — fixed at creation, not `now + window` (RIL
-        // ISS-066 / TASK-079).
+        // Stored expiry — fixed at creation, not `now + window`.
         expires_at: job.expires_at,
         completed_at: job.completed_at,
         request_counts: Some(RequestCounts {
@@ -436,7 +437,7 @@ mod tests {
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
     }
 
-    // RIL ISS-067 / TASK-080: batch prompts inherit the sync
+    // batch prompts inherit the sync
     // `/v1/completions` empty-prompt contract (`req.prompt.is_empty()` →
     // 400 "prompt is required"). An empty batch prompt would reach the
     // worker as a zero-token prefill the sync endpoint explicitly forbids;
@@ -485,7 +486,7 @@ mod tests {
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
     }
 
-    // RIL ISS-139: whitespace-only prompts follow the same contract —
+    // whitespace-only prompts follow the same contract —
     // embeddings rejects whitespace-only elements while claiming every
     // sibling does; batch must mirror the trim.
     #[tokio::test]
@@ -509,7 +510,7 @@ mod tests {
         );
     }
 
-    // RIL ISS-140: empty model-id parity — chat + embeddings 400 on
+    // empty model-id parity — chat + embeddings 400 on
     // `model: ""`; batch previously ignored it entirely. `None` stays the
     // server default; only `Some("")` is rejected.
     #[tokio::test]
@@ -588,7 +589,7 @@ mod tests {
 
         let result = create_batch(State(state), OpenaiJson(req)).await;
         let response = result.expect("create_batch must succeed once the worker exists");
-        // RIL ISS-124: OpenAI's `POST /v1/batches` returns 202 Accepted
+        // OpenAI's `POST /v1/batches` returns 202 Accepted
         // (the job runs asynchronously); the pre-fix contract returned a
         // plain 200, which strict clients checking the status code rejected.
         assert_eq!(response.0, axum::http::StatusCode::ACCEPTED);
@@ -614,12 +615,12 @@ mod tests {
         }
     }
 
-    // RIL ISS-065 / TASK-078: the batch endpoint must inherit the same
+    // the batch endpoint must inherit the same
     // boundary validation the chat + completions endpoints enforce —
-    // `validate_temperature` (ISS-048: NaN / ±inf / out-of-[0,2] would
-    // silently corrupt sampling) and `max_tokens >= 1` (ISS-033: 0 still
+    // `validate_temperature` (NaN / ±inf / out-of-[0,2] would
+    // silently corrupt sampling) and `max_tokens >= 1` (0 still
     // emits one token, negative silently coerces to 100). Round 59
-    // hardened the batch endpoint for rate-limit cost + the ISS-044
+    // hardened the batch endpoint for rate-limit cost + the
     // context-length ceiling; the float/int sampling-param boundary
     // checks were the remaining hardening-parity gap. Rejection must
     // happen BEFORE `create_job` so an invalid request never leaves a
@@ -727,7 +728,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_batch_response_reports_fixed_stored_expires_at() {
-        // RIL ISS-066 / TASK-079: the response's `expires_at` must come
+        // the response's `expires_at` must come
         // from the stored job (fixed at creation), not be synthesised as
         // `now + 86_400` — the old behaviour reported a moving target that
         // extended the retention window on every read.
@@ -805,7 +806,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_batches_returns_openai_list_envelope() {
-        // RIL ISS-118: `GET /v1/batches` must return
+        // `GET /v1/batches` must return
         // `{"object":"list","data":[...]}` — a bare array breaks OpenAI
         // SDKs that read `parsed["data"]`.
         let state = create_test_state();
@@ -827,13 +828,13 @@ mod tests {
         assert_eq!(data[0].endpoint, BatchEndpoint::Completion);
     }
 
-    // RIL ISS-159: batch model-conformance parity — chat/completions/
+    // batch model-conformance parity — chat/completions/
     // embeddings 404 `model_not_found` for a requested model that isn't
-    // the loaded one (RIL ISS-152); batch previously accepted ANY
+    // the loaded one; batch previously accepted ANY
     // non-empty id and ran the loaded model with a 202. Uses a real
-    // on-disk tokenizer (deriving its model id from the dir name, RIL
-    // ISS-147) so the conformance check fires. Skipped when the model
-    // cache is absent (fresh CI).
+    // on-disk tokenizer (deriving its model id from the dir name) so the
+    // conformance check fires. Skipped when the model cache is absent
+    // (fresh CI).
     #[tokio::test]
     async fn test_create_batch_rejects_model_that_is_not_loaded() {
         let model_dir = std::path::Path::new("/models/Qwen3-0.6B");
@@ -851,7 +852,7 @@ mod tests {
         assert_eq!(
             state.tokenizer.model_name().as_deref(),
             Some("Qwen3-0.6B"),
-            "on-disk tokenizer must report the dir name as its model id (RIL ISS-147)"
+            "on-disk tokenizer must report the dir name as its model id"
         );
 
         let req = SimpleBatchRequest {
@@ -876,7 +877,7 @@ mod tests {
     async fn test_create_batch_accepts_loaded_model_id() {
         let mut state = create_test_state();
         // A server that cannot name its model (fallback tokenizer) stays
-        // lenient — the ISS-152 test seam. A request for the loaded
+        // lenient — the test seam. A request for the loaded
         // model (when one is nameable) must be accepted.
         let model_dir = std::path::Path::new("/models/Qwen3-0.6B");
         let tokenizer_path = model_dir.join("tokenizer.json");
@@ -911,7 +912,7 @@ mod tests {
             let result = create_batch(State(state), OpenaiJson(req)).await;
             assert_eq!(
                 result
-                    .expect("non-empty id must pass with a fallback tokenizer (ISS-152 seam)")
+                    .expect("non-empty id must pass with a fallback tokenizer (seam)")
                     .0,
                 axum::http::StatusCode::ACCEPTED
             );

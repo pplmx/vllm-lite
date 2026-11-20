@@ -101,7 +101,7 @@ pub fn validate_top_p(top_p: Option<f32>) -> Result<(), (StatusCode, Json<ErrorR
 /// proceeds and every logit becomes `NaN`; `±inf` flattens or inverts
 /// the distribution to garbage; a negative value flips the logits and
 /// samples the *least* likely token) — reject them with `400` instead
-/// (RIL ISS-048). A negative temperature is also out of contract.
+/// A negative temperature is also out of contract.
 ///
 /// # Errors
 ///
@@ -793,7 +793,7 @@ pub fn validate_chat_tool_choice(
 pub fn validate_chat_request_fields(
     req: &ChatRequest,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
-    // RIL ISS-033: `max_tokens` must be >= 1. The engine's completion check
+    // `max_tokens` must be >= 1. The engine's completion check
     // is `generated >= max_tokens`; with `max_tokens = 0` a request would
     // emit one token anyway (the prefill samples one), and a negative value
     // was silently coerced to 100 by `usize::try_from(...).unwrap_or(100)` —
@@ -868,7 +868,7 @@ pub fn validate_chat_request_fields(
 pub fn validate_completion_request_fields(
     req: &CompletionRequest,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
-    // RIL ISS-140: empty model-id parity — chat + embeddings reject
+    // empty model-id parity — chat + embeddings reject
     // `model: ""`; completions previously echoed the blank id back. `None`
     // stays allowed (legacy default to the loaded model).
     if req.model.as_deref().is_some_and(str::is_empty) {
@@ -880,7 +880,7 @@ pub fn validate_completion_request_fields(
             )),
         ));
     }
-    // RIL ISS-033: same max_tokens >= 1 contract as the chat endpoint (see
+    // same max_tokens >= 1 contract as the chat endpoint (see
     // `validate_chat_request_fields`).
     if let Some(max_tokens) = req.max_tokens
         && max_tokens < 1
@@ -959,7 +959,7 @@ pub fn validate_completion_request_fields(
             ));
         }
     }
-    // RIL ISS-158: `stream: true` + `best_of > 1` is irreconcilable with
+    // `stream: true` + `best_of > 1` is irreconcilable with
     // SSE. `run_best_of` must spawn N candidates, rank by mean logprob,
     // and return ONE — the ranking cannot stream incrementally — so a
     // stream request was silently downgraded to a single JSON document
@@ -989,7 +989,7 @@ pub fn validate_completion_request_fields(
 }
 
 /// Reject a client-provided `model` id that does not match the model
-/// actually serving (RIL ISS-152).
+/// actually serving.
 ///
 /// Every inference endpoint previously accepted ANY non-empty `model`
 /// string and served it with the loaded model, echoing the requested
@@ -1653,7 +1653,7 @@ mod tests {
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
-    // `validate_temperature` tests (RIL ISS-048). Per OpenAI spec
+    // `validate_temperature` tests. Per OpenAI spec
     // `temperature` lies in `[0, 2]`; non-finite or out-of-range values
     // must be rejected with 400 because they silently corrupt the
     // engine's sampling (NaN temperature disables the greedy shortcut,
@@ -3296,7 +3296,7 @@ mod tests {
 
     #[test]
     fn test_completions_stream_with_best_of_returns_400() {
-        // RIL ISS-158: stream:true + best_of>1 is a silent downgrade — the
+        // stream:true + best_of>1 is a silent downgrade — the
         // handler's best_of dispatch (run_best_of) returns a single JSON
         // document with Content-Type application/json, so a client that
         // requested an SSE stream waits for `data:` lines / `[DONE]` that
@@ -3341,7 +3341,7 @@ mod tests {
         validate_completion_request_fields(&req).expect("non-streaming best_of > 1 must pass");
     }
 
-    // RIL ISS-152: model-name conformance — a requested model that
+    // model-name conformance — a requested model that
     // differs from the loaded model must 404 model_not_found (OpenAI
     // contract), and the check is strict only when the server can name
     // its model (lenient for fallback/stub tokenizers with no name).

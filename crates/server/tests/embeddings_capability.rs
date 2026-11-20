@@ -169,7 +169,7 @@ async fn embeddings_reaches_engine_when_capabilities_real() {
     );
 }
 
-// RIL ISS-144: OpenAI's `input` accepts a single string
+// OpenAI's `input` accepts a single string
 // (`"input": "the quick brown fox"`) as well as an array; the single
 // string must deserialize into a one-element input list and reach the
 // engine like any array call — NOT a 400 deserialization failure.

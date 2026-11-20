@@ -14,7 +14,7 @@ use serde::Serialize;
 use super::types::ErrorResponse;
 
 /// Render a model payload as a response with `OpenAI`'s `cache-control:
-/// no-cache` header (RIL ISS-118) — proxies must not serve a stale
+/// no-cache` header — proxies must not serve a stale
 /// model list after a model is removed/added. Sets `Content-Type` to
 /// `application/json` implicitly via `Json`.
 fn models_response(payload: ModelsResponse) -> Response {
@@ -25,7 +25,7 @@ fn models_response(payload: ModelsResponse) -> Response {
     response
 }
 
-/// Render a bare model object (RIL ISS-129 `GET /v1/models/{id}`) with
+/// Render a bare model object (`GET /v1/models/{id}`) with
 /// the same `cache-control: no-cache` contract as the list.
 fn model_object_response(model: ModelObject) -> Response {
     let mut response = Json(model).into_response();
@@ -81,7 +81,7 @@ pub async fn models_handler(State(state): State<ApiState>) -> Response {
         data: vec![ModelObject {
             id: model_name,
             object: "model".to_string(),
-            // RIL ISS-098: report when this server instance serves the
+            // report when this server instance serves the
             // model entry (vLLM's convention), not a stale hardcoded
             // epoch (1_700_000_000 = 2023-11-14) that implied a fixed
             // creation date for every model on every deployment.
@@ -94,7 +94,7 @@ pub async fn models_handler(State(state): State<ApiState>) -> Response {
     models_response(response)
 }
 
-/// `OpenAI`-compatible `GET /v1/models/{id}` handler (RIL ISS-106).
+/// `OpenAI`-compatible `GET /v1/models/{id}` handler.
 ///
 /// Resolves a single model by id — the id the list endpoint just
 /// advertised. `OpenAI` clients / SDKs commonly follow up a model list
@@ -122,7 +122,7 @@ pub async fn model_by_id_handler(
         return (StatusCode::NOT_FOUND, Json(body)).into_response();
     }
 
-    // RIL ISS-129: OpenAI's `GET /v1/models/{model}` returns the BARE
+    // OpenAI's `GET /v1/models/{model}` returns the BARE
     // model object (`object: "model"`, `id`/`created`/`owned_by` at top
     // level) — not the list envelope `{object: "list", data: [...]}` a
     // pre-fix version used, which breaks `client.models.retrieve(id)`.

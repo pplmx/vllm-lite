@@ -1,4 +1,4 @@
-//! Forward-error recovery (RIL TASK-049, ISS-045).
+// Forward-error recovery.
 //!
 //! `build_batch` moves freshly-admitted prefills into `running` as
 //! `Status::Prefilling` *before* the model forward runs. If the forward
@@ -154,7 +154,7 @@ fn persistent_forward_error_recovers_orphaned_prefill() {
     let result = engine.step();
     assert!(result.is_err(), "a failing forward must surface an error");
 
-    // RIL ISS-045: the admitted prefill must NOT be stranded in `running`
+    // the admitted prefill must NOT be stranded in `running`
     // as Prefilling (which would pin its KV block and keep has_pending
     // spinning forever); it is rolled back to the waiting queue.
     assert_eq!(

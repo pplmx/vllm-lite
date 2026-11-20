@@ -16,7 +16,8 @@
 
 use candle_core::{Result, Tensor};
 
-/// Configuration for Attention. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for Attention. Constructed via the `builder()` associated function or by
+/// deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Default)]
 pub struct AttentionConfig {
     pub tile_size: Option<usize>,
@@ -46,7 +47,7 @@ impl AttentionConfig {
 /// **Why not `Tensor::repeat`:** `repeat` *tiles* (`[K0, K1, K0, K1, …]`),
 /// pairing query head `h` with KV head `h % num_kv_heads` — the wrong head
 /// for every group past the first, silently corrupting GQA attention
-/// (RIL ISS-010). The reshape→broadcast→reshape idiom below is the
+/// The reshape→broadcast→reshape idiom below is the
 /// repeat-interleave equivalent (same as `gemma4/attention/kernels.rs`).
 /// # Errors
 ///

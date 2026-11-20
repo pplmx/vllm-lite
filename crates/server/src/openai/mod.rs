@@ -14,7 +14,7 @@ pub mod completions;
 /// Embedding generation.
 pub mod embeddings;
 /// Shared `OpenaiJson<T>` extractor — maps axum's JSON rejection
-/// defaults to OpenAI-format errors (RIL ISS-104).
+/// defaults to OpenAI-format errors.
 pub mod json;
 /// Model metadata (`/v1/models`).
 pub mod models;

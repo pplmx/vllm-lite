@@ -89,8 +89,7 @@ impl TokenBucket {
         // replenish the bucket. Report "retry never" instead of
         // dividing by zero — `needed / 0.0` is `+inf`, and
         // `Duration::from_secs_f64` panics on non-finite values,
-        // which would abort every request to a zero-quota key
-        // (RIL ISS-009).
+        // which would abort every request to a zero-quota key.
         if !refill_rate.is_finite() || refill_rate <= 0.0 {
             return Duration::MAX;
         }
@@ -385,7 +384,7 @@ impl AuthMiddleware {
             .strip_prefix("Bearer ")
             .ok_or(AuthError::MissingHeader)?;
 
-        // RIL ISS-049: constant-time comparison. `Vec::contains` /
+        // constant-time comparison. `Vec::contains` /
         // `String == String` short-circuits on the first differing byte,
         // so response time leaks how many key-prefix bytes matched — an
         // attacker iterating candidate keys can recover the key
@@ -452,7 +451,8 @@ fn is_health_path(path: &str) -> bool {
 
 /// # Panics
 ///
-/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+/// Panics if a required invariant is violated (e.g. A `None` value is force-unwrapped or an
+/// out-of-bounds index is used).
 pub async fn auth_middleware(
     auth: axum::extract::State<Arc<AuthMiddleware>>,
     request: Request,
@@ -461,7 +461,7 @@ pub async fn auth_middleware(
     // K8s liveness/readiness probes are unauthenticated GETs (the Helm
     // chart's probes carry no `Authorization` header). Exempt the
     // health/readiness paths from API-key auth so probes succeed without
-    // credentials (RIL ISS-018) — otherwise every probe gets 401 and the
+    // credentials — otherwise every probe gets 401 and the
     // pod never becomes ready. The guard against an unauthenticated public
     // deployment is the startup WARNING emitted by `main.rs` (SEC-01) when
     // binding a non-loopback address with no API keys — plus the
@@ -488,8 +488,8 @@ pub async fn auth_middleware(
     let Ok(body_bytes) = axum::body::to_bytes(body, usize::MAX).await else {
         // Body stream errored (the size-limit layer above tripped):
         // translate into the same 413 the limit layer would produce
-        // rather than continuing with a silently-truncated body. RIL
-        // ISS-118: emit the OpenAI error envelope (previously a bare
+        // rather than continuing with a silently-truncated body. Emit the OpenAI error envelope
+        // (previously a bare
         // `{"error":"..."}` string — `error.message`-parsing clients broke).
         return Response::builder()
             .status(StatusCode::PAYLOAD_TOO_LARGE)
@@ -547,7 +547,7 @@ pub async fn auth_middleware(
             // Rate-limited: include Retry-After + rate-limit headers.
             // The limit reflects the per-key bucket capacity (may differ
             // from the global default when overrides are configured).
-            // RIL ISS-118: an EMPTY body broke OpenAI SDK error typing
+            // an EMPTY body broke OpenAI SDK error typing
             // (SDKs parse error.message/type/code); emit the envelope.
             Response::builder()
                 .status(StatusCode::TOO_MANY_REQUESTS)
@@ -570,7 +570,7 @@ pub async fn auth_middleware(
                 .unwrap()
         }
         Err(_) => {
-            // Unauthorized / missing header. RIL ISS-118: the body was
+            // Unauthorized / missing header. the body was
             // EMPTY, so OpenAI SDKs raised a generic error with no
             // message/type; emit the envelope with the documented
             // invalid_api_key code.
@@ -1427,7 +1427,7 @@ mod tests {
             StatusCode::TOO_MANY_REQUESTS
         );
     }
-    /// Regression (RIL TASK-009 / ISS-009): a zero global quota
+    /// Regression: a zero global quota
     /// (`max_requests = 0`) must deny with "retry never" instead of
     /// panicking — the old `wait_for` divided by the zero refill rate
     /// and `Duration::from_secs_f64(inf)` panics.
@@ -1444,7 +1444,7 @@ mod tests {
         );
     }
 
-    /// Regression (RIL TASK-009 / ISS-009): a per-key override with
+    /// Regression: a per-key override with
     /// `max_requests = 0` (a natural "revoke this key" config) must
     /// deny that key without panicking while other keys keep the
     /// global quota.
@@ -1461,7 +1461,7 @@ mod tests {
         assert!(limiter.check_and_consume("normal", 1.0).allowed);
     }
 
-    /// Regression (RIL TASK-009 / ISS-009): `window_secs = 0` with a
+    /// Regression: `window_secs = 0` with a
     /// zero quota must deny (zero capacity) without panicking; the
     /// infinite refill rate makes the wait zero.
     #[test]

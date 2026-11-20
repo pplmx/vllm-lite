@@ -154,8 +154,8 @@ impl Fp8Quantizer {
         let biased_exp = exp + 7;
 
         // Zero / underflow: below the smallest representable normal (E4M3
-        // subnormals are not encoded here). Flush to positive zero. RIL
-        // ISS-015: the old code only flushed `|value| < 0.000732`, so values
+        // subnormals are not encoded here). Flush to positive zero. The old code only flushed
+        // `|value| < 0.000732`, so values
         // in `[0.000732, 2^-6)` reached the `as u8` cast where a negative
         // `biased_exp` wrapped to a huge value and tripped the overflow
         // saturation — mapping tiny values (e.g. 1e-3) to ~44.
@@ -204,7 +204,7 @@ impl Fp8Quantizer {
             return half::f16::from_bits(sign << 15);
         }
 
-        // RIL ISS-015: the exponent is `biased_exp - 7` (E4M3 bias 7). The
+        // the exponent is `biased_exp - 7` (E4M3 bias 7). The
         // old `- 3` made every dequantized value 8x too small (the f16
         // exponent field came out 3 too low), corrupting any FP8 KV cache.
         let exp = biased_exp - 7;

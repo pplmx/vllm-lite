@@ -6,7 +6,7 @@ global:
 # server service is named `vllm-server` (see docker-compose.yml), so
 # scrape that name on the server port. The previous `vllm:9090` target
 # pointed at a port nothing bound and a host that didn't exist, so the
-# target was permanently DOWN (RIL ISS-102).
+# target was permanently DOWN.
 scrape_configs:
   - job_name: 'vllm'
     static_configs:

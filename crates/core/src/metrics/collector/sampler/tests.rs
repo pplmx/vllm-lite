@@ -22,7 +22,7 @@ fn test_collector_records_cuda_graph_hit() {
     assert_eq!(hits, 1);
 }
 
-/// RIL ISS-074 / TASK-089: the engine must make token-channel drops
+/// the engine must make token-channel drops
 /// observable. The token-send loop `try_send`s each sampled token into the
 /// bounded response channel and previously ignored the result — on
 /// `TrySendError::Full` the token vanished with no log, no counter, and no
@@ -37,7 +37,7 @@ fn test_collector_records_dropped_token() {
     assert_eq!(collector.get_counter("dropped_tokens_total"), 2);
 }
 
-/// RIL ISS-090: `errors_total` in /debug/metrics was backed by the
+/// `errors_total` in /debug/metrics was backed by the
 /// collector's `_ => 0` fallback — pinned at 0 no matter how many real engine
 /// step errors occurred. The engine's `error_count` is now surfaced through
 /// `record_engine_error` at the single increment site (run.rs).
@@ -68,7 +68,7 @@ fn test_collector_records_speculative_acceptance() {
 
 // ---- Plan 17.4-H: Metrics Tests ----
 
-/// RIL ISS-108: `speculative_acceptance_rate` and `speculative_efficiency`
+/// `speculative_acceptance_rate` and `speculative_efficiency`
 /// were duplicate gauges — the producer fed BOTH from the identical
 /// accepted/drafted ratio (dispatch.rs), so /metrics emitted two
 /// differently-named gauges with the same value and the same HELP text.
@@ -171,7 +171,7 @@ fn test_collector_records_draft_failures() {
     assert_eq!(snap.runtime_errors_total, 1);
 }
 
-/// RIL ISS-095: `record_batch_phase_tokens` must split a scheduler
+/// `record_batch_phase_tokens` must split a scheduler
 /// `Batch` into the prefill (input positions processed) vs decode
 /// (1 token per decode seq) counters that feed `prefill_throughput` /
 /// `decode_throughput`. A pure-decode batch must move only the decode

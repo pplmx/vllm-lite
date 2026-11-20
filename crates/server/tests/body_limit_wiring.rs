@@ -141,7 +141,7 @@ async fn body_limit_helper_returns_router() {
 
 #[tokio::test]
 async fn rejected_body_uses_openai_error_envelope() {
-    // RIL ISS-118: the 413 must be the OpenAI error envelope
+    // the 413 must be the OpenAI error envelope
     // `{error:{message,type,code}}` — not tower-http's plain-text
     // `"length limit exceeded"` — so OpenAI SDK clients (which parse
     // `error.message`) see a structured error. Fails pre-fix: body is

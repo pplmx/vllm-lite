@@ -61,7 +61,7 @@ impl SchedulerEngine {
         } else {
             false
         };
-        // RIL ISS-052: when the cache drain itself made the pool whole
+        // when the cache drain itself made the pool whole
         // again, stop here — the old code fell through to phase 1/2 with
         // the phase-0 frees absent from the accounting (`blocks_freed` is
         // re-seeded to `victim_set.len()` in phase 2), so it needlessly
@@ -86,7 +86,7 @@ impl SchedulerEngine {
         // victim-owning sequences WHOLESALE, releasing their full tables
         // — including shared (refcount > 1) blocks that `select_victims`
         // never returned as victims. Phase 2 must continue from that real
-        // total; reseeding to `victim_set.len()` (RIL ISS-174) made phase
+        // total; reseeding to `victim_set.len()` made phase
         // 2 think it was closer to `blocks_needed` than it was, so it
         // preempted extra healthy decode sequences.
         let mut blocks_freed = 0usize;
@@ -185,7 +185,7 @@ impl SchedulerEngine {
 
     /// Rollback KV cache for rejected draft tokens (Plan 17.1-D).
     ///
-    /// **Superseded for the speculative step (RIL ISS-027):** the verifier's
+    /// **Superseded for the speculative step:** the verifier's
     /// block table is pre-allocated for the full verification span, so
     /// rejected-draft KV is unused capacity beyond `num_computed_tokens`
     /// rather than blocks that must be freed. Calling this from the
@@ -207,8 +207,7 @@ impl SchedulerEngine {
     /// (input tokens + drafts) BEFORE the target model writes draft KV:
     /// without the extra blocks, `write_prefill_kv`'s
     /// `block_ids.get(block_idx).unwrap_or(0)` fallback silently writes the
-    /// overflow into block 0, corrupting the prompt's first-block KV (RIL
-    /// ISS-026).
+    /// overflow into block 0, corrupting the prompt's first-block KV.
     ///
     /// Returns the number of blocks the sequence holds afterwards.
     pub fn ensure_blocks_for_tokens(&mut self, seq_id: SeqId, min_blocks: usize) -> usize {
@@ -228,7 +227,7 @@ impl SchedulerEngine {
                 // MemoryManager so the chain hash advances with real
                 // content (same contract as build_batch / update). The
                 // speculative verification span can pre-allocate blocks
-                // BEYOND the sequence's current token count (RIL ISS-026),
+                // BEYOND the sequence's current token count,
                 // so `tokens[start..]` may be empty — skip the feed (the
                 // cursor is a best-effort placeholder until the tokens are
                 // actually written, per the MemoryManager doc).

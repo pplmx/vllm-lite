@@ -70,7 +70,7 @@ impl crate::engine::Engine {
             // bonus/rejection token), so at most `remaining - 1` drafts may
             // be accepted. Without the cap, a step near the end of its
             // budget emitted up to `max_draft + 1` tokens past `max_tokens`
-            // (RIL ISS-030).
+
             let remaining = self
                 .scheduler
                 .get_sequence(*seq_id)
@@ -83,7 +83,7 @@ impl crate::engine::Engine {
             // The seen set for repeat/presence penalties: the tokens the
             // sequence has generated BEFORE this step — the same set the
             // regular (non-speculative) path passes to
-            // `sample_batch_with_params` (RIL ISS-036). The verifier must
+            // `sample_batch_with_params`. The verifier must
             // apply the same penalties as the regular sampler, otherwise the
             // accepted/emitted tokens come from the un-penalized
             // distribution and speculative output diverges from regular
@@ -135,13 +135,13 @@ impl crate::engine::Engine {
             // 0-based positions previously used here applied RoPE at the
             // wrong positions for any sequence past position 0 (i.e. every
             // speculative step after prefill), corrupting the target logits
-            // used for accept/reject (RIL ISS-016). The empty-drafts path
+            // used for accept/reject. The empty-drafts path
             // above already passes `batch.positions[i]` correctly.
             let base = batch.positions[i].first().copied().unwrap_or(0);
             let verify_positions: Vec<usize> = (base..base + verify_tokens.len()).collect();
 
             // Get logits from target model for all positions.
-            // RIL ISS-023 / TASK-027: pass is_prefill=true so the model
+            // pass is_prefill=true so the model
             // embeds and processes ALL verify_tokens (not just the last,
             // which embed_sequence(is_prefill=false) would do). The verifier
             // needs logits for every verify position to check each draft.

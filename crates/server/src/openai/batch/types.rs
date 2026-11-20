@@ -1,4 +1,5 @@
-//! `OpenAI` Batch API wire types: `BatchRequest`, `BatchResponse`, `BatchStatus`, request/result counts, and the per-line `BatchRequestInput` / `BatchResponseOutput` shapes.
+// ! `OpenAI` Batch API wire types: `BatchRequest`, `BatchResponse`, `BatchStatus`, request/result
+// counts, and the per-line `BatchRequestInput` / `BatchResponseOutput` shapes.
 //!
 //! Mirrors the upstream `OpenAI` Batch schema 1:1; the handler (`handler.rs`)
 //! and manager (`manager.rs`) operate on these types end-to-end.
@@ -58,7 +59,8 @@ where
     ser.serialize_str(value.as_str())
 }
 
-/// Request payload for `SimpleBatch`. Contains input data, configuration, and request-tracking metadata.
+/// Request payload for `SimpleBatch`. Contains input data, configuration, and request-tracking
+/// metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleBatchRequest {
     /// Prompts to execute (one HTTP-style request per prompt).
@@ -77,7 +79,7 @@ pub struct SimpleBatchRequest {
     pub temperature: Option<f32>,
 }
 
-/// `OpenAI`-compatible `GET /v1/batches` list envelope (RIL ISS-118).
+/// `OpenAI`-compatible `GET /v1/batches` list envelope.
 ///
 /// `OpenAI` returns a bare `{"object":"list","data":[...]}` wrapper; the
 /// previous `Vec<BatchResponse>` array broke SDKs that read
@@ -154,7 +156,8 @@ pub struct BatchResultItem {
     pub error: Option<String>,
 }
 
-/// Status of an async batch job: pending, running, completed, failed, or cancelled. Transitions are monotonic.
+/// Status of an async batch job: pending, running, completed, failed, or cancelled. Transitions are
+/// monotonic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BatchStatus {
     /// Queued, not yet picked up by a worker.
@@ -178,7 +181,8 @@ pub enum BatchStatus {
 /// 24h figure matches the retention the `OpenAI` Batch `API` documents.
 pub(crate) const DEFAULT_BATCH_RETENTION_SECS: i64 = 86_400;
 
-/// Background job: scheduled for execution by the worker pool. Carries the work payload plus retry / cancellation metadata.
+/// Background job: scheduled for execution by the worker pool. Carries the work payload plus retry
+/// / cancellation metadata.
 #[derive(Debug, Clone)]
 pub struct BatchJob {
     /// Server-allocated batch identifier.
@@ -204,16 +208,16 @@ pub struct BatchJob {
     /// `created_at` is second-precision, so batches created within the same
     /// wall-clock second (the normal rapid-submission case) tie on
     /// `created_at`; this counter breaks the tie so newest-first iteration
-    /// is fully deterministic instead of degrading to `HashMap` order (RIL
-    /// ISS-146). `pub(crate)` — wire types don't expose internal ordering
+    /// is fully deterministic instead of degrading to `HashMap` order. `pub(crate)` — wire types
+    /// don't expose internal ordering
     /// (the `BatchListResponse.data` doc promises "newest first" but the
     /// ordering is an iteration contract, not an API field).
     pub(crate) created_seq: u64,
     /// Unix timestamp at which the job's retrievability expires
     /// (`created_at + DEFAULT_BATCH_RETENTION_SECS`). Fixed at creation;
     /// [`super::manager::BatchManager`] evicts **terminal** jobs past this
-    /// window on access so the in-memory job map stays bounded (RIL
-    /// ISS-066). Responses report this stored value rather than
+    /// window on access so the in-memory job map stays bounded. Responses report this stored value
+    /// rather than
     /// recomputing `now + window` per read.
     pub expires_at: i64,
     /// Unix timestamp at which the batch reached a terminal state, if any.

@@ -1,11 +1,13 @@
-//! Phase-switch policy: decide when to flip between Prefill (ingest prompt tokens) and Decode (generate next tokens).
+// ! Phase-switch policy: decide when to flip between Prefill (ingest prompt tokens) And Decode
+// (generate next tokens).
 //!
 //! Encapsulated as [`PhaseSwitchPolicy`] (struct) with multiple policy
 //! impls selected by `SchedulerConfig.phase_policy`. The scheduler picks
 //! one at construction time.
 use crate::types::Phase;
 
-/// Strategy for switching between prefill and decode phases. Different policies optimize throughput (drain decode) vs. fairness (round-robin).
+/// Strategy for switching between prefill and decode phases. Different policies optimize throughput
+/// (drain decode) Vs. Fairness (round-robin).
 #[derive(Clone, Debug)]
 pub struct PhaseSwitchPolicy {
     /// Maximum decode rounds run back-to-back before the scheduler must visit prefill again.
@@ -67,7 +69,8 @@ impl PhaseSwitchPolicyBuilder {
     }
 }
 
-/// Internal mutable state of the phase scheduler: current phase, last-transition tick, accumulated stats. Mutated under the scheduler's lock on each transition.
+/// Internal mutable state of the phase scheduler: current phase, last-transition tick, accumulated
+/// stats. Mutated under the scheduler's lock on each transition.
 #[derive(Clone, Debug)]
 pub struct SchedulerState {
     pub waiting_count: usize,
@@ -79,7 +82,8 @@ pub struct SchedulerState {
 }
 
 #[derive(Debug)]
-/// Coordinator that interleaves prefill and decode batches within a single step. Avoids the head-of-line blocking that happens when a long prefill monopolizes the GPU.
+/// Coordinator that interleaves prefill and decode batches within a single step. Avoids the
+/// head-of-line blocking that happens when a long prefill monopolizes the GPU.
 pub struct PhaseScheduler {
     current_phase: Phase,
     switch_policy: PhaseSwitchPolicy,
@@ -141,7 +145,7 @@ impl PhaseScheduler {
 
     const fn should_switch_to_prefill(&self, state: &SchedulerState) -> bool {
         // No prefill work: switching would produce an empty batch and idle
-        // the whole step (RIL ISS-031). In steady-state decode every
+        // the whole step. In steady-state decode every
         // sequence is running, not queued, so `decode_queue_len` reads 0 and
         // the heuristic below would oscillate Decode -> Prefill(empty) ->
         // Decode, wasting every other step (~50% throughput loss).

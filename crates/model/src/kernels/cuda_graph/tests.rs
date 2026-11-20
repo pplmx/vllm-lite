@@ -184,7 +184,7 @@ fn test_cuda_graph_not_captured_error() {
     assert!(result.is_err());
 }
 
-/// Regression (RIL ISS-176): a `cached` graph that captured ZERO nodes
+/// Regression: a `cached` graph that captured ZERO nodes
 /// is a stub, not an acceleration — `capture()` (the CPU-side mock) sets
 /// `cached=true` without recording any kernel launches, and
 /// `BatchCudaGraphExecutor::capture_all_graphs` builds exactly such empty

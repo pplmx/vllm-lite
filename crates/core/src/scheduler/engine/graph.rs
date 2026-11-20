@@ -28,8 +28,8 @@ impl SchedulerEngine {
 
         let batch = self.batch_composer.compose(sequences.clone(), phase);
 
-        // RIL ISS-072 / TASK-085: same overflow requeue as `build_batch`
-        // (ISS-041). `compose` serves at most `max_batch_size` / the token
+        // same overflow requeue as `build_batch`
+        // `compose` serves at most `max_batch_size` / the token
         // budget; a drained-but-uncomposed prefill would otherwise stay
         // `Prefilling` in `running` forever (never re-scheduled) with its
         // pre-allocated KV pinned. The graph path previously skipped this.
@@ -77,19 +77,19 @@ impl SchedulerEngine {
     ///
     /// Returns the sequences to compose *and* the ids of the newly-admitted
     /// prefill sequences, so [`Self::build_batch_with_graph`] can re-queue
-    /// any that `compose` does not serve (ISS-041). Mirrors `build_batch`'s
+    /// any that `compose` does not serve. Mirrors `build_batch`'s
     /// guard order so the graph path applies the SAME memory-admission
-    /// hardening the regular path got in ISS-042/052/055/056 (RIL ISS-072):
+    /// hardening the regular path got in:
     ///
-    /// 1. **ISS-055/056** preemption gate demands only the *additional*
+    /// 1. ** ** preemption gate demands only the *additional*
     ///    blocks a sequence still needs — a running decode owning its full
     ///    table must not be re-charged for the whole table (pre-fix
     ///    over-preempted it into a self-livelock under pressure).
-    /// 2. **ISS-022/028** pre-allocate the newly-admitted prefills' KV
+    /// 2. ** ** pre-allocate the newly-admitted prefills' KV
     ///    blocks before the forward writes them.
-    /// 3. **ISS-042** drop any prefill whose table could not be fully
+    /// 3. ** ** drop any prefill whose table could not be fully
     ///    pre-allocated (re-queue, never forward a short prefill table).
-    /// 4. **ISS-052** for a Decode round, grow each running sequence's KV
+    /// 4. ** ** for a Decode round, grow each running sequence's KV
     ///    table to cover its current tokens (or defer it) so no short-table
     ///    decode is forwarded to the block-0 fallback.
     pub(super) fn select_sequences_for_phase(
@@ -112,14 +112,14 @@ impl SchedulerEngine {
 
         let (mut new_sequences, waits): (Vec<Sequence>, Vec<std::time::Duration>) =
             self.request_queue.drain_by_phase(phase).into_iter().unzip();
-        // RIL TASK-119: record each freshly-drained sequence's wait so the
+        // record each freshly-drained sequence's wait so the
         // CUDA-Graph admission path feeds `avg_scheduler_wait_time_ms` too.
         for wait in waits {
             self.metrics
                 .record_scheduler_wait_time(wait.as_secs_f64() * 1000.0);
         }
 
-        // RIL ISS-055/056: memory-pressure admission gate, demanding only
+        // memory-pressure admission gate, demanding only
         // the ADDITIONAL blocks each sequence still needs. Pre-fix this
         // compared the full block count, so a running decode holding its
         // whole table re-charged itself for it and got needlessly preempted
@@ -134,19 +134,19 @@ impl SchedulerEngine {
             }
         }
 
-        // RIL ISS-022/028: allocate the newly-admitted sequences' KV blocks
+        // allocate the newly-admitted sequences' KV blocks
         // before the forward writes their KV — same contract as
         // `build_batch`. The CUDA-Graph builder previously skipped this, so
         // every prefill on `cuda-graph` builds wrote its KV to the block-0
         // fallback and corrupted the cache.
         self.preallocate_kv_blocks(&mut new_sequences);
 
-        // ISS-042: do not admit a prefill whose KV block table could not be
+        // do not admit a prefill whose KV block table could not be
         // fully pre-allocated (defer to a later round instead of serving a
         // short prefill table to the block-0 fallback).
         new_sequences = self.filter_fully_allocated_prefills(new_sequences, phase);
 
-        // RIL ISS-052: for a Decode round, grow each running `Decoding`
+        // for a Decode round, grow each running `Decoding`
         // sequence's KV table to cover its current tokens before
         // composing — or defer any that still cannot obtain its growth
         // block. Pre-fix the graph path cloned short-table decode sequences
@@ -164,7 +164,7 @@ impl SchedulerEngine {
         let admitted: HashSet<SeqId> = new_sequences.iter().map(|s| s.id).collect();
         self.running.extend(new_sequences);
 
-        // RIL ISS-136: mirror `build_batch`'s gauge publishing (state/
+        // mirror `build_batch`'s gauge publishing (state/
         // batch.rs:66,140) — pre-fix this graph path never updated
         // `active_sequences` / `request_queue_depth`, so with cuda_graph
         // enabled the engine (which routes exclusively through here) left

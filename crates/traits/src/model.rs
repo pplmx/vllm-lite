@@ -10,7 +10,8 @@ use std::sync::Arc;
 
 use crate::types::{BatchOutput, SampledToken, SeqId, TokenId};
 
-/// Error type for Model. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Error type for Model. Returned from every fallible public API; covers I/O, validation, and
+/// resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ModelError {
@@ -123,7 +124,7 @@ pub trait ModelBackend: Send + Sync {
     /// is NOT stored in the KV cache — e.g. the Qwen3.5 hybrid GDN recurrent
     /// layers — MUST return `false`: a full prefix hit would admit the
     /// sequence straight into Decode with fresh `None` recurrent states,
-    /// erroring on the first decode (RIL ISS-038).
+    /// erroring on the first decode.
     fn supports_prefix_caching(&self) -> bool {
         true
     }
@@ -134,7 +135,7 @@ pub trait ModelBackend: Send + Sync {
     /// Default no-op. Stateful backends (e.g. the Qwen3.5 hybrid GDN
     /// recurrent-state map) MUST drop the sequence's entry here — without
     /// it, every finished request leaks its per-sequence state for the
-    /// engine's lifetime (RIL ISS-034).
+    /// engine's lifetime.
     fn on_sequence_finished(&mut self, _seq_id: SeqId) {}
 
     /// Forward pass stopped after `upto_layer` layers.

@@ -104,7 +104,7 @@ fn test_top_k_all_neg_inf_falls_back_to_greedy() {
     assert_eq!(top_k_sample(&logits, 5, 0.5), 0);
 }
 
-// RIL ISS-073 / TASK-086: a single NaN logit among FINITE logits must not
+// a single NaN logit among FINITE logits must not
 // produce an arbitrary (non-argmax) token — the pre-fix guard checked only
 // `max_val` finiteness, but `f32::max` silently ignores NaN, so a NaN row
 // left `max_val` finite while the softmax exp-sum became NaN and every
@@ -157,7 +157,7 @@ fn test_top_p_mixed_nan_picks_finite_argmax() {
     assert_eq!(top_p_sample(&logits, 0.9, 0.5), 1);
 }
 
-// RIL ISS-073 / TASK-086: the logprob helpers shared the same mixed-NaN
+// the logprob helpers shared the same mixed-NaN
 // poisoning — a NaN slipped past the `max_val.is_finite()` guard and made
 // `log_softmax` / `renormalized_top_p_logprobs` emit NaN logprobs for the
 // finite entries (which breaks `SampledToken` JSON serialization).
@@ -1026,7 +1026,7 @@ fn test_seed_different_seeds_diverge_in_distribution() {
     // threshold level: distinct seeds ⇒ distinct draws. Asserting
     // distinct *tokens* instead is fragile — SEED_TEST_LOGITS at T=1.0
     // is peaked toward token 4, so two independent draws can both land
-    // on it (RIL ISS-007: this test previously asserted token inequality
+    // on it (this test previously asserted token inequality
     // and broke when the per-step stream shifted the deterministic
     // draws). If the seeded RNG were broken (shared across seeds), the
     // thresholds below would coincide and this would catch it.
@@ -1149,7 +1149,7 @@ fn test_seed_per_sequence_independence_in_batch() {
     // Independence is pinned at the threshold level: seed 42 and seed
     // 99 draw different thresholds, so their streams are independent.
     // Asserting different *tokens* would be fragile on the peaked
-    // SEED_TEST_LOGITS distribution (RIL ISS-007).
+    // SEED_TEST_LOGITS distribution.
     assert_ne!(
         sample_random_threshold(Some(42), 0).to_bits(),
         sample_random_threshold(Some(99), 0).to_bits(),
@@ -1185,7 +1185,7 @@ fn test_seed_top_p_path_uses_seeded_rng() {
 }
 
 // =============================================================================
-// RIL ISS-007 / TASK-007 — per-step seeded stream regression tests.
+// — per-step seeded stream regression tests.
 //
 // Pre-fix, `random_f32_seeded` re-seeded a fresh `StdRng` with the bare
 // request seed on EVERY decode step and read its first value, so a
@@ -1207,7 +1207,7 @@ fn test_seeded_stream_advances_across_steps() {
     let distinct: std::collections::HashSet<u32> = thresholds.iter().map(|t| t.to_bits()).collect();
     assert!(
         distinct.len() > 1,
-        "a seeded stream must draw different thresholds per step; got a          frozen value {thresholds:?} (per-step quantile lock, RIL ISS-007)"
+        "a seeded stream must draw different thresholds per step; got a frozen value {thresholds:?} (per-step quantile lock)"
     );
     // The values are deterministic constants (fixed seed + fixed mixer),
     // so this stronger assertion is stable: a good mixer yields 8

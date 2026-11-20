@@ -8,7 +8,8 @@
 use std::fmt::Write;
 use tokenizers::Tokenizer as HFTokenizer;
 
-/// Error type for tokenizer encoding/decoding failures. Covers invalid UTF-8, missing vocab entries, and chat-template substitution errors.
+/// Error type for tokenizer encoding/decoding failures. Covers invalid UTF-8, missing vocab
+/// entries, and chat-template substitution errors.
 #[derive(Debug, thiserror::Error)]
 pub enum TokenizerError {
     #[error("failed to load tokenizer from {path}: {source}")]
@@ -55,7 +56,7 @@ impl Tokenizer {
     /// `<...>` special tokens) but takes the HF tokenizer in hand — the
     /// seam tests need when exercising a specific tokenizer shape (e.g.
     /// the byte-level BPE that splits a multi-byte char across tokens,
-    /// RIL ISS-105/ISS-121) without a tokenizer.json on disk.
+    ///) without a tokenizer.json on disk.
     #[must_use]
     pub fn from_hf_tokenizer(tokenizer: HFTokenizer) -> Self {
         let vocab_size = tokenizer.get_vocab_size(true);
@@ -94,7 +95,7 @@ impl Tokenizer {
             source: e,
         })?;
         let vocab_size = tokenizer.get_vocab_size(true);
-        // RIL ISS-147: derive the model id from the `--model` directory
+        // derive the model id from the `--model` directory
         // (the parent of `tokenizer.json`), never a hardcoded constant —
         // a fabricated identity would make `/v1/models` and
         // `/health/details` advertise the wrong model to operations.
@@ -142,7 +143,8 @@ impl Tokenizer {
             .collect()
     }
 
-    /// Decode token IDs back to text via the HF tokenizer, or an ASCII placeholder if none is loaded.
+    /// Decode token IDs back to text via the HF tokenizer, or an ASCII placeholder if none is
+    /// loaded.
     #[must_use]
     pub fn decode(&self, tokens: &[u32]) -> String {
         if let Some(ref tokenizer) = self.inner
@@ -192,7 +194,7 @@ impl Tokenizer {
     }
 }
 
-/// Derive the model id from a `tokenizer.json` path (RIL ISS-147).
+/// Derive the model id from a `tokenizer.json` path.
 ///
 /// `Tokenizer::from_file` is given `<model_dir>/tokenizer.json`, so the
 /// parent directory's basename is exactly the `--model` directory the
@@ -213,7 +215,7 @@ impl Default for Tokenizer {
 }
 
 /// Incremental token-stream decoder that never splits a multi-byte UTF-8
-/// character across SSE chunks (RIL ISS-105).
+/// character across SSE chunks.
 ///
 /// The naive streaming path decodes each sampled token in isolation
 /// (`tokenizer.decode(&[t])`). For byte-level BPE tokenizers (the shipped
@@ -307,7 +309,7 @@ mod tests {
         assert_eq!(tokenizer.vocab_size(), 151_936);
     }
 
-    // RIL ISS-147: the model id reported by `Tokenizer::from_file` must
+    // the model id reported by `Tokenizer::from_file` must
     // be derived from the model directory (the `--model` dir the operator
     // pointed at), never a hardcoded constant — the pre-fix tokenizer
     // reported `"Qwen3.5-0.8B"` for EVERY real checkpoint (a Llama or
@@ -467,7 +469,7 @@ mod streaming_decode_tests {
         Tokenizer::from_hf_tokenizer(hf)
     }
 
-    /// Regression for RIL ISS-105: streaming the three split-byte tokens
+    /// Regression for streaming the three split-byte tokens
     /// one at a time through `StreamingDecoder` must reassemble 你 — the
     /// naive per-token `decode(&[t])` path produced `���`.
     #[test]

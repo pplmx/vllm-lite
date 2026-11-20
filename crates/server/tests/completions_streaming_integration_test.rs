@@ -64,7 +64,7 @@ fn completions_request_json(stream: bool) -> String {
     .to_string()
 }
 
-/// Regression (RIL ISS-175): each `/v1/completions` SSE stream's chunks
+/// Regression: each `/v1/completions` SSE stream's chunks
 /// must carry the SAME per-request `cmpl-<uuid>` id (OpenAI contract:
 /// `id` identifies ONE completion). The n = 1 streaming handler hardcoded
 /// `"cmpl-stream"` — every streamed completion shared the identical id,

@@ -1,4 +1,5 @@
-//! Top-level axum router and the `/health` / `/v1/models` / `/metrics` handlers that aren't part of the `OpenAI` surface.
+// ! Top-level axum router and the `/health` / `/v1/models` / `/metrics` handlers that aren't part
+// of the `OpenAI` surface.
 //!
 //! `build_router` is the entry point called from `main.rs`; it wires
 //! every middleware (correlation, audit, auth) and the `OpenAI`
@@ -33,7 +34,8 @@ pub struct HealthResponse {
     pub status: String,
 }
 
-/// Response payload for `HealthDetail`. Returned from handlers, serialized to JSON for the HTTP boundary.
+/// Response payload for `HealthDetail`. Returned from handlers, serialized to JSON for the HTTP
+/// boundary.
 ///
 /// Only fields with real backing data are reported. The former
 /// `gpu_available` (hardcoded `true`) and `gpu_utilization` (which
@@ -42,22 +44,21 @@ pub struct HealthResponse {
 /// CPU build reported utilization for a GPU it did not have) were
 /// fabricated: vllm-lite does not sample real GPU state. They have been
 /// removed rather than perpetuated; GPU presence is still visible in the
-/// `Device initialized` startup log. (RIL ISS-092)
+/// `Device initialized` startup log.
 #[derive(Debug, Serialize)]
 pub struct HealthDetailResponse {
     /// Readiness status derived from the `HealthChecker`
     /// (`"ok"` / `"not_ready"` / `"unhealthy"`) — a draining pod reports
-    /// `not_ready` (RIL ISS-141). Pre-fix this was hardcoded `"ok"`.
+    /// `not_ready`. Pre-fix this was hardcoded `"ok"`.
     pub status: String,
     /// Loaded model id from the tokenizer's name; absent from the wire
-    /// when the fallback tokenizer exposes none (no null lie, RIL
-    /// ISS-141).
+    /// when the fallback tokenizer exposes none (no null lie).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Mean prefill-phase throughput in tokens per second over the
     /// recent sampling window, when the engine answered `GetMetrics`.
     /// `None` when the engine was mid-step and the bounded wait elapsed
-    /// (RIL ISS-151) — omitted from the wire, not a `null` lie.
+    /// — omitted from the wire, not a `null` lie.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prefill_throughput: Option<f32>,
     /// Fraction of KV-cache blocks currently in use (0.0–1.0 scale),
@@ -94,7 +95,7 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
     // Prometheus scrape of /metrics) for the whole step, so fall back
     // to `None` after METRICS_RESPONSE_TIMEOUT instead.
     //
-    // RIL ISS-151: keep the `Option` — a timeout (or closed channel) is
+    // keep the `Option` — a timeout (or closed channel) is
     // "unknown", NOT "0 tokens/sec, 0% KV used". Emitting `Some(0.0)` for
     // an engine that was mid-step made a long decode look like an idle or
     // dead engine to dashboards. `None` signals the operator the engine
@@ -105,13 +106,13 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
             .ok()
             .flatten();
 
-    // RIL ISS-092: report only real data. vllm-lite does not sample GPU
+    // report only real data. vllm-lite does not sample GPU
     // utilization, so `gpu_available`/`gpu_utilization` (previously a
     // hardcoded `true` and `prefill_throughput` mislabeled as a "% util")
     // are not emitted at all — an ops dashboard reading `gpu_utilization`
     // as a percentage saw a busy server report 0% forever.
     //
-    // RIL ISS-141: `status` comes from the real HealthChecker readiness
+    // `status` comes from the real HealthChecker readiness
     // (a draining pod reports `not_ready`; pre-fix it was hardcoded "ok"),
     // and the loaded model id is exposed when the tokenizer names one.
     // `model` stays `None` for a fallback tokenizer (absent, not a null lie).
@@ -122,7 +123,7 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
             .map_or("unhealthy", |h| h.check_readiness().as_str())
             .to_string(),
         model: state.tokenizer.model_name(),
-        // RIL ISS-151: only `Some` when the engine actually answered —
+        // only `Some` when the engine actually answered —
         // on timeout both stay `None` (omitted from the wire via
         // `skip_serializing_if`), so a dashboard sees "unknown" instead
         // of fabricated `0.0` for an engine mid-step.
@@ -163,7 +164,7 @@ pub async fn shutdown(State(state): State<ApiState>, headers: axum::http::Header
         .and_then(|v| v.to_str().ok())
         .and_then(|h| h.strip_prefix("Bearer "));
     match api_key {
-        // RIL ISS-049: constant-time comparison (see security::timing).
+        // constant-time comparison (see security::timing).
         Some(key)
             if auth
                 .api_keys()

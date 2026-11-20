@@ -1,4 +1,5 @@
-//! `OpenAI` Embeddings endpoint: `POST /v1/embeddings`. Tokenise the input list and return one embedding vector per input.
+// ! `OpenAI` Embeddings endpoint: `POST /v1/embeddings`. Tokenise the input list and return one
+// embedding vector per input.
 use super::json::OpenaiJson;
 use super::sampling_validation::validate_model_conformance;
 use super::types::{EmbeddingsRequest, EmbeddingsResponse, ErrorResponse};
@@ -8,7 +9,7 @@ use tokio::sync::mpsc;
 use vllm_core::types::EngineMessage;
 
 /// Hard cap on the number of input elements a single `POST /v1/embeddings`
-/// request may carry (RIL ISS-068 / TASK-081).
+/// request may carry.
 ///
 /// Each element yields a full model-dimension vector that is materialised,
 /// kept in memory, and serialized; with no cap (the generation siblings
@@ -76,7 +77,7 @@ pub async fn embeddings(
             )),
         ));
     }
-    // RIL ISS-152: never embed with a model that isn't loaded — a
+    // never embed with a model that isn't loaded — a
     // mismatched id previously ran the loaded model and echoed the
     // wrong id back with 200. Matches OpenAI's `404 model_not_found`.
     validate_model_conformance(Some(&req.model), state.tokenizer.model_name())?;
@@ -90,7 +91,7 @@ pub async fn embeddings(
         ));
     }
 
-    // RIL ISS-161: explicitly reject unsupported `encoding_format` values
+    // explicitly reject unsupported `encoding_format` values
     // instead of silently ignoring them. The endpoint emits plain floats;
     // a client that asked for `encoding_format: "base64"` (per OpenAI's
     // contract) would receive un-encoded floats with a 200 and decode
@@ -111,7 +112,7 @@ pub async fn embeddings(
         ));
     }
 
-    // RIL ISS-068 / TASK-081: per-element + count + context validation,
+    // per-element + count + context validation,
     // mirroring the sibling boundary checks on chat/completions.
     //
     // Empty / whitespace-only elements reject the whole request — the sync
@@ -147,7 +148,7 @@ pub async fn embeddings(
         .map(|text| state.tokenizer.encode(text))
         .collect();
 
-    // RIL ISS-068 / TASK-081 (ISS-044 class): reject an input whose token
+    // (class): reject an input whose token
     // count exceeds the model's context length instead of forcing a
     // full-length embed forward. `check_context_length(prompt, 0, ...)`
     // with `max_tokens = 0` reduces the gate to exactly
@@ -169,7 +170,7 @@ pub async fn embeddings(
         }
     }
 
-    // RIL ISS-131: compute the TRUE input token count (Σ encoded lengths)
+    // compute the TRUE input token count (Σ encoded lengths)
     // BEFORE `input_tokens` is moved into the engine message. Reported in
     // `usage.prompt_tokens` per OpenAI — the vector length returned by the
     // engine is the embedding dimension, not a token count.

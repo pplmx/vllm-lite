@@ -242,7 +242,7 @@ fn test_chunked_prefill_populates_num_computed_tokens() {
 
 #[test]
 fn test_partial_prefill_resume_keeps_is_prefill_true() {
-    // Regression (RIL ISS-021): a sequence resuming prefill after a partial
+    // Regression: a sequence resuming prefill after a partial
     // prefix-cache hit (num_computed_tokens > 0 with a multi-token suffix)
     // must keep is_prefill = true so the model dispatches to forward_prefill
     // -> forward_prefill_continue (reads cached KV, processes the chunk).
@@ -256,7 +256,7 @@ fn test_partial_prefill_resume_keeps_is_prefill_true() {
     assert_eq!(batch.seq_ids.len(), 1);
     assert!(
         batch.is_prefill[0],
-        "a resumed prefill (num_computed > 0) must keep is_prefill=true so it          routes to forward_prefill_continue, not single-token forward_decode          (RIL ISS-021)"
+        "a resumed prefill (num_computed > 0) must keep is_prefill=true so it routes to forward_prefill_continue, not single-token forward_decode"
     );
     // The full 6-token suffix is processed in this prefill batch.
     assert_eq!(batch.input_tokens[0].len(), 6);

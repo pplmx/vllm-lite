@@ -105,7 +105,7 @@ async fn metrics_endpoint_returns_promptly_when_engine_unresponsive() {
     );
 }
 
-/// RIL ISS-141: `/health/details` status must reflect the real
+/// `/health/details` status must reflect the real
 /// HealthChecker readiness — a draining pod (`mark_not_ready` via the
 /// SIGTERM/shutdown path) must NOT keep reporting `"status":"ok"` while
 /// `/health/ready` returns 503. Pre-fix `status` was hardcoded `"ok"`.
@@ -130,7 +130,7 @@ async fn health_details_status_reflects_readiness() {
     );
 }
 
-/// RIL ISS-141: a ready server reports `"ok"` (and the loaded model id
+/// a ready server reports `"ok"` (and the loaded model id
 /// when the tokenizer exposes one — the fixture's default tokenizer has
 /// no name, so the field is honestly ABSENT, not a null lie).
 #[tokio::test]
@@ -144,11 +144,11 @@ async fn health_details_reports_ok_and_omits_unknown_model() {
     );
     assert!(
         !body.contains("\"model\":null"),
-        "unknown model must be ABSENT (no null lie, RIL ISS-141), got: {body}"
+        "unknown model must be ABSENT (no null lie), got: {body}"
     );
 }
 
-/// RIL ISS-092: `/health/details` must not report fabricated GPU state.
+/// `/health/details` must not report fabricated GPU state.
 ///
 /// The pre-fix response carried `gpu_available: true` (hardcoded) and
 /// `gpu_utilization` (which was `prefill_throughput`, mislabeled as a
@@ -158,7 +158,7 @@ async fn health_details_reports_ok_and_omits_unknown_model() {
 /// the honest endpoint omits both fields and exposes `prefill_throughput`
 /// under its own name.
 ///
-/// RIL ISS-151: when the engine does NOT answer `GetMetrics` (bounded
+/// when the engine does NOT answer `GetMetrics` (bounded
 /// wait elapses — the fixture below is a dead engine), the per-metric
 /// fields must ALSO be absent (`None`), not `"prefill_throughput": 0.0`.
 /// A dashboard reading 0.0 during a long decode step can't distinguish
@@ -188,7 +188,7 @@ async fn health_details_omits_fabricated_gpu_fields() {
     );
 }
 
-/// RIL ISS-151: when the engine ANSWERS `GetMetrics` with a live
+/// when the engine ANSWERS `GetMetrics` with a live
 /// snapshot, `prefill_throughput` / `kv_cache_usage_percent` are present
 /// with real values (not `None`) — the honest-data companion to the
 /// timeout case above.

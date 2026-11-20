@@ -157,7 +157,7 @@ fn test_cache_invalidation() {
     assert_eq!(victims1.len(), victims2.len());
 }
 
-/// Regression (RIL TASK-002 / ISS-002): the victim-cache hash must cover
+/// Regression: the victim-cache hash must cover
 /// `consecutive_decode_rounds`, because `compute_priority` flips when a
 /// sequence crosses the 5-round threshold. Without it, a cached victim
 /// order computed before the crossing is served unchanged afterwards.
@@ -189,7 +189,7 @@ fn test_victim_cache_invalidates_on_decode_rounds_change() {
     );
 }
 
-/// Regression (RIL TASK-002 / ISS-002): `touch_blocks` reorders the LRU
+/// Regression: `touch_blocks` reorders the LRU
 /// deque that the victim order's tiebreak embeds, so it must invalidate
 /// the cached victim set.
 #[test]

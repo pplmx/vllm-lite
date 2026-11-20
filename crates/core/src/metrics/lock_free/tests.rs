@@ -39,14 +39,14 @@ fn test_metrics_snapshot_new_fields() {
     assert_eq!(snapshot.requests_in_flight, 0);
     assert!((snapshot.kv_cache_usage_percent - 50.0).abs() < 0.01);
     assert!((snapshot.prefix_cache_hit_rate - 100.0).abs() < 0.01);
-    // RIL ISS-039: raw block counts must ride on the snapshot so debug
+    // raw block counts must ride on the snapshot so debug
     // endpoints can report REAL totals instead of fabricating 1024.
     assert_eq!(snapshot.kv_cache_blocks_used, 50);
     assert_eq!(snapshot.kv_cache_blocks_total, 100);
-    // RIL ISS-040: real prefix-cache entry count rides on the snapshot so
+    // real prefix-cache entry count rides on the snapshot so
     // kv_cache_dump stops fabricating `prefix_cache_nodes: 0`.
     assert_eq!(snapshot.prefix_cache_nodes, 7);
-    // RIL TASK-119: the production scheduler-wait recorder's sample must
+    // the production scheduler-wait recorder's sample must
     // ride through to the snapshot driving `avg_scheduler_wait_time_ms`.
     assert!((snapshot.avg_scheduler_wait_time_ms - 10.0).abs() < 0.01);
 }
@@ -114,7 +114,7 @@ fn test_lock_free_metrics_buffer_overflow() {
     assert!(snapshot.avg_latency_ms > 0.0);
 }
 
-/// RIL ISS-107: `snapshot()` must be **non-destructive**. Pre-fix it
+/// `snapshot()` must be **non-destructive**. Pre-fix it
 /// drained the bounded latency/batch/wait ring channels with `try_recv`,
 /// so a *second* consumer of the same `LockFreeMetrics` (the engine's
 /// `GetMetrics` round-trip serving `/health/details`, a concurrent

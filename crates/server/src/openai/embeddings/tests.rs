@@ -61,7 +61,7 @@ async fn test_embeddings_empty_input() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
-// RIL ISS-068 / TASK-081: the sibling sync completions endpoint rejects an
+// the sibling sync completions endpoint rejects an
 // empty prompt (`req.prompt.is_empty()` -> 400 "prompt is required",
 // completions.rs:1402). Embeddings accepted `input: [""]` / `["   "]` — the
 // guard only checked the *array* was non-empty, so an empty/whitespace
@@ -135,7 +135,7 @@ async fn test_embeddings_rejects_whitespace_element_in_list() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
-// RIL ISS-068 / TASK-081: the request must bound the number of input
+// the request must bound the number of input
 // elements. Each element produces a full model-dimension vector held in
 // memory + serialized; with no cap (mirroring the `n <= 8` / `best_of <= 20`
 // fan-out bounds on the generation siblings) a single request can amplify
@@ -180,7 +180,7 @@ async fn test_embeddings_accepts_up_to_max_inputs() {
     assert_eq!(body.error.code.as_deref(), Some("engine_unavailable"));
 }
 
-// RIL ISS-068 / TASK-081 (ISS-044 class): an input whose token count
+// (class): an input whose token count
 // exceeds the model context must be rejected instead of forcing a
 // full-length embed forward. Mirrors the chat/completions context-length
 // gate; the tokenizer result for a long string is checked against the
@@ -247,7 +247,7 @@ async fn test_embeddings_multiple_inputs() {
     );
 }
 
-// RIL ISS-161: unsupported `encoding_format` values must be explicitly
+// unsupported `encoding_format` values must be explicitly
 // rejected, not silently ignored. The endpoint emits plain floats; a
 // client that asks for base64 (per OpenAI's contract) would otherwise get
 // un-encoded floats with a 200 and decode garbage — a silent

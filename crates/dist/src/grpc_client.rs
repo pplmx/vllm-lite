@@ -20,7 +20,7 @@ use crate::distributed_kv::MAX_BLOCK_TRANSFER_BYTES;
 use crate::error::GrpcError;
 use crate::grpc::node_service_client::NodeServiceClient;
 
-/// Boundedness for a single peer gRPC call (RIL ISS-088): applied to both the
+/// Boundedness for a single peer gRPC call: applied to both the
 /// HTTP/2 connect handshake (`connect_timeout`) and each request (`timeout`),
 /// so a half-open / wedged peer fails the call in bounded time instead of
 /// stalling it indefinitely. Also reused to cap the fire-and-forget broadcast
@@ -59,7 +59,7 @@ impl PeerClient {
         let url: String = url.into();
         let endpoint = Endpoint::from_shared(url.clone())
             .map_err(GrpcError::Transport)?
-            // RIL ISS-088: without an explicit timeout, an RPC to a peer
+            // without an explicit timeout, an RPC to a peer
             // that completed the handshake but never answers would hang
             // forever. `connect_timeout` bounds the HTTP/2 handshake too
             // (the silent-peer case timed out implicitly before; now it is

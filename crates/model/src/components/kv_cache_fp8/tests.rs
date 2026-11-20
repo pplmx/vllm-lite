@@ -47,7 +47,7 @@ fn test_fp8_roundtrip_quantization() {
     let dequantized = quantizer.dequantize(&quantized).unwrap();
     assert_eq!(dequantized.dims(), tensor.dims());
 
-    // Regression (RIL ISS-015): the round-trip must preserve VALUES, not just
+    // Regression: the round-trip must preserve VALUES, not just
     // shape. A 3-bit mantissa bounds the relative rounding error well under
     // ~13%; allow 15% headroom. Pre-fix the dequant exponent was off by 3, so
     // every value came back 8x too small — invisible to a shape-only assert.
@@ -61,7 +61,7 @@ fn test_fp8_roundtrip_quantization() {
         let rel_err = (orig - rec).abs() / orig.abs();
         assert!(
             rel_err < 0.15,
-            "FP8 round-trip must preserve value within ~15% relative error:              orig={orig}, recovered={rec}, rel_err={rel_err} (8x error => RIL ISS-015)"
+            "FP8 round-trip must preserve value within ~15% relative error: orig={orig}, recovered={rec}, rel_err={rel_err} (8x error)"
         );
     }
 }
@@ -85,14 +85,14 @@ fn test_fp8_preserves_small_values() {
         .map(|h| h.to_f32())
         .collect();
 
-    // Regression (RIL ISS-015): sub-normal inputs must flush to ~0, NOT
+    // Regression: sub-normal inputs must flush to ~0, NOT
     // saturate to a large value. Pre-fix, a negative biased_exp wrapped to a
     // huge u8 and tripped overflow saturation, so 0.001 dequantized to ~44;
     // the old assertion's `|| o.abs() <= 0.001` clause made it vacuous.
     for (i, r) in recovered.iter().enumerate() {
         assert!(
             r.abs() < 0.02,
-            "sub-normal input #{i} must flush to ~0, got {r} (saturation => RIL ISS-015)"
+            "sub-normal input #{i} must flush to ~0, got {r} (saturation)"
         );
     }
 }

@@ -49,7 +49,7 @@ async fn test_completions_empty_prompt() {
 
 #[tokio::test]
 async fn test_completions_rejects_invalid_temperature() {
-    // RIL ISS-048: a negative / non-finite temperature silently produces
+    // a negative / non-finite temperature silently produces
     // garbage sampling (negative flips the logits to the least-likely
     // token; NaN disables the greedy shortcut). The handler must reject
     // it with 400 before the engine is touched — not return a plausible
@@ -348,15 +348,15 @@ fn test_populate_completion_sampling_params_applies_per_candidate_seed() {
     }
 }
 
-/// Regression (RIL ISS-035): the single-shot completions streaming path
+/// Regression: the single-shot completions streaming path
 /// must emit a well-formed JSON chunk with empty text for skipped tokens
 /// instead of a bare `data: ` SSE event. Pin the wire shape the
 /// skipped-token branch now produces — every chunk carries `model` +
-/// `created` (RIL ISS-122) alongside the `{id, object, choices}` core.
+/// `created` alongside the `{id, object, choices}` core.
 #[test]
 fn test_skipped_token_chunk_is_valid_json_with_empty_text() {
     let chunk = serde_json::json!({
-        // RIL ISS-175: per-request id (was the shared "cmpl-stream").
+        // per-request id (was the shared "cmpl-stream").
         "id": "cmpl-7f3a9c21-d0b2-4e11-8a3c-8f4c1e5a7b9d",
         "object": "text_completion",
         "model": "test-model",
@@ -376,7 +376,7 @@ fn test_skipped_token_chunk_is_valid_json_with_empty_text() {
     );
 }
 
-/// RIL ISS-047: every `n > 1` streaming *finish* `choices[]` entry must
+/// every `n > 1` streaming *finish* `choices[]` entry must
 /// carry a `text` field (empty string), exactly like the token chunks do.
 /// Before the fix the consolidated final event and the intermediate
 /// per-candidate finish event emitted only `{"index", "finish_reason"}`
@@ -443,7 +443,7 @@ fn test_completion_choice_logprobs_suppressed_when_speculative_placeholder_prese
 
 // =============================================================================
 
-// RIL ISS-094: a `/v1/completions` response must never report the literal
+// a `/v1/completions` response must never report the literal
 // placeholder `"default"` as the model. When the legacy endpoint's optional
 // `model` field is omitted, the response reports the model actually serving
 // (`Tokenizer::model_name()`, the same source as `GET /v1/models`); `"unknown"`
@@ -510,7 +510,7 @@ fn test_response_model_echoes_client_model_when_provided() {
     assert_eq!(response_model(&req, &state), "gpt-3.5-turbo");
 }
 
-/// Regression (RIL ISS-164): the legacy completions endpoint must
+/// Regression: the legacy completions endpoint must
 /// REFUSE a stop set that tokenizes to zero tokens, exactly like the
 /// chat twin (`tokenize_chat_stop_sequences`) — not silently warn and
 /// skip stop-sequence matching. Same invalid input, same 400: OpenAI
@@ -530,7 +530,7 @@ fn test_tokenize_stop_sequences_all_zero_returns_error() {
     assert_eq!(
         err.0,
         axum::http::StatusCode::BAD_REQUEST,
-        "completions must reject zero-token stop sets (chat parity, RIL ISS-164)"
+        "completions must reject zero-token stop sets (chat parity)"
     );
     assert!(
         err.1.0.error.message.contains("stop"),

@@ -66,7 +66,7 @@ use std::collections::HashMap;
 /// `api_keys_file` file), per [`AuthConfig::resolve_api_keys`]. Returns
 /// `None` only when no key is configured anywhere.
 ///
-/// (RIL ISS-080: the production binary previously gated the middleware on
+/// (the production binary previously gated the middleware on
 /// the inline `api_keys` list alone, so an operator using
 /// `--api-key-file` / `VLLM_API_KEYS_FILE` / `api_keys_env` got a
 /// non-empty SEC-01 posture — no startup warning — while the middleware
@@ -134,14 +134,14 @@ pub fn build_app(
         .route("/debug/audit", get(debug::audit_dump))
         // Shutdown
         .route("/shutdown", get(api::shutdown))
-        // OpenAI-envelope 404 for unmatched paths (RIL ISS-125): axum's
+        // OpenAI-envelope 404 for unmatched paths: axum's
         // default fallback answers plain-text "Not Found", which breaks
         // OpenAI SDKs that parse every response as `{error: {...}}` — a
         // typo'd route (e.g. `/v1/cheat/completions`) surfaces as a
         // JSON parse error instead of a usable `error.message`.
         .fallback(api_not_found)
         // OpenAI-envelope 405 for wrong-verb requests on known paths
-        // (RIL ISS-145): without this, `POST /v1/models` or
+        // without this, `POST /v1/models` or
         // `GET /v1/chat/completions` reaches axum's default plain-text
         // `Method Not Allowed` — the exact SDK-breaking shape the 404
         // fallback above exists to prevent. `method_not_allowed_fallback`
@@ -179,7 +179,7 @@ pub fn build_app(
     with_cors(app, cors)
 }
 
-/// Router-level fallback (RIL ISS-125): every unmatched path answers
+/// Router-level fallback: every unmatched path answers
 /// `404` with the `OpenAI` error envelope instead of axum's default
 /// plain-text "Not Found". `OpenAI` SDKs parse `error.message` on any
 /// non-2xx; without this, a mistyped route (a client bug, typo'd SDK
@@ -193,7 +193,7 @@ async fn api_not_found() -> (StatusCode, Json<ErrorResponse>) {
     )
 }
 
-/// Method-level fallback (RIL ISS-145): a known path with the wrong HTTP
+/// Method-level fallback: a known path with the wrong HTTP
 /// verb (e.g. `POST /v1/models`, `GET /v1/chat/completions`) answers
 /// `405` with the `OpenAI` envelope instead of axum's default plain-text
 /// `Method Not Allowed` — mirroring the 404 fallback's SDK contract.
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn build_auth_middleware_enforces_file_keys() {
-        // RIL ISS-080 regression: a config carrying ONLY file keys must
+        // regression: a config carrying ONLY file keys must
         // still produce a middleware. Pre-fix the binary gated on the
         // inline `api_keys` list alone, so `--api-key-file` /
         // `VLLM_API_KEYS_FILE` deployments saw no SEC-01 warning (the

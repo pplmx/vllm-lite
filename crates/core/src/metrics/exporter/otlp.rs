@@ -136,7 +136,7 @@ enum MetricSource {
     Atomic,
     /// The lock-free runtime [`MetricsSnapshot`] (lifetime + live gauges:
     /// tokens, latency percentiles, throughput, KV/prefix usage, in-flight,
-    /// scheduler wait). RIL ISS-103 — pre-fix the exporter read ONLY the
+    /// scheduler wait). — pre-fix the exporter read ONLY the
     /// atomic path, so every headline engine metric that lives on
     /// `/metrics` was absent from OTLP.
     Snapshot,
@@ -156,7 +156,7 @@ enum InstrumentKind {
 /// name so a single name drives both `/metrics` and OTLP (parity is pinned
 /// by `metric_schema_mapping_covers_all_exported_prometheus_metrics`).
 ///
-/// Only instruments with a REAL production source are listed (RIL ISS-103):
+/// Only instruments with a REAL production source are listed:
 /// the five fabricated always-0 instruments (`gpu_memory_used/total_bytes`
 /// — no GPU-memory source; `is_leader` — no leader-election in production;
 /// `scheduler_queue_size` / `inflight_requests` — stale names with no
@@ -199,7 +199,7 @@ const SCHEMA_MAP: &[(&str, &str, InstrumentKind, &str, MetricSource)] = &[
         MetricSource::Atomic,
     ),
     (
-        // RIL ISS-133: engine step errors on the primary OTLP surface too
+        // engine step errors on the primary OTLP surface too
         // (was /debug/metrics-admin-only).
         "errors_total",
         "engine.errors",
@@ -440,7 +440,7 @@ fn ratio_scale_for(unit: &str) -> f64 {
 
 /// Lifetime/u64-valued field of a [`MetricsSnapshot`], keyed by the
 /// Prometheus wire name (for snapshot-sourced `Counter` /
-/// `UpDownCounter` instruments — RIL ISS-103).
+/// `UpDownCounter` instruments).
 fn snapshot_u64(snap: &MetricsSnapshot, name: &str) -> u64 {
     match name {
         "tokens_total" => snap.tokens_total,
@@ -450,7 +450,7 @@ fn snapshot_u64(snap: &MetricsSnapshot, name: &str) -> u64 {
 }
 
 /// Float-valued field of a [`MetricsSnapshot`], keyed by the Prometheus
-/// wire name (for snapshot-sourced `Gauge` instruments — RIL ISS-103).
+/// wire name (for snapshot-sourced `Gauge` instruments).
 /// Values are exported as-is (no fixed-point scale): `kv_cache_usage_percent`
 /// and `prefix_cache_hit_rate` are already `0..=100`, latencies ms, throughput
 /// tokens/sec, batch sizes sequences.
@@ -665,7 +665,7 @@ impl OtlpExporter {
                 draft.runtime_errors_total,
             );
 
-            // RIL ISS-103: the lock-free runtime snapshot carries the
+            // the lock-free runtime snapshot carries the
             // headline engine metrics every tick — read once, applied to
             // every snapshot-sourced instrument.
             let snapshot = self.inner.collector.runtime_snapshot();
@@ -832,7 +832,7 @@ mod tests {
         assert!(OtlpConfig::default().validate().is_ok());
     }
 
-    /// RIL ISS-103: `SCHEMA_MAP` must match the `PrometheusExporter` surface
+    /// `SCHEMA_MAP` must match the `PrometheusExporter` surface
     /// EXACTLY — pre-fix it omitted every headline engine metric (tokens,
     /// latencies, throughput, KV/prefix usage, in-flight, scheduler wait —
     /// all live on `/metrics`) and instead carried 5 fabricated always-0
@@ -870,7 +870,7 @@ mod tests {
         );
     }
 
-    /// RIL ISS-133: engine step errors must surface on the PRIMARY
+    /// engine step errors must surface on the PRIMARY
     /// observability surface (`/metrics` Prometheus) with the real
     /// counter value — pre-fix `errors_total` was written in production
     /// (engine/run.rs) but only rendered on the admin-gated
@@ -901,7 +901,7 @@ mod tests {
         );
     }
 
-    /// RIL ISS-134: the latency gauges measure one engine scheduler step
+    /// the latency gauges measure one engine scheduler step
     /// (record_latency fires once per step), NOT end-to-end request
     /// latency / TTFT — pin the honest HELP text so the label can't
     /// regress to the misleading "inference/request latency".
@@ -921,7 +921,7 @@ mod tests {
         );
     }
 
-    /// RIL ISS-103: the fabricated always-0 instruments must not come back.
+    /// the fabricated always-0 instruments must not come back.
     #[test]
     fn schema_map_excludes_fabricated_instruments() {
         for banned in [

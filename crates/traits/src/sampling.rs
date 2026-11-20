@@ -158,7 +158,7 @@ pub struct SamplingParams {
     /// threshold from a deterministic per-step stream derived from
     /// `(seed, step)`, so the same seed + same model + same prompt
     /// reproduces the same output while each step still gets a fresh,
-    /// independent draw (RIL ISS-007). When `None`, the sampler reads
+    /// independent draw. When `None`, the sampler reads
     /// from the thread-local default RNG (the pre-P34 behaviour).
     ///
     /// **Honouring is greedy-agnostic:** `temperature = 0` and
@@ -344,7 +344,7 @@ impl SamplingParamsBuilder {
     /// the same seed + same model + same prompt reproduces the same
     /// output while each step gets a fresh draw (`OpenAI` `seed`
     /// semantic — P34 v0.2 wire-type follow-up engine wire-through;
-    /// per-step fix RIL ISS-007). See the field doc-comment on
+    /// per-step fix). See the field doc-comment on
     /// [`SamplingParams::seed`] for the greedy-bypass + per-step
     /// stream guarantees.
     #[must_use]

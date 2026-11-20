@@ -78,7 +78,7 @@ the main HTTP server port — there is no separate metrics listener):
 - `requests_in_flight` / `request_queue_depth` / `active_sequences` — load
 - `avg_scheduler_wait_time_ms` — queue→admission delay
 - `dropped_tokens_total` — tokens dropped on a full client channel
-- `errors_total` — engine step errors (RIL ISS-133)
+- `errors_total` — engine step errors
 
 Grafana dashboards in `docs/grafana/`. Import into your Grafana
 instance.

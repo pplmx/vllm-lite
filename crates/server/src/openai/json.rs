@@ -7,7 +7,7 @@
 //! `Content-Type` returns `415`, and the message leaks serde/type
 //! internals. OpenAI clients parse error bodies as `{error:
 //! {message, type, code}}` and mostly treat non-200 / non-400 as
-//! opaque, so these defaults break client error handling (RIL ISS-104).
+// opaque, so these defaults break client error handling.
 //!
 //! This wrapper intercepts every
 //! [`JsonRejection`](axum::extract::rejection::JsonRejection) and maps it to the
@@ -146,7 +146,7 @@ mod tests {
 
     #[tokio::test]
     async fn wrong_shape_returns_400_openai_error() {
-        // RIL ISS-104: a wrong-shaped but valid JSON body was 422 plain
+        // a wrong-shaped but valid JSON body was 422 plain
         // text (`Failed to deserialize the JSON body into the target
         // type: ...`) — now 400 with an OpenAI error envelope.
         let resp = app()

@@ -1,6 +1,6 @@
 // crates/core/tests/chunked_prefill_no_stale_stream.rs
 //
-// RIL regression (TASK-057 / ISS-053): a mid-chunk prefill's "predicted
+// Regression: a mid-chunk prefill's "predicted
 // next prompt token" must never reach the client's response channel.
 //
 // During chunked prefill each non-final chunk runs a forward that predicts
@@ -119,7 +119,7 @@ fn drain_tokens(rx: &mut mpsc::Receiver<SampledToken>) -> Vec<TokenId> {
     out
 }
 
-// RIL TASK-057 / ISS-053: chunked prefill must not stream stale mid-chunk
+// chunked prefill must not stream stale mid-chunk
 // predictions. A 100-token prompt with budget 32 / chunk 16 runs six
 // mid-chunk rounds (each predicting the NEXT prompt token: mark 111), then
 // one final chunk (whose single real first output is also mark 111 because

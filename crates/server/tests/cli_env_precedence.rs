@@ -1,4 +1,4 @@
-//! RIL ISS-081: environment-variable overrides must populate the resolved
+// environment-variable overrides must populate the resolved
 //! `AppConfig` through `CliArgs::to_app_config`.
 //!
 //! This lives in `tests/` (not `src/cli/args/tests.rs`) on purpose: nextest

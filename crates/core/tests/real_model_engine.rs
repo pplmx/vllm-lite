@@ -1,7 +1,7 @@
 //! End-to-end engine integration test with a REAL KV-writing model
 //! (`LlamaModel`), exercising the full scheduler + model + KV-cache path that
 //! `StubModel`/`ConstModel` skip (they don't write KV). This is the capstone
-//! regression guard for the KV-data-path bug class (RIL ISS-019/ISS-022): a
+// regression guard for the KV-data-path bug class: a
 //! multi-block prompt is prefilled, then decoded, and we verify the model
 //! produces deterministic output and actually populates the KV cache.
 
@@ -116,7 +116,7 @@ fn run_to_completion(prompt: Vec<TokenId>, max_tokens: usize) -> Vec<TokenId> {
     generated
 }
 
-/// Regression (RIL ISS-026): a speculative prefill whose prompt + drafts
+/// Regression: a speculative prefill whose prompt + drafts
 /// cross a block boundary must NOT silently fall back to writing the
 /// overflow KV into block 0.
 ///
@@ -209,7 +209,7 @@ fn real_model_speculative_prefill_does_not_corrupt_first_block() {
     );
 }
 
-/// Regression (RIL ISS-026 decode side): a speculative DECODE step whose
+/// Regression (decode side): a speculative DECODE step whose
 /// draft span crosses a block boundary must not fall back into block 0
 /// either.
 ///
@@ -299,7 +299,7 @@ fn real_model_speculative_decode_boundary_does_not_corrupt_first_block() {
     compare(1, 14);
 }
 
-/// Regression (RIL ISS-029): with a REAL draft model, speculative decode
+/// Regression: with a REAL draft model, speculative decode
 /// must generate drafts from the true accumulated context so they match the
 /// target model and get accepted.
 ///
@@ -363,7 +363,7 @@ fn real_model_speculative_decode_keeps_generating_drafts() {
         decode_tokens.len() > 1,
         "speculative decode must accept drafts with a real model (emitted {decode_tokens:?}); \
          pre-fix the step emitted exactly 1 token because every draft was \
-         generated at the wrong position/context and rejected (RIL ISS-029)"
+         generated at the wrong position/context and rejected"
     );
     // Same weights for target and draft: with correct positions/cache all
     // max_draft drafts are accepted plus the bonus token.
@@ -374,7 +374,7 @@ fn real_model_speculative_decode_keeps_generating_drafts() {
     );
 }
 
-/// End-to-end equivalence (RIL ISS-029): a real-model speculative engine
+/// End-to-end equivalence: a real-model speculative engine
 /// must produce the SAME generated tokens as a regular engine for the same
 /// prompt, because drafts are verified against the target model and only
 /// accepted tokens (plus the target-sampled bonus) are emitted.
@@ -441,12 +441,12 @@ fn real_model_speculative_output_matches_regular() {
     assert_eq!(
         spec_tokens, regular_tokens,
         "speculative decoding must produce the same output as regular decoding \
-         with an identical-weight draft model (RIL ISS-029); spec={spec_tokens:?} \
+         with an identical-weight draft model; spec={spec_tokens:?}\
          regular={regular_tokens:?}"
     );
 }
 
-/// Regression (RIL ISS-036): speculative verification must apply the same
+/// Regression: speculative verification must apply the same
 /// repeat-penalty seen set as the regular path, so the emitted distribution
 /// matches non-speculative decoding exactly.
 ///
@@ -522,12 +522,12 @@ fn real_model_speculative_output_matches_regular_with_repeat_penalty() {
     assert_eq!(
         spec_tokens, regular_tokens,
         "speculative decoding must match regular decoding under repeat_penalty \
-         (verifier must apply the seen set; RIL ISS-036); spec={spec_tokens:?} \
+         (verifier must apply the seen set); spec={spec_tokens:?}\
          regular={regular_tokens:?}"
     );
 }
 
-/// Regression (RIL ISS-038): a Qwen3.5 hybrid model (GDN linear-attention
+/// Regression: a Qwen3.5 hybrid model (GDN linear-attention
 /// layers with per-sequence recurrent state) must survive a full
 /// prefix-cache hit.
 ///
@@ -581,7 +581,7 @@ fn qwen35_hybrid_full_prefix_hit_does_not_error() {
         assert!(
             result.is_ok(),
             "full prefix-cache hit must not error on a Qwen3.5 hybrid model \
-             (GDN state must be rebuilt; RIL ISS-038): {result:?}"
+             (GDN state must be rebuilt): {result:?}"
         );
         if engine.scheduler.get_sequence(2).is_none() {
             break;
@@ -617,7 +617,7 @@ fn real_model_engine_output_is_deterministic() {
 #[test]
 fn real_model_engine_populates_kv_cache() {
     // After a multi-block prefill, the model must have written NON-zero KV
-    // into the cache (the data path StubModel skips). RIL ISS-019/022 guard.
+    // into the cache (the data path StubModel skips). guard.
     let model = build_model();
     let cache = model.paged_kv_cache();
     let mut engine = Engine::with_config_boxed(

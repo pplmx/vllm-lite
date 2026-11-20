@@ -269,7 +269,7 @@ async fn completions_rejects_empty_prompt_with_400() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
-/// RIL ISS-139: whitespace-only input parity — the sync completions
+/// whitespace-only input parity — the sync completions
 /// contract must reject a whitespace-only prompt (embeddings already
 /// rejects whitespace-only elements while claiming every sibling does;
 /// chat + batch get the same trim in this batch).
@@ -312,7 +312,7 @@ async fn completions_rejects_whitespace_only_prompt_with_400() {
     assert_eq!(body.0.error.error_type, "invalid_request_error");
 }
 
-/// RIL ISS-140: empty model-id parity — chat + embeddings 400 on
+/// empty model-id parity — chat + embeddings 400 on
 /// `model: ""`; completions previously echoed the blank id back instead.
 /// Model `None` stays allowed (legacy default); only `Some("")` is a
 /// malformed value.

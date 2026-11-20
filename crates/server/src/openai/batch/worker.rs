@@ -22,7 +22,7 @@ use crate::ApiState;
 use crate::openai::chat_template::ChatTemplate;
 use crate::openai::types::ChatMessage;
 
-/// Bounded wait for the engine's assigned `seq_id` (RIL ISS-070 / TASK-083).
+/// Bounded wait for the engine's assigned `seq_id`.
 ///
 /// The batch worker is background work (no interactive client), so this is
 /// intentionally a little more generous than the 1s bound the sync
@@ -61,7 +61,7 @@ pub fn spawn_batch_worker(state: &ApiState, job: BatchJob) -> tokio::task::JoinH
 ///
 /// `max_model_len` is threaded in so each prompt passes the same
 /// `check_context_length` gate as the non-batch generation paths — the
-/// batch worker must not re-open the ISS-044 `max_tokens`-ceiling bypass
+/// batch worker must not re-open the `max_tokens`-ceiling bypass
 /// that the chat/completions/embeddings endpoints all enforce.
 async fn run_batch_job(
     job: BatchJob,
@@ -185,7 +185,7 @@ async fn execute_one(
     // `prompt + max_tokens` must fit `max_model_len` (or the hard
     // `DEFAULT_MAX_GENERATION_TOKENS` ceiling when none is configured).
     // Without this, a batch prompt can carry `max_tokens = i64::MAX`
-    // against an unconfigured model and re-open the ISS-044 DoS (unbounded
+    // against an unconfigured model and re-open the DoS (unbounded
     // per-sequence token growth until OOM) on the new endpoint.
     if let Err((_, json)) =
         crate::openai::chat::check_context_length(prompt_tokens.len(), max_tokens, max_model_len)
@@ -218,7 +218,7 @@ async fn execute_one(
     // Learn the engine-assigned seq_id so a cancellation can cancel this
     // specific sequence (not just skip the next prompt).
     //
-    // RIL ISS-070 / TASK-083: the wait is BOUNDED. The sync streaming paths
+    // the wait is BOUNDED. The sync streaming paths
     // (`completions.rs:932`, `chat.rs:1403`) cap the seq_id await at 1s and
     // fail the request on timeout; without an equivalent bound here, a
     // stalled engine (long/wedged forward before it drains the mailbox and
@@ -283,7 +283,7 @@ mod tests {
     /// `seq_id_tx` — simulating the engine that assigned a `seq_id`
     /// synchronously in the real run loop but is stalled (long forward /
     /// wedged) so the reply is delayed past the worker's bound. Without the
-    /// ISS-070 / TASK-083 `seq_id` timeout, this would hang the batch job in
+    /// `seq_id` timeout, this would hang the batch job in
     /// `InProgress` forever.
     fn create_state_with_stalled_engine() -> ApiState {
         let mut state = test_fixtures::api_state(Architecture::Qwen3);
@@ -338,7 +338,7 @@ mod tests {
         // `max_tokens` beyond the hard ceiling (no max_model_len configured
         // -> check_context_length caps at DEFAULT_MAX_GENERATION_TOKENS) must
         // fail the item locally, never reaching the engine — re-opening the
-        // ISS-044 DoS on the batch endpoint is not allowed.
+        // DoS on the batch endpoint is not allowed.
         let (state, _engine) = create_state_with_mock_engine();
         let job = state
             .batch_manager
@@ -418,7 +418,7 @@ mod tests {
         assert!(finished.results[0].error.is_some());
     }
 
-    /// RIL ISS-070 / TASK-083: a stalled engine must not hang the batch job
+    /// a stalled engine must not hang the batch job
     /// in `InProgress` forever. Pre-fix `execute_one` awaited `seq_id_rx`
     /// with no timeout (worker.rs:211); if the engine never replied (stalled
     /// modelling a long/wedged forward), the worker awaited indefinitely,

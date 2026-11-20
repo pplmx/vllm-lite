@@ -201,7 +201,7 @@ fn test_sequence_finished_event() {
 
     // Full prefill: input_count = prompt length (2 tokens). The prefill's
     // single predicted token counts as 1 generated, reaching max_tokens = 1
-    // and finishing the sequence (RIL ISS-051: a *partial* prefill — a
+    // and finishing the sequence (a *partial* prefill — a
     // chunk, input_count < prompt_len — must NOT finish via max_tokens; it
     // is re-queued for the remaining prompt tokens instead).
     engine.update(

@@ -1,4 +1,4 @@
-# vLLM-lite example server configuration (RIL ISS-116 / TASK-138).
+# vLLM-lite example server configuration.
 #
 # Every field here matches the on-disk `AppConfig` schema — the test
 # `crates/server/src/config/tests.rs::example_yaml_stays_valid` loads this
@@ -6,7 +6,7 @@
 # recognized (or starts failing validation) fails CI instead of drifting.
 #
 # Load with `--config config/example.yaml`, or `VLLM_CONFIG_PATH` (which
-# takes precedence). Precedence contract (RIL ISS-081):
+# takes precedence). Precedence contract:
 #   explicit CLI flags / VLLM_* env vars  >  this file  >  built-in defaults.
 # Sections may be omitted; unspecified fields fall back to defaults.
 

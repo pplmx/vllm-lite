@@ -111,7 +111,7 @@ fn list_models(dir: &PathBuf) -> Result<()> {
     }
 
     println!("Available models in {}:", dir.display());
-    // RIL ISS-170: the table's width must match its border lines exactly.
+    // the table's width must match its border lines exactly.
     // A row is `║ ` + {name:<29} + ` │ ` + {size:>9} + ` │ ` + {type:<17} +
     // ` ║` = 65 chars; the previous border used 60 `═` (= 62 total), so the
     // table's right edge was off by one and the border didn't close. Rows
@@ -153,7 +153,7 @@ fn show_model_info(path: &PathBuf) -> Result<()> {
     }
 
     let config_path = path.join("config.json");
-    // RIL ISS-142: a dir that exists but isn't a model (no config.json)
+    // a dir that exists but isn't a model (no config.json)
     // must bail with an actionable message instead of printing a
     // size-only "Model:" line and exiting 0 — the operator asked for
     // model metadata.
@@ -189,7 +189,7 @@ fn show_model_info(path: &PathBuf) -> Result<()> {
                 info.insert("vocab_size".to_string(), vocab_size.clone());
             }
             if let Some(eos) = obj.get("eos_token_id") {
-                // RIL ISS-075: the model's end-of-sentence token — the server
+                // the model's end-of-sentence token — the server
                 // now stops generation here (finish_reason=stop).
                 info.insert("eos_token_id".to_string(), eos.clone());
             }
@@ -353,7 +353,7 @@ engine:
         // A config with only a partial `server:` section (no `engine`) is
         // VALID — the server's AppConfig applies `#[serde(default)]` to every
         // section, so the validator must agree instead of issuing a false
-        // rejection. Guards the RIL TASK-110 fix that replaced the hand-rolled
+        // rejection. Guards the fix that replaced the hand-rolled
         // required-field check with the server's real `validate()`.
         let temp = TempDir::new().unwrap();
         let config_path = temp.path().join("config.yaml");
@@ -407,11 +407,11 @@ server:
         assert_eq!(format_size(1024 * 1024 * 1024), "1.0 GB");
     }
 
-    // RIL ISS-117: the documented usage (`vllm config validate config.yaml`)
+    // the documented usage (`vllm config validate config.yaml`)
     // was rejected because the args were `#[arg(long)]` flags. Guard the
     // positional form (and the `--<flag>` spelling docs never claimed) so the
     // tool's own usage comment stays true.
-    // RIL ISS-153: `vllm --help` / `vllm config --help` / `vllm model --help`
+    // `vllm --help` / `vllm config --help` / `vllm model --help`
     // previously rendered the subcommands (`config`, `model`, `validate`,
     // `list`, `info`) with BLANK descriptions — a fresh operator reading
     // help learned nothing about what each command does. clap renders enum
@@ -438,7 +438,7 @@ server:
 
     #[test]
     fn version_flag_reports_cargo_version() {
-        // RIL ISS-119: `--version` must track CARGO_PKG_VERSION (was a
+        // `--version` must track CARGO_PKG_VERSION (was a
         // hardcoded "0.1.0" that would go stale on a version bump).
         let rendered = Cli::command().render_version();
         assert!(
@@ -483,7 +483,7 @@ server:
         }
     }
 
-    // RIL ISS-142: `vllm model info` on a directory that exists but is
+    // `vllm model info` on a directory that exists but is
     // NOT a model (no config.json) must bail with an actionable message
     // instead of silently printing "Model: <dir>" with size-only fields
     // and exiting 0 — the operator asked for model metadata and got
