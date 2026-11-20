@@ -9132,3 +9132,120 @@ async fn chat_n_gt_1_candidate_error_fails_the_request() {
         "the failure must use the OpenAI error envelope, got {json}"
     );
 }
+
+/// A STREAMING `n > 1` request whose candidate dies after admission must
+/// still tell the client that candidate ended.
+///
+/// Admission is checked up front — if any candidate cannot get a `seq_id`
+/// the whole request fails with 503 before the stream opens (covered by
+/// `streaming_n_gt_1_*` admission tests). This test covers the later case:
+/// the stream has started, and one candidate's sequence ends without
+/// producing a token. That candidate must still be reported so the client
+/// can account for all `n` choices instead of silently receiving fewer.
+#[tokio::test]
+async fn streaming_n_gt_1_candidate_ending_silently_is_still_reported() {
+    use tokio::sync::mpsc;
+
+    let (engine_tx, mut engine_rx) = mpsc::channel::<EngineMessage>(32);
+    tokio::spawn(async move {
+        let mut idx = 0usize;
+        while let Some(msg) = engine_rx.recv().await {
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                let candidate = idx;
+                idx += 1;
+                // All candidates are admitted (seq_id answered), so the
+                // request reaches the streaming phase.
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send((candidate + 1) as u64);
+                }
+                if candidate == 1 {
+                    // Candidate 1's sequence ends with no tokens at all.
+                    drop(response_tx);
+                    drop(finish_reason_tx);
+                } else {
+                    let _ = response_tx
+                        .send(vllm_traits::SampledToken {
+                            token: 10 + candidate as u32,
+                            logprob: 0.0,
+                            top_logprobs: vec![],
+                        })
+                        .await;
+                    drop(finish_reason_tx);
+                }
+            }
+        }
+    });
+
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stream": true,
+        "n": 3,
+        "max_tokens": 4
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8_lossy(&bytes);
+
+    let mut seen = std::collections::BTreeSet::new();
+    for line in text.lines() {
+        let Some(payload) = line.strip_prefix("data: ") else {
+            continue;
+        };
+        if payload.trim() == "[DONE]" {
+            continue;
+        }
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(payload) else {
+            continue;
+        };
+        if let Some(choices) = json["choices"].as_array() {
+            for c in choices {
+                if let Some(i) = c["index"].as_i64() {
+                    seen.insert(i);
+                }
+            }
+        }
+    }
+    assert_eq!(
+        seen,
+        [0i64, 1, 2]
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>(),
+        "every admitted candidate must appear in the stream, saw {seen:?}\n--- stream ---\n{text}"
+    );
+}
