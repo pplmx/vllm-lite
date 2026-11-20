@@ -150,12 +150,34 @@ proptest! {
             if is_record {
                 policy.record_blocks(&[block_id]);
                 *expected.entry(block_id).or_insert(0) += 1;
-            } else if let Some(&count) = expected.get(&block_id) {
-                policy.release_blocks(&[block_id]);
-                if count <= 1 {
-                    expected.remove(&block_id);
+            } else {
+                // Release even when nothing was recorded: the policy must not
+                // report an unknown block as freed (that would hand a live
+                // block back to the allocator). The previous version skipped
+                // this arm entirely, so the defect below never showed up here.
+                let freed = policy.release_blocks(&[block_id]);
+                if let Some(&count) = expected.get(&block_id) {
+                    if count <= 1 {
+                        expected.remove(&block_id);
+                        prop_assert!(
+                            freed.contains(&block_id),
+                            "dropping the LAST reference must report the block as freed"
+                        );
+                    } else {
+                        // Still owned by someone else: the block must NOT be
+                        // returned to the allocator.
+                        expected.insert(block_id, count - 1);
+                        prop_assert!(
+                            !freed.contains(&block_id),
+                            "a block with {} remaining references must not be freed",
+                            count - 1
+                        );
+                    }
                 } else {
-                    expected.insert(block_id, count - 1);
+                    prop_assert!(
+                        !freed.contains(&block_id),
+                        "a block that was never recorded must not be reported as freed"
+                    );
                 }
             }
             prop_assert_eq!(policy.get_block_ref_count(block_id), expected.get(&block_id).copied().unwrap_or(0));

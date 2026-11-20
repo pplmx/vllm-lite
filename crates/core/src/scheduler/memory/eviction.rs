@@ -228,11 +228,23 @@ impl EvictionPolicy {
     pub fn release_blocks(&mut self, blocks: &[BlockId]) -> Vec<BlockId> {
         let mut freed = Vec::new();
         for &block in blocks {
-            let decremented_to_zero = self.block_ref_count.get_mut(&block).is_none_or(|count| {
-                *count = count.saturating_sub(1);
-                *count == 0
-            });
-            if decremented_to_zero {
+            // Only a block this policy actually held may be reported as
+            // freed. `release_blocks` feeds `MemoryManager::release_blocks`,
+            // which returns everything named in `freed` to the allocator — so
+            // counting an unknown block as released would hand a block that is
+            // still owned by someone else back to the free pool (two sequences
+            // then share one KV block). An unknown block means the caller's
+            // record/release pairing is broken; report nothing and let it be
+            // noticed rather than corrupting the pool.
+            let Some(count) = self.block_ref_count.get_mut(&block) else {
+                tracing::warn!(
+                    block_id = block,
+                    "release_blocks: block was never recorded; ignoring"
+                );
+                continue;
+            };
+            *count = count.saturating_sub(1);
+            if *count == 0 {
                 self.block_ref_count.remove(&block);
                 self.block_access_order.retain(|&b| b != block);
                 freed.push(block);

@@ -591,14 +591,19 @@ fn test_memory_manager_allocation_and_release() {
     let config = SchedulerConfig::default();
     let mut memory = MemoryManager::new(config, 100);
 
-    // Allocate blocks
+    // Allocate blocks. Every allocation must be recorded: `release_blocks`
+    // only returns a block to the allocator when the policy actually held a
+    // reference — an unrecorded block is unknown, and counting it as freed
+    // would hand a block with a live owner back to the free pool.
     let blocks1 = memory.allocate(10).unwrap();
     assert_eq!(blocks1.len(), 10);
+    memory.record_blocks(&blocks1);
     assert_eq!(memory.available_blocks(), 90);
 
     // Allocate more
     let blocks2 = memory.allocate(20).unwrap();
     assert_eq!(blocks2.len(), 20);
+    memory.record_blocks(&blocks2);
     assert_eq!(memory.available_blocks(), 70);
 
     // Release first allocation
@@ -617,9 +622,11 @@ fn test_memory_manager_out_of_memory() {
     let config = SchedulerConfig::default();
     let mut memory = MemoryManager::new(config, 10);
 
-    // Allocate all blocks
+    // Allocate all blocks (recording is what gives the policy a reference to
+    // release later; see `test_memory_manager_allocation_and_release`).
     let blocks = memory.allocate(10).unwrap();
     assert_eq!(blocks.len(), 10);
+    memory.record_blocks(&blocks);
     assert_eq!(memory.available_blocks(), 0);
 
     // Try to allocate more - should fail

@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 9083b169148828319b8839280094a1d583e5711b1f3fd4488e099315e131b49a # shrinks to long_running_rounds = 6, new_rounds = 0
+cc b073b4fbe7a8b955a959852cf132b9d6ba0c1c18259208888d62cb39ed3861ba # shrinks to ops = [(14, true), (14, true), (14, false)]

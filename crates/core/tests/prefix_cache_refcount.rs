@@ -246,12 +246,20 @@ fn release_blocks_with_outstanding_refcount_does_not_free() {
     );
 }
 
-/// ARCH-01 unit-level regression: a release on a block that was
-/// never recorded (refcount drift) must still be safe — it should
-/// free the block rather than leak it. Catches the "throw an error"
-/// variant which would silently leak memory in production.
+/// A release on a block the policy never recorded must NOT return it to the
+/// allocator.
+///
+/// The earlier version of this test required the opposite ("free rather than
+/// leak") as protection against refcount drift. The two failure modes are not
+/// comparable: leaking a block costs a few KB for the life of the process,
+/// while freeing one that still has a live owner hands it to the next
+/// allocation — two sequences then read and write the same KV block, which is
+/// silent data corruption. Records happen on every `allocate` in production
+/// (four call sites, all paired), so an unrecorded block means the pairing is
+/// already broken; the policy reports nothing and logs a warning instead of
+/// turning that into corruption.
 #[test]
-fn release_blocks_on_unrecorded_block_frees_instead_of_leaking() {
+fn release_blocks_on_unrecorded_block_frees_nothing() {
     let mut engine = Engine::with_config(StubModel::default(), None, test_config(), 4, 100);
     let mem = engine.scheduler.memory_mut();
 
@@ -262,10 +270,8 @@ fn release_blocks_on_unrecorded_block_frees_instead_of_leaking() {
     mem.release_blocks(&allocated);
     let available_after = mem.available_blocks();
     assert_eq!(
-        available_after,
-        available_before + allocated.len(),
-        "release_blocks on an unrecorded block must free it (return {} slots); \
-         instead went {available_before} -> {available_after}",
-        allocated.len()
+        available_after, available_before,
+        "an unrecorded block must not be returned to the allocator; \
+         available went {available_before} -> {available_after}"
     );
 }

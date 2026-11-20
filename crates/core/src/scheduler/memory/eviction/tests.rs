@@ -83,6 +83,38 @@ fn test_release_blocks_removes_zero_refs() {
     assert_eq!(policy.get_block_ref_count(1), 0);
 }
 
+/// Releasing a block this policy never held must not report it as freed.
+///
+/// `MemoryManager::release_blocks` forwards `freed` to the allocator, so an
+/// unknown block counted as released would hand a block that still has a live
+/// owner back to the free pool — two sequences would then share one KV block.
+#[test]
+fn test_release_unrecorded_block_reports_nothing() {
+    let mut policy = EvictionPolicy::new();
+    let freed = policy.release_blocks(&[42]);
+    assert!(
+        freed.is_empty(),
+        "a block that was never recorded must not be freed, got {freed:?}"
+    );
+    assert_eq!(policy.get_block_ref_count(42), 0);
+}
+
+/// Only the release that drops the count to zero reports the block.
+#[test]
+fn test_release_reports_only_the_final_reference() {
+    let mut policy = EvictionPolicy::new();
+    policy.record_blocks(&[5, 5]);
+
+    let first = policy.release_blocks(&[5]);
+    assert!(
+        first.is_empty(),
+        "one reference remains, so nothing is freed, got {first:?}"
+    );
+
+    let second = policy.release_blocks(&[5]);
+    assert_eq!(second, vec![5], "the last reference frees the block");
+}
+
 #[test]
 fn test_touch_blocks_updates_order() {
     let mut policy = EvictionPolicy::new();
