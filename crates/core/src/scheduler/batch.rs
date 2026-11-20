@@ -146,6 +146,7 @@ impl crate::engine::Engine {
             &batch.seq_ids,
             &output.next_tokens,
             &stale_mask,
+            &batch.sampling_params,
             &mut disconnected,
         );
 
@@ -225,14 +226,20 @@ impl crate::engine::Engine {
     /// sequences whose channel returned `Closed` are appended
     /// to `disconnected` so the caller can cancel them (client disconnect).
     pub(crate) fn send_and_collect_results(
-        &self,
+        &mut self,
         seq_ids: &[SeqId],
         next_tokens: &[SampledToken],
         stale: &[bool],
+        sampling_params: &[vllm_traits::SamplingParams],
         disconnected: &mut Vec<SeqId>,
     ) -> Vec<(SeqId, SampledToken)> {
         let mut results = Vec::with_capacity(seq_ids.len());
-        for ((seq_id, sampled), &is_stale) in seq_ids.iter().zip(next_tokens.iter()).zip(stale) {
+        for (i, ((seq_id, sampled), &is_stale)) in seq_ids
+            .iter()
+            .zip(next_tokens.iter())
+            .zip(stale)
+            .enumerate()
+        {
             if is_stale {
                 tracing::debug!(
                     seq_id = %seq_id,
@@ -241,13 +248,85 @@ impl crate::engine::Engine {
                 );
                 continue;
             }
-            tracing::debug!(seq_id = %seq_id, token = %sampled.token, "Sending token to channel");
-            if let Some(tx) = self.response_txs.get(seq_id) {
-                self.try_send_token(*seq_id, sampled, tx, disconnected);
-            }
             results.push((*seq_id, sampled.clone()));
+
+            // `OpenAI`'s `stop` contract: "the returned text will not contain
+            // the stop sequence." A stop can span several tokens, so the
+            // trailing `stop_len - 1` tokens can still turn out to be part of
+            // one — and a token already written to the response channel cannot
+            // be recalled. Hold them back until they are proven innocent.
+            let hold = self.stop_hold_back(sampling_params.get(i));
+            let completes_stop =
+                self.token_completes_stop_sequence(*seq_id, sampling_params.get(i));
+
+            let pending = self.scheduler.pending_stream.entry(*seq_id).or_default();
+            pending.push(sampled.clone());
+
+            if completes_stop {
+                tracing::debug!(
+                    seq_id = %seq_id,
+                    held = pending.len(),
+                    "Generated tail completes a stop sequence; withholding it"
+                );
+                pending.clear();
+                continue;
+            }
+            // Everything except the tokens that may still become a stop.
+            let mut released = Vec::new();
+            while pending.len() > hold {
+                released.push(pending.remove(0));
+            }
+            for ready in released {
+                tracing::debug!(
+                    seq_id = %seq_id,
+                    token = %ready.token,
+                    "Sending token to channel"
+                );
+                if let Some(tx) = self.response_txs.get(seq_id) {
+                    self.try_send_token(*seq_id, &ready, tx, disconnected);
+                }
+            }
         }
         results
+    }
+
+    /// How many trailing tokens must be held back because they may still
+    /// complete a stop sequence.
+    ///
+    /// `stop_len - 1` for the longest configured stop, so the final token of
+    /// any match can be recognised before its prefix goes out. Zero when the
+    /// sequence has no multi-token stops — the common case pays nothing.
+    fn stop_hold_back(&self, params: Option<&vllm_traits::SamplingParams>) -> usize {
+        let Some(stops) = params.and_then(|p| p.stop_token_sequences.as_ref()) else {
+            return 0;
+        };
+        // A single-token stop needs no lookahead: the matching token itself is
+        // the one that would be withheld.
+        let longest = stops.iter().map(Vec::len).max().unwrap_or(1);
+        longest.saturating_sub(1)
+    }
+
+    /// Whether the sequence's generated tail now ends with one of its
+    /// configured `stop` token sequences.
+    ///
+    /// Reads the post-update `seq.tokens`, so it must run after
+    /// `scheduler.update()`.
+    fn token_completes_stop_sequence(
+        &self,
+        seq_id: SeqId,
+        params: Option<&vllm_traits::SamplingParams>,
+    ) -> bool {
+        let Some(stops) = params.and_then(|p| p.stop_token_sequences.as_ref()) else {
+            return false;
+        };
+        if stops.is_empty() {
+            return false;
+        }
+        let Some(seq) = self.scheduler.get_sequence(seq_id) else {
+            return false;
+        };
+        let generated = &seq.tokens[seq.prompt_len.min(seq.tokens.len())..];
+        crate::sampling::matched_stop_len(generated, stops).is_some()
     }
 
     /// Finalize stop-sequence and length-completed sequences, clear finished

@@ -65,6 +65,17 @@ pub struct SchedulerEngine {
     /// unchanged across feature flags.
     #[cfg(feature = "multi-node")]
     pub(super) chain_cursors: HashMap<SeqId, u64>,
+    /// Tokens generated but not yet handed to the client channel.
+    ///
+    /// A stop sequence can span several tokens, so the tokens that might
+    /// still turn out to belong to one cannot be sent as soon as they are
+    /// sampled: `OpenAI`'s `stop` contract is that "the returned text will
+    /// not contain the stop sequence", and a token already written to the
+    /// response channel cannot be recalled. Each sequence therefore holds
+    /// back its trailing `stop_len - 1` tokens (nothing at all when it has
+    /// no multi-token stops), and releases them as soon as they can no
+    /// longer complete a stop.
+    pub(crate) pending_stream: std::collections::HashMap<SeqId, Vec<vllm_traits::SampledToken>>,
 }
 
 impl std::fmt::Debug for SchedulerEngine {
@@ -159,6 +170,7 @@ impl SchedulerEngine {
             metrics,
             #[cfg(feature = "multi-node")]
             chain_cursors: HashMap::new(),
+            pending_stream: std::collections::HashMap::new(),
         }
     }
 

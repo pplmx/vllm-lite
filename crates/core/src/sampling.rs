@@ -806,16 +806,27 @@ pub fn apply_logit_bias<S: std::hash::BuildHasher>(
 /// via deref coercion at the call site.
 #[must_use]
 pub fn matches_stop_sequences(generated_tokens: &[u32], stops: &[Vec<u32>]) -> bool {
+    matched_stop_len(generated_tokens, stops).is_some()
+}
+
+/// Length of the stop sequence matching the tail of `generated_tokens`.
+///
+/// `None` when nothing matches. `OpenAI`'s contract for `stop` is that "the
+/// returned text will not contain the stop sequence", which means the caller
+/// must know how many trailing tokens the stop covers — not merely that one
+/// matched.
+#[must_use]
+pub fn matched_stop_len(generated_tokens: &[u32], stops: &[Vec<u32>]) -> Option<usize> {
     for stop in stops {
         if stop.is_empty() || stop.len() > generated_tokens.len() {
             continue;
         }
         let start = generated_tokens.len() - stop.len();
         if &generated_tokens[start..] == stop.as_slice() {
-            return true;
+            return Some(stop.len());
         }
     }
-    false
+    None
 }
 
 // Unit tests are extracted to `tests.rs` and `prop_tests.rs` to keep

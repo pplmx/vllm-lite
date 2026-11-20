@@ -1055,8 +1055,13 @@ fn test_stop_sequence_finalizes_with_stop_reason() {
 
     // The sequence must be finished (not lingering in running).
     assert_eq!(engine.scheduler.running_count(), 0);
-    // The matched token (3) was emitted before the channel was dropped.
-    assert_eq!(rx.try_recv().unwrap().token, 3);
+    // The matched token is part of the stop sequence, and `OpenAI`'s contract
+    // is that "the returned text will not contain the stop sequence" — so it
+    // must NOT reach the client.
+    assert!(
+        rx.try_recv().is_err(),
+        "the token that completes a stop sequence must not be streamed"
+    );
     // FinishReason::Stop was delivered (not Length, not nothing).
     assert_eq!(finish_rx.try_recv().unwrap(), FinishReason::Stop);
     // No more work.
@@ -1109,9 +1114,13 @@ fn test_multi_token_stop_sequence() {
     let seq_id = engine.add_request(req, tx);
     engine.finish_reason_txs.insert(seq_id, finish_tx);
 
-    // Step 1: prefill, generates 3. Stop check: [3] vs [3,3] → no match.
+    // Step 1: prefill, generates 3. Stop check: [3] vs [3,3] → no match yet.
     engine.step().unwrap();
-    assert_eq!(rx.try_recv().unwrap().token, 3);
+    // Held back, not dropped: it could still be the first half of `[3, 3]`.
+    assert!(
+        rx.try_recv().is_err(),
+        "a token that may begin a multi-token stop must not be streamed yet"
+    );
     assert_eq!(
         engine.scheduler.running_count(),
         1,
@@ -1120,7 +1129,13 @@ fn test_multi_token_stop_sequence() {
 
     // Step 2: decode, generates 3. Stop check: [3, 3] vs [3, 3] → match!
     engine.step().unwrap();
-    assert_eq!(rx.try_recv().unwrap().token, 3);
+    // Both tokens belong to the stop sequence: the first is held back while it
+    // might still be the start of a `[3, 3]` match, and neither may reach the
+    // client once the match completes.
+    assert!(
+        rx.try_recv().is_err(),
+        "tokens forming a stop sequence must not be streamed"
+    );
     assert_eq!(
         engine.scheduler.running_count(),
         0,

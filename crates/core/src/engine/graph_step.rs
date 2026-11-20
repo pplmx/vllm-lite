@@ -213,6 +213,7 @@ impl Engine {
             &output.seq_ids,
             &output.next_tokens,
             &stale_mask,
+            &batch.sampling_params,
             &mut disconnected,
         );
 
