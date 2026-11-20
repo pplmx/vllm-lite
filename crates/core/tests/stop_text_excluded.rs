@@ -292,3 +292,39 @@ fn pending_stream_is_cleared_when_a_sequence_hits_max_tokens() {
         "a length-terminated sequence must not leave its buffer behind"
     );
 }
+
+/// Withholding must not shorten the output when the sequence ends by length.
+///
+/// A `stop` of length 3 makes the engine hold back 2 trailing tokens. If the
+/// sequence then ends by `max_tokens` instead of matching, those tokens are
+/// real output — dropping them silently truncates what the client asked for
+/// (`max_tokens = 4` delivered only 2).
+#[test]
+fn length_terminated_sequence_still_streams_its_held_tokens() {
+    let model = SequenceModel {
+        tokens: vec![7, 7, 7, 7],
+        next: Arc::new(AtomicUsize::new(0)),
+    };
+    let mut engine = Engine::new_boxed(Box::new(model), None::<Box<dyn ModelBackend>>);
+    let (tx, mut rx) = mpsc::channel(64);
+
+    // `max_tokens = 4`, and a stop that never matches so nothing is withheld
+    // permanently — but 2 tokens are always in flight.
+    let mut request = Request::new(1, vec![1, 2], 4);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![9, 9, 9]]);
+    engine.add_request(request, tx);
+
+    for _ in 0..12 {
+        let _ = engine.step();
+    }
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    assert_eq!(
+        streamed.len(),
+        4,
+        "every generated token must reach the client, got {streamed:?}"
+    );
+}

@@ -149,17 +149,26 @@ impl Engine {
         // covers callers without a `finish_reason_tx` (batch worker).
         // The counter saturates at 0, so an unbalanced call cannot wrap
         // to u64::MAX.
+        // Release whatever the stop hold-back is still sitting on. A
+        // `Stop` finalization clears the buffer itself (the withheld tokens
+        // ARE the stop sequence), so what remains here is real output that
+        // was being held back speculatively when the sequence ended for
+        // another reason — by length, most often. Dropping it would truncate
+        // the client's output; the entry also has to go, because `SeqId`s are
+        // monotonic and a leftover entry is never reused.
+        if let Some(mut pending) = self.scheduler.pending_stream.remove(&seq_id) {
+            for sampled in pending.drain(..) {
+                if let Some(tx) = self.response_txs.get(&seq_id) {
+                    let _ = tx.try_send(sampled);
+                }
+            }
+        }
         if self.response_txs.remove(&seq_id).is_some() {
             self.scheduler.metrics.record_request_end();
         }
         if let Some(tx) = self.finish_reason_txs.remove(&seq_id) {
             let _ = tx.send(reason);
         }
-        // Drop any tokens still held back for a `stop` sequence. Without this
-        // the buffer entry outlives its sequence, and since `SeqId`s are
-        // monotonic it is never reused — one leaked entry (plus its withheld
-        // tokens) per request that configured a multi-token stop.
-        self.scheduler.pending_stream.remove(&seq_id);
         // tell the target model the sequence is done so it can
         // drop per-sequence state (e.g. the Qwen3.5 hybrid GDN recurrent
         // map). Best-effort: a poisoned lock just skips the cleanup.
