@@ -131,3 +131,138 @@ fn model_forward_panic_does_not_kill_the_engine_loop() {
         .join()
         .expect("run() must return cleanly after Shutdown (panic guard held)");
 }
+
+/// A panic inside `model.embed` must not kill the engine loop.
+///
+/// Message handling runs outside the step `catch_unwind` guard, so a backend
+/// unwinding in `embed` — foreign code, exactly the case the step guard
+/// exists for — would unwind `run()` and terminate the engine thread,
+/// closing every in-flight channel and stopping all further work.
+///
+/// The loop now survives the unwind. Note what it does NOT do: the model
+/// lives behind a `std::sync::Mutex`, so the panic poisons it and later
+/// calls fail with `LockPoisoned` rather than succeeding. Recovering a
+/// poisoned model is a separate decision (the backend's internal state is
+/// suspect after an unwind), so this test pins only the survival contract:
+/// the loop thread stays alive and honours `Shutdown`.
+#[test]
+fn engine_loop_survives_a_panicking_embed() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::sync::mpsc;
+    use vllm_core::engine::Engine;
+    use vllm_core::types::EngineMessage;
+    use vllm_testing::StubModel;
+    use vllm_traits::{ModelBackend, Result, SeqId, TokenId};
+
+    /// Panics the first time `embed` is called.
+    #[derive(Clone)]
+    struct PanickingEmbed {
+        inner: StubModel,
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl ModelBackend for PanickingEmbed {
+        fn forward(
+            &mut self,
+            seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            positions: &[Vec<usize>],
+            kv_block_ids: &[Vec<usize>],
+            num_computed_tokens: &[usize],
+            is_prefill: &[bool],
+        ) -> Result<vllm_traits::BatchOutput> {
+            self.inner.forward(
+                seq_ids,
+                input_tokens,
+                positions,
+                kv_block_ids,
+                num_computed_tokens,
+                is_prefill,
+            )
+        }
+
+        fn forward_logits(
+            &mut self,
+            seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            positions: &[Vec<usize>],
+            kv_block_ids: &[Vec<usize>],
+            num_computed_tokens: &[usize],
+            is_prefill: &[bool],
+        ) -> Result<Vec<Vec<f32>>> {
+            self.inner.forward_logits(
+                seq_ids,
+                input_tokens,
+                positions,
+                kv_block_ids,
+                num_computed_tokens,
+                is_prefill,
+            )
+        }
+
+        fn embed(
+            &mut self,
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> Result<Vec<Vec<f32>>> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                panic!("backend embed exploded");
+            }
+            Ok(vec![vec![0.5_f32, 0.5]])
+        }
+
+        fn vocab_size(&self) -> usize {
+            self.inner.vocab_size()
+        }
+
+        fn num_layers(&self) -> usize {
+            self.inner.num_layers()
+        }
+
+        fn num_heads(&self) -> usize {
+            self.inner.num_heads()
+        }
+    }
+
+    let model = PanickingEmbed {
+        inner: StubModel::returning(7),
+        calls: Arc::new(AtomicUsize::new(0)),
+    };
+    let mut engine = Engine::new_boxed(Box::new(model), None::<Box<dyn ModelBackend>>);
+
+    let (msg_tx, msg_rx) = mpsc::channel::<EngineMessage>(16);
+    let loop_handle = std::thread::spawn(move || engine.run(msg_rx));
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    // This request panics inside the backend.
+    let (tx1, mut rx1) = mpsc::unbounded_channel::<Vec<Vec<f32>>>();
+    msg_tx
+        .blocking_send(EngineMessage::GetEmbeddings {
+            input_tokens: vec![vec![1, 2]],
+            response_tx: tx1,
+        })
+        .unwrap();
+    // The request fails (dropped channel), which is the correct outcome.
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    assert!(
+        matches!(
+            rx1.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
+        ),
+        "the panicking request must not produce a reply"
+    );
+
+    // The loop thread must still be running after the unwind.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    assert!(
+        !loop_handle.is_finished(),
+        "a backend panic must not terminate the engine loop"
+    );
+
+    // And it must still honour Shutdown (i.e. it is looping, not wedged).
+    msg_tx.blocking_send(EngineMessage::Shutdown).unwrap();
+    loop_handle
+        .join()
+        .expect("the engine loop thread must exit cleanly on Shutdown");
+}

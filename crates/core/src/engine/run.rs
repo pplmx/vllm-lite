@@ -31,43 +31,68 @@ impl Engine {
         let mut step_count = 0u64;
         loop {
             while let Ok(msg) = msg_rx.try_recv() {
-                match msg {
-                    EngineMessage::AddRequest {
-                        request,
-                        response_tx,
-                        seq_id_tx,
-                        finish_reason_tx,
-                        request_id,
-                    } => self.handle_add_request(
-                        *request,
-                        response_tx,
-                        seq_id_tx,
-                        finish_reason_tx,
-                        request_id.as_ref(),
-                    ),
-                    EngineMessage::CancelRequest { seq_id } => {
-                        // Production-readiness recommendation: when an
-                        // HTTP client disconnects mid-stream, the
-                        // handler sends CancelRequest to release the
-                        // sequence's KV blocks and response channel.
-                        // Unknown seq_id is a no-op (race with natural
-                        // completion) — `cancel_request` returns
-                        // false and we drop the message silently.
-                        let _ = self.cancel_request(seq_id);
+                // Message handling can reach foreign backend code too —
+                // `handle_get_embeddings` calls `model.embed`, and
+                // `handle_add_request` touches the tokenizer and prefix cache.
+                // A panic there would unwind `run()` and kill the engine
+                // thread, taking the whole server with it (every in-flight
+                // request sees its channel close). The step path already
+                // guards its forwards; guard the message path the same way.
+                // A panic is logged and the message dropped: the caller's
+                // response channel closes, which is the same signal it would
+                // get from any other failure here.
+                // The closure reports "shut down" through its return value:
+                // a `return` inside it would only leave the closure, so the
+                // `Shutdown` arm must not rely on `return`.
+                let handled = catch_unwind(AssertUnwindSafe(|| {
+                    match msg {
+                        EngineMessage::AddRequest {
+                            request,
+                            response_tx,
+                            seq_id_tx,
+                            finish_reason_tx,
+                            request_id,
+                        } => self.handle_add_request(
+                            *request,
+                            response_tx,
+                            seq_id_tx,
+                            finish_reason_tx,
+                            request_id.as_ref(),
+                        ),
+                        EngineMessage::CancelRequest { seq_id } => {
+                            // Production-readiness recommendation: when an
+                            // HTTP client disconnects mid-stream, the
+                            // handler sends CancelRequest to release the
+                            // sequence's KV blocks and response channel.
+                            // Unknown seq_id is a no-op (race with natural
+                            // completion) — `cancel_request` returns
+                            // false and we drop the message silently.
+                            let _ = self.cancel_request(seq_id);
+                        }
+                        EngineMessage::GetMetrics { response_tx } => {
+                            let (used, total) = self.scheduler.get_kv_cache_usage();
+                            self.scheduler.metrics.record_kv_cache_usage(used, total);
+                            self.scheduler
+                                .metrics
+                                .record_prefix_cache_nodes(self.scheduler.prefix_cache().len());
+                            let _ = response_tx.send(self.scheduler.metrics.snapshot());
+                        }
+                        EngineMessage::GetEmbeddings {
+                            input_tokens,
+                            response_tx,
+                        } => self.handle_get_embeddings(&input_tokens, &response_tx),
+                        EngineMessage::Shutdown => {
+                            return None;
+                        }
                     }
-                    EngineMessage::GetMetrics { response_tx } => {
-                        let (used, total) = self.scheduler.get_kv_cache_usage();
-                        self.scheduler.metrics.record_kv_cache_usage(used, total);
-                        self.scheduler
-                            .metrics
-                            .record_prefix_cache_nodes(self.scheduler.prefix_cache().len());
-                        let _ = response_tx.send(self.scheduler.metrics.snapshot());
+                    Some(())
+                }));
+                match handled {
+                    Ok(Some(())) => {}
+                    Ok(None) => return,
+                    Err(_) => {
+                        error!("engine message handling panicked; message dropped");
                     }
-                    EngineMessage::GetEmbeddings {
-                        input_tokens,
-                        response_tx,
-                    } => self.handle_get_embeddings(&input_tokens, &response_tx),
-                    EngineMessage::Shutdown => return,
                 }
             }
 
@@ -190,9 +215,7 @@ impl Engine {
         match lock_mutex(&self.target_model)
             .and_then(|mut model| model.embed(input_tokens, &positions).map_err(Into::into))
         {
-            Ok(embeddings) => {
-                let _ = response_tx.send(embeddings);
-            }
+            Ok(embeddings) => {}
             Err(e) => {
                 error!(error = %e, "Embeddings error");
             }
