@@ -44,7 +44,21 @@ impl SchedulerEngine {
         // Record metrics: request received
         self.metrics.record_request();
 
-        if req.id == 0 {
+        // A caller-supplied id is honoured, but a COLLISION must not silently
+        // drop the request: the second sequence would overwrite the first in
+        // `running`/the queue, the first would vanish from the batch, and the
+        // caller would get back an id naming different work than it asked
+        // for. Assign a fresh id instead and say so.
+        let collides = req.id != 0
+            && (self.running.iter().any(|s| s.id == req.id)
+                || self.request_queue.get(req.id).is_some());
+        if req.id == 0 || collides {
+            if collides {
+                tracing::warn!(
+                    requested_id = req.id,
+                    "duplicate sequence id rejected; assigning a fresh one"
+                );
+            }
             req.id = self.next_seq_id;
             self.next_seq_id += 1;
         }

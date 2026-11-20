@@ -671,3 +671,43 @@ fn readmitted_chunked_prefill_does_not_preempt_running_decode() {
     );
     step(&mut engine, &batch_a2);
 }
+
+/// A caller-supplied sequence id that collides with a live one must not drop
+/// the request.
+///
+/// `add_request` honours an explicit `Request::id`, but two requests naming the
+/// same id used to collapse into one: the second overwrote the first, the
+/// first disappeared from the batch, and the caller received an id that now
+/// named different work — with no error and no way to notice.
+#[test]
+fn duplicate_sequence_id_does_not_drop_the_request() {
+    use std::sync::Arc;
+    use vllm_core::metrics::EnhancedMetricsCollector;
+    use vllm_core::types::SchedulerConfig;
+
+    let metrics = Arc::new(EnhancedMetricsCollector::new());
+    let mut scheduler = SchedulerEngine::new(SchedulerConfig::default(), 4096, metrics);
+
+    let first = scheduler.add_request(Request::new(0, vec![1, 2], 8));
+    // Deliberately reuse the id the scheduler just handed out.
+    let second = scheduler.add_request(Request::new(first, vec![3, 4], 8));
+
+    assert_ne!(
+        first, second,
+        "a collision must yield a fresh id, not the same one twice"
+    );
+
+    let batch = scheduler.build_batch();
+    assert_eq!(
+        batch.seq_ids.len(),
+        2,
+        "both requests must reach the batch, got {:?}",
+        batch.seq_ids
+    );
+    assert!(
+        scheduler
+            .get_sequence(first)
+            .is_some_and(|s| s.tokens == vec![1, 2]),
+        "the first request's sequence must survive intact"
+    );
+}

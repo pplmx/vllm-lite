@@ -287,7 +287,7 @@ fn gpu_scheduler_handles_variable_prompt_lengths() {
 
     for (i, &len) in prompt_lengths.iter().enumerate() {
         let prompt: Vec<u32> = (0..len).map(|j| (i as u32 * 100 + j)).collect();
-        let req = Request::new(i as u64, prompt, 8);
+        let req = Request::new(0, prompt, 8);
         let seq_id = scheduler.add_request(req);
         assert!(seq_id > 0, "seq {i} should be added");
     }
@@ -368,7 +368,7 @@ fn gpu_scheduler_batch_building_respects_partition() {
     // Add a batch of requests.
     for i in 0..5 {
         let prompt: Vec<u32> = (0..8).map(|j| (i as u32 * 10 + j)).collect();
-        let req = Request::new(i as u64, prompt, 10);
+        let req = Request::new(0, prompt, 10);
         scheduler.add_request(req);
     }
 
@@ -396,15 +396,17 @@ fn gpu_scheduler_completes_and_frees_blocks() {
     let config = SchedulerConfig::default();
     let mut scheduler = make_scheduler(config, 512);
 
-    // Add a request.
-    let req = Request::new(1, vec![1, 2, 3], 5);
+    // One generated token is enough: `max_tokens` counts OUTPUT tokens, so
+    // `max_tokens = 1` finishes the sequence on the first update. The test
+    // previously asked for 5 and then fed a single token, which cannot
+    // complete anything — it was never exercised because it is `#[ignore]`d.
+    let req = Request::new(1, vec![1, 2, 3], 1);
     let seq_id = scheduler.add_request(req);
 
     // Build batch and process.
     let batch = scheduler.build_batch();
     assert!(!batch.seq_ids.is_empty());
 
-    // Complete the sequence.
     scheduler.update(
         &batch.seq_ids,
         &[vllm_traits::SampledToken {
@@ -415,7 +417,6 @@ fn gpu_scheduler_completes_and_frees_blocks() {
         &[3],
     );
 
-    // After completion, the sequence should be finished.
     let finished = scheduler.finished_sequences();
     assert!(
         finished.iter().any(|s| s.id == seq_id),
