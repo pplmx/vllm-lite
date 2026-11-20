@@ -628,6 +628,12 @@ async fn handle_chat(
     // `finish_reason` (e.g. `"length"` when the sequence hit
     // `max_tokens`, instead of the pre-fix hardcoded `"stop"`).
     let (finish_reason_tx, finish_reason_rx) = tokio::sync::oneshot::channel();
+    // Learn the seq_id so a client that gives up can release the sequence.
+    // The non-streaming handler awaits the whole token loop; if axum drops
+    // this future (client closed the connection while waiting for JSON) the
+    // guard below tells the engine to stop instead of letting it generate to
+    // `max_tokens` for nobody.
+    let (seq_id_tx, seq_id_rx) = tokio::sync::oneshot::channel();
 
     // REL-01 (technical due diligence): use `try_send` so a full
     // engine mailbox fails fast with `503 engine_overloaded`
@@ -635,15 +641,24 @@ async fn handle_chat(
     // modes:
     //   - `Full`:   mailbox is saturated → 503 `engine_overloaded`
     //   - `Closed`: engine has shut down → 503 `engine_unavailable`
+    // Built BEFORE the request is enqueued: once the engine owns the
+    // sequence, any drop of this future — including one during the
+    // `seq_id_rx.await` handshake — must release it. `disarm()` on the normal
+    // path turns the guard into a no-op; `seq_id == 0` (a rejected admission)
+    // is skipped by the guard itself.
+    let cancel_guard = CancelOnDrop {
+        engine_tx: state.engine_tx.clone(),
+        seq_id: std::sync::atomic::AtomicU64::new(0),
+        fired: std::sync::atomic::AtomicBool::new(false),
+        request_id: correlation_id.to_string(),
+    };
+
     state
         .engine_tx
         .try_send(vllm_core::types::EngineMessage::AddRequest {
             request: Box::new(request),
             response_tx,
-            // Non-streaming handler doesn't need a seq_id
-            // round-trip; the request runs to natural completion
-            // (or max_tokens) and we drop the oneshot on the floor.
-            seq_id_tx: None,
+            seq_id_tx: Some(seq_id_tx),
             finish_reason_tx: Some(finish_reason_tx),
             // Production-readiness §6: forward the correlation id
             // so the engine run loop's `tracing::info_span!` can
@@ -654,10 +669,17 @@ async fn handle_chat(
         })
         .map_err(|e| map_engine_send_error(&e))?;
 
+    if let Ok(seq_id) = seq_id_rx.await {
+        cancel_guard
+            .seq_id
+            .store(seq_id, std::sync::atomic::Ordering::Release);
+    }
+
     let mut tokens = Vec::new();
     while let Some(sampled) = response_rx.recv().await {
         tokens.push(sampled);
     }
+    cancel_guard.disarm();
 
     // The engine sends the reason right before dropping
     // `response_tx`. If we don't see one (engine panicked, or the

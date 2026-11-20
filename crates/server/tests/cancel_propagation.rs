@@ -83,12 +83,30 @@ fn router(state: ApiState) -> Router {
 fn spawn_recording_mock_engine(
     tokens: Vec<TokenId>,
 ) -> (EngineHandle, Arc<tokio::sync::Mutex<Vec<u64>>>) {
+    spawn_recording_mock_engine_inner(tokens, false)
+}
+
+/// Same engine, but it parks after the last token instead of closing the
+/// response channel — a generation that is still running when the client
+/// goes away.
+fn spawn_stalled_mock_engine(
+    tokens: Vec<TokenId>,
+) -> (EngineHandle, Arc<tokio::sync::Mutex<Vec<u64>>>) {
+    spawn_recording_mock_engine_inner(tokens, true)
+}
+
+fn spawn_recording_mock_engine_inner(
+    tokens: Vec<TokenId>,
+    stall: bool,
+) -> (EngineHandle, Arc<tokio::sync::Mutex<Vec<u64>>>) {
     let cancels: Arc<tokio::sync::Mutex<Vec<u64>>> = Arc::new(tokio::sync::Mutex::new(Vec::new()));
     let cancels_clone = cancels.clone();
 
     let (engine_tx, mut engine_rx) = mpsc::channel(TEST_MAILBOX);
     tokio::spawn(async move {
         let mut next_seq_id: u64 = 1;
+        // Senders held open by the `stall` mode, so their channel never closes.
+        let mut held: Vec<tokio::sync::mpsc::Sender<vllm_traits::SampledToken>> = Vec::new();
         while let Some(msg) = engine_rx.recv().await {
             match msg {
                 EngineMessage::AddRequest {
@@ -118,6 +136,13 @@ fn spawn_recording_mock_engine(
                         {
                             break;
                         }
+                    }
+                    if stall {
+                        // Keep the sequence alive (the handler waits on a
+                        // channel that never closes) WITHOUT parking the
+                        // engine loop — it still has to receive the
+                        // `CancelRequest` this test is about.
+                        held.push(response_tx);
                     }
                 }
                 EngineMessage::CancelRequest { seq_id } => {
@@ -245,5 +270,67 @@ async fn streaming_natural_completion_does_not_cancel() {
         recorded.len(),
         0,
         "natural completion must not send CancelRequest (disarmed); got {recorded:?}"
+    );
+}
+
+/// A non-streaming client that gives up must also release the sequence.
+///
+/// The streaming paths install a `CancelOnDrop` guard because an SSE body can
+/// be dropped mid-stream. The non-streaming handler sends
+/// `seq_id_tx: None` and awaits the token loop to completion, so when axum
+/// drops the handler future (client closed the connection while waiting for
+/// JSON) nothing tells the engine to stop: it keeps generating up to
+/// `max_tokens`, holding a scheduler slot and KV blocks for a caller that is
+/// gone. `max_tokens` is caller-chosen, so this is unbounded work.
+#[tokio::test]
+async fn non_streaming_client_disconnect_sends_cancel_request() {
+    let (engine_tx, cancels) = spawn_stalled_mock_engine(Vec::new());
+    let state = build_state(engine_tx);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "stream": false,
+        "max_tokens": 4096
+    })
+    .to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap();
+
+    // Poll the handler once so it enqueues the AddRequest and parks on the
+    // token channel, then drop the future — what axum does when the client
+    // disconnects before the JSON reply is ready.
+    // Spawn the handler and abort it while it waits for engine output —
+    // the same shape as axum dropping the handler future when the client
+    // closes the connection before the JSON reply is ready.
+    let handle = tokio::spawn(async move { app.oneshot(request).await });
+    // Let the handler enqueue the AddRequest and complete the seq_id
+    // handshake with the mock engine.
+    for _ in 0..64 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert!(!handle.is_finished(), "the handler must still be waiting");
+    handle.abort();
+    let _ = handle.await;
+
+    // Give the drop path a moment to enqueue the cancel.
+    for _ in 0..50 {
+        if !cancels.lock().await.is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    let recorded = cancels.lock().await.clone();
+    assert_eq!(
+        recorded,
+        vec![1],
+        "dropping a non-streaming handler must cancel its sequence; got {recorded:?}"
     );
 }
