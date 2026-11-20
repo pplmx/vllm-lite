@@ -287,7 +287,11 @@ async fn spawn_n_candidate(
     correlation_id: String,
     candidate_index: usize,
 ) -> Result<
-    (Vec<vllm_traits::SampledToken>, vllm_traits::FinishReason),
+    (
+        usize,
+        Vec<vllm_traits::SampledToken>,
+        vllm_traits::FinishReason,
+    ),
     (axum::http::StatusCode, Json<ErrorResponse>),
 > {
     // `max_tokens` is the upper bound on *generated* tokens (prompt not
@@ -371,7 +375,7 @@ async fn spawn_n_candidate(
     let finish_reason = finish_reason_rx
         .await
         .unwrap_or(vllm_traits::FinishReason::Stop);
-    Ok((tokens, finish_reason))
+    Ok((candidate_index, tokens, finish_reason))
 }
 
 /// Derive a deterministic per-candidate seed for `n > 1` / `best_of > 1`.
@@ -556,13 +560,18 @@ async fn run_n_parallel_completions(
     // We carry BOTH the per-candidate `Vec<SampledToken>` AND its
     // `FinishReason` through to the assembly step. `best_of` only
     // needs the single best candidate's pair; `n > 1` needs all N.
-    let mut candidates: Vec<Vec<vllm_traits::SampledToken>> = Vec::with_capacity(n);
-    let mut candidate_finish_reasons: Vec<vllm_traits::FinishReason> = Vec::with_capacity(n);
+    // `JoinSet::join_next` yields in COMPLETION order, but `choices[]` must be
+    // laid out in candidate order (`index` labels the candidate). Appending on
+    // arrival would pair one candidate's text with another's index.
+    let mut candidates: Vec<Vec<vllm_traits::SampledToken>> = vec![Vec::new(); n];
+    let mut candidate_finish_reasons: Vec<Option<vllm_traits::FinishReason>> = vec![None; n];
     while let Some(joined) = candidates_set.join_next().await {
         match joined {
-            Ok(Ok((tokens, finish_reason))) => {
-                candidates.push(tokens);
-                candidate_finish_reasons.push(finish_reason);
+            Ok(Ok((index, tokens, finish_reason))) => {
+                if let Some(slot) = candidates.get_mut(index) {
+                    *slot = tokens;
+                    candidate_finish_reasons[index] = Some(finish_reason);
+                }
             }
             Ok(Err(e)) => return Err(e),
             Err(e) => {
@@ -598,7 +607,11 @@ async fn run_n_parallel_completions(
                 &state.tokenizer,
                 &state.tokenizer.decode(&token_ids(tokens)),
             );
-            let finish_reason_string = match finish_reason {
+            // Every slot is filled by the join loop, which only exits once the
+            // set is drained or a candidate error aborted the request.
+            let finish_reason_string = match finish_reason
+                .unwrap_or(vllm_traits::FinishReason::Stop)
+            {
                 vllm_traits::FinishReason::Length => "length",
                 vllm_traits::FinishReason::Stop | vllm_traits::FinishReason::Cancelled => "stop",
             };
@@ -1393,13 +1406,18 @@ async fn run_best_of(
     // Join all candidates. First failure wins (the other candidates
     // keep running in the background — see the partial-failure
     // comment in the module doc above).
-    let mut candidates: Vec<Vec<vllm_traits::SampledToken>> = Vec::with_capacity(n);
-    let mut candidate_finish_reasons: Vec<vllm_traits::FinishReason> = Vec::with_capacity(n);
+    // `JoinSet::join_next` yields in COMPLETION order, but `choices[]` must be
+    // laid out in candidate order (`index` labels the candidate). Appending on
+    // arrival would pair one candidate's text with another's index.
+    let mut candidates: Vec<Vec<vllm_traits::SampledToken>> = vec![Vec::new(); n];
+    let mut candidate_finish_reasons: Vec<Option<vllm_traits::FinishReason>> = vec![None; n];
     while let Some(joined) = candidates_set.join_next().await {
         match joined {
-            Ok(Ok((tokens, finish_reason))) => {
-                candidates.push(tokens);
-                candidate_finish_reasons.push(finish_reason);
+            Ok(Ok((index, tokens, finish_reason))) => {
+                if let Some(slot) = candidates.get_mut(index) {
+                    *slot = tokens;
+                    candidate_finish_reasons[index] = Some(finish_reason);
+                }
             }
             Ok(Err(e)) => return Err(e),
             Err(e) => {
@@ -1433,7 +1451,7 @@ async fn run_best_of(
     // Render the chosen completion's finish_reason per OpenAI's
     // contract (same string mapping as the non-streaming single-shot
     // path; see that branch for the full rationale).
-    let finish_reason_string = match best_finish_reason {
+    let finish_reason_string = match best_finish_reason.unwrap_or(vllm_traits::FinishReason::Stop) {
         vllm_traits::FinishReason::Length => "length",
         vllm_traits::FinishReason::Stop | vllm_traits::FinishReason::Cancelled => "stop",
     };

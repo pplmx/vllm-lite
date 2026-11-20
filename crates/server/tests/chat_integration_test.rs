@@ -8828,3 +8828,212 @@ async fn test_n_gt_one_stream_preserves_last_candidate_held_back_tail() {
         "stream must end with [DONE]"
     );
 }
+
+/// `n > 1` choices must be in candidate order, not completion order.
+///
+/// The fan-out uses a `JoinSet`, whose `join_next()` yields **whichever
+/// task finished first**. Pushing results as they arrive therefore orders
+/// `choices[]` by completion, while `index` still labels them by position —
+/// so a candidate that finishes early gets a `choice` whose `index` points
+/// at a different candidate's content. The same request can even return a
+/// different order on the next call.
+#[tokio::test]
+async fn n_gt_1_choices_follow_candidate_order_not_completion_order() {
+    use tokio::sync::mpsc;
+
+    // Candidate 0 is slow, candidates 1 and 2 are fast: completion order is
+    // 2, 1, 0 while candidate order is 0, 1, 2.
+    let (engine_tx, mut engine_rx) = mpsc::channel::<EngineMessage>(32);
+    tokio::spawn(async move {
+        let mut idx = 0usize;
+        while let Some(msg) = engine_rx.recv().await {
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send((idx + 1) as u64);
+                }
+                let candidate = idx;
+                idx += 1;
+                drop(finish_reason_tx);
+                tokio::spawn(async move {
+                    // Reverse the completion order relative to candidate order.
+                    let delay = match candidate {
+                        0 => 120,
+                        _ => 10,
+                    };
+                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                    let _ = response_tx
+                        .send(vllm_traits::SampledToken {
+                            token: 100 + candidate as u32,
+                            logprob: 0.0,
+                            top_logprobs: vec![],
+                        })
+                        .await;
+                });
+            }
+        }
+    });
+
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stream": false,
+        "n": 3,
+        "max_tokens": 4
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let choices = json["choices"].as_array().expect("choices array");
+    assert_eq!(choices.len(), 3);
+
+    for (position, choice) in choices.iter().enumerate() {
+        let index = choice["index"].as_i64().unwrap();
+        let content = choice["message"]["content"].as_str().unwrap_or("");
+        assert_eq!(
+            index as usize, position,
+            "choices must be laid out in candidate order; got {choices:?}"
+        );
+        // Candidate N decodes to "token_(100+N) "; a mismatch means the
+        // content belongs to a different candidate than `index` claims.
+        assert!(
+            content.contains(&format!("token_{}", 100 + index)),
+            "choice at position {position} claims index {index} but carries: {content:?}"
+        );
+    }
+}
+
+/// Same ordering contract for `/v1/completions`: `n > 1` choices must follow
+/// candidate order even though the `JoinSet` yields in completion order.
+#[tokio::test]
+async fn completions_n_gt_1_choices_follow_candidate_order() {
+    use tokio::sync::mpsc;
+
+    let (engine_tx, mut engine_rx) = mpsc::channel::<EngineMessage>(32);
+    tokio::spawn(async move {
+        let mut idx = 0usize;
+        while let Some(msg) = engine_rx.recv().await {
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send((idx + 1) as u64);
+                }
+                let candidate = idx;
+                idx += 1;
+                drop(finish_reason_tx);
+                tokio::spawn(async move {
+                    let delay = if candidate == 0 { 120 } else { 10 };
+                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                    let _ = response_tx
+                        .send(vllm_traits::SampledToken {
+                            token: 100 + candidate as u32,
+                            logprob: 0.0,
+                            top_logprobs: vec![],
+                        })
+                        .await;
+                });
+            }
+        }
+    });
+
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route(
+            "/v1/completions",
+            post(vllm_server::openai::completions::completions),
+        )
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "prompt": "Hi",
+        "stream": false,
+        "n": 3,
+        "max_tokens": 4
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let choices = json["choices"].as_array().expect("choices array");
+    assert_eq!(choices.len(), 3);
+    for (position, choice) in choices.iter().enumerate() {
+        let index = choice["index"].as_i64().unwrap();
+        let text = choice["text"].as_str().unwrap_or("");
+        assert_eq!(
+            index as usize, position,
+            "choices must follow candidate order"
+        );
+        assert!(
+            text.contains(&format!("token_{}", 100 + index)),
+            "choice at position {position} claims index {index} but carries: {text:?}"
+        );
+    }
+}
