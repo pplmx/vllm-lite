@@ -225,3 +225,31 @@ async fn concurrent_first_rpc_opens_a_single_connection() {
     );
     assert!(client.is_connected().await);
 }
+
+/// A failed connect must release the lock so the next caller can retry.
+///
+/// The slow path now holds the channel lock across `connect()`. If a failed
+/// attempt left the guard installed or the client wedged, every later RPC
+/// would block (`connect_timeout` bounds it, but a retry that never runs is
+/// still a wedged peer).
+#[tokio::test]
+async fn failed_connect_does_not_wedge_later_calls() {
+    // Port 1 is not served by this client; `connect_timeout` bounds it.
+    let client = PeerClient::new("http://127.0.0.1:1").expect("valid url");
+
+    let first = client.put(1, 0xDD).await;
+    assert!(first.is_err(), "connecting to a dead peer must fail");
+    assert!(
+        !client.is_connected().await,
+        "a failed connect installs nothing"
+    );
+
+    // A second call must be able to take the lock and try again.
+    let second = client.put(1, 0xDD).await;
+    assert!(second.is_err(), "the peer is still dead");
+    assert_eq!(
+        client.connect_attempts(),
+        2,
+        "each RPC retries the connection after a failure"
+    );
+}
