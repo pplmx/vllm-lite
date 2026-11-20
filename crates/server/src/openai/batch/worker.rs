@@ -12,6 +12,7 @@
 
 use std::sync::Arc;
 
+use futures::FutureExt;
 use tokio::sync::mpsc;
 use vllm_model::tokenizer::Tokenizer;
 use vllm_traits::SampledToken;
@@ -45,7 +46,7 @@ pub fn spawn_batch_worker(state: &ApiState, job: BatchJob) -> tokio::task::JoinH
     let architecture = state.architecture;
     let max_model_len = state.max_model_len;
     tokio::spawn(async move {
-        run_batch_job(
+        drive_job(
             job,
             engine_tx,
             tokenizer,
@@ -55,6 +56,58 @@ pub fn spawn_batch_worker(state: &ApiState, job: BatchJob) -> tokio::task::JoinH
         )
         .await;
     })
+}
+
+/// Run one batch job to a terminal state, even if it panics.
+///
+/// A panic anywhere inside the job (a tokenizer or a model backend
+/// unwinding) would otherwise kill the worker task before it reaches
+/// `set_completed`/`set_failed`. The job would stay non-terminal, and
+/// `BatchManager::sweep_expired` never evicts a non-terminal job by design —
+/// so it would sit in `InProgress` for the life of the process with nothing
+/// for a polling client to observe. The unwind is therefore caught and
+/// converted into `Failed`.
+async fn drive_job(
+    job: BatchJob,
+    engine_tx: crate::api::EngineHandle,
+    tokenizer: Arc<Tokenizer>,
+    manager: Arc<BatchManager>,
+    architecture: vllm_model::config::Architecture,
+    max_model_len: Option<usize>,
+) {
+    let job_id = job.id.clone();
+    guard_panics(
+        &job_id,
+        &manager,
+        run_batch_job(
+            job,
+            engine_tx,
+            tokenizer,
+            Arc::clone(&manager),
+            architecture,
+            max_model_len,
+        ),
+    )
+    .await;
+}
+
+/// Await `work`, converting a panic into a `Failed` job.
+///
+/// Pulled out of [`drive_job`] so the conversion itself is testable: the
+/// worker's real futures cannot be made to panic on demand, but this
+/// contract — "an unwind still leaves the job terminal" — can be.
+async fn guard_panics<F>(job_id: &str, manager: &BatchManager, work: F)
+where
+    F: std::future::Future<Output = ()>,
+{
+    if std::panic::AssertUnwindSafe(work)
+        .catch_unwind()
+        .await
+        .is_err()
+    {
+        tracing::error!(job_id = %job_id, "batch worker panicked; marking the job failed");
+        manager.set_failed(job_id).await;
+    }
 }
 
 /// Drive `job` to `Completed`/`Failed`/`Cancelled` by executing every prompt.
@@ -318,6 +371,74 @@ mod tests {
         });
         state.engine_tx = engine_tx;
         state
+    }
+
+    /// A panic inside a job must leave the job terminal, not `InProgress`.
+    ///
+    /// Without the guard, the worker task dies mid-job: `set_completed` /
+    /// `set_failed` never run, and `sweep_expired` never evicts a
+    /// non-terminal job, so the batch stays `InProgress` for the life of the
+    /// process and a polling client never learns anything.
+    #[tokio::test]
+    async fn guard_panics_marks_the_job_failed() {
+        let (state, _engine) = create_state_with_mock_engine();
+        let job_id = state
+            .batch_manager
+            .create_job(
+                BatchEndpoint::Completion,
+                vec!["boom".to_string()],
+                None,
+                Some(10),
+                None,
+            )
+            .await;
+        assert!(state.batch_manager.mark_in_progress(&job_id).await);
+
+        guard_panics(&job_id, &state.batch_manager, async {
+            tokio::task::yield_now().await;
+            panic!("worker exploded");
+        })
+        .await;
+
+        let job = state.batch_manager.get_job(&job_id).await.unwrap();
+        assert_eq!(
+            job.status,
+            BatchStatus::Failed,
+            "an unwinding worker must leave the job Failed, got {:?}",
+            job.status
+        );
+        assert!(
+            job.completed_at.is_some(),
+            "a failed job must be stamped complete"
+        );
+    }
+
+    /// A normal (non-panicking) job is left to `run_batch_job`'s own
+    /// terminal transition — the guard must not overwrite it.
+    #[tokio::test]
+    async fn guard_panics_leaves_a_completed_job_alone() {
+        let (state, _engine) = create_state_with_mock_engine();
+        let job_id = state
+            .batch_manager
+            .create_job(
+                BatchEndpoint::Completion,
+                vec!["fine".to_string()],
+                None,
+                Some(10),
+                None,
+            )
+            .await;
+        assert!(state.batch_manager.mark_in_progress(&job_id).await);
+        state.batch_manager.set_completed(&job_id).await;
+
+        guard_panics(&job_id, &state.batch_manager, async {}).await;
+
+        let job = state.batch_manager.get_job(&job_id).await.unwrap();
+        assert_eq!(
+            job.status,
+            BatchStatus::Completed,
+            "a job that completed must not be turned Failed by the guard"
+        );
     }
 
     #[tokio::test]
