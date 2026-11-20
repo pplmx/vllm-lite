@@ -183,6 +183,21 @@ async fn peer_client_lazy_connection() {
     assert!(client.is_connected().await);
 }
 
+/// URL for a port that is **known** to have no listener.
+///
+/// Binding to port 0 and dropping the listener reserves an OS-assigned port
+/// that nothing serves, then releases it: a connect is refused, and the test
+/// does not depend on a hardcoded port being free (port 1 is not guaranteed
+/// to be unused in every container/network namespace).
+async fn dead_peer_url() -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind ephemeral port");
+    let addr = listener.local_addr().expect("local_addr on bound listener");
+    drop(listener);
+    format!("http://{addr}")
+}
+
 /// Concurrent first use must open exactly one connection.
 ///
 /// `ensure_channel` checks for an existing channel, then connects outside the
@@ -234,8 +249,9 @@ async fn concurrent_first_rpc_opens_a_single_connection() {
 /// still a wedged peer).
 #[tokio::test]
 async fn failed_connect_does_not_wedge_later_calls() {
-    // Port 1 is not served by this client; `connect_timeout` bounds it.
-    let client = PeerClient::new("http://127.0.0.1:1").expect("valid url");
+    // A port that was just released and has no listener; `connect_timeout`
+    // bounds the attempt if a handshake ever stalls.
+    let client = PeerClient::new(dead_peer_url().await).expect("valid url");
 
     let first = client.put(1, 0xDD).await;
     assert!(first.is_err(), "connecting to a dead peer must fail");
@@ -270,9 +286,9 @@ async fn failed_connect_does_not_wedge_later_calls() {
 #[tokio::test]
 async fn broadcast_put_reaches_all_peers_promptly() {
     let cfg = CacheConfig::new(NodeId(0), 4).with_peer_urls(vec![
-        "http://127.0.0.1:1".to_string(),
-        "http://127.0.0.1:2".to_string(),
-        "http://127.0.0.1:3".to_string(),
+        dead_peer_url().await,
+        dead_peer_url().await,
+        dead_peer_url().await,
     ]);
     let mut cache = DistributedKVCache::new(cfg);
     cache.connect_peers().expect("valid urls");

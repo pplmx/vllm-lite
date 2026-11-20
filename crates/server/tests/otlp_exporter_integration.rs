@@ -67,10 +67,19 @@ async fn otlp_metrics_arrive_with_correct_name_and_value() {
 /// crash the server if the collector is down.
 #[tokio::test]
 async fn otlp_collector_unreachable_does_not_crash_exporter() {
+    // Reserve an ephemeral port and release it: nothing serves it, so the
+    // exporter's connects are refused. A hardcoded port is not guaranteed to
+    // be unused in every network namespace.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind ephemeral port");
+    let addr = listener.local_addr().expect("local_addr on bound listener");
+    drop(listener);
+
     let collector = collector_with_one_request();
     let cfg = OtlpConfig {
         enabled: true,
-        endpoint: "http://127.0.0.1:1".to_string(), // port 1 — guaranteed to refuse
+        endpoint: format!("http://{addr}"),
         metrics_export_interval_secs: 1,
         ..OtlpConfig::default()
     };
@@ -79,9 +88,23 @@ async fn otlp_collector_unreachable_does_not_crash_exporter() {
     let run_clone = exporter.clone();
     let task = tokio::spawn(async move { run_clone.run().await });
     tokio::time::sleep(Duration::from_millis(1500)).await;
-    // No assertion needed — the test passes if the task didn't panic.
+
+    // The contract is "the exporter survives an unreachable collector", so
+    // the task must still be running rather than have finished (which would
+    // mean it returned early) or panicked (`await` would yield `Err`).
+    assert!(
+        !task.is_finished(),
+        "the exporter loop must keep running while the collector is unreachable"
+    );
     task.abort();
-    let _ = task.await;
+    // `abort` surfaces as `Err(JoinError::cancelled)`, which is expected; a
+    // panic would also be `Err`, so distinguish the two.
+    if let Err(e) = task.await {
+        assert!(
+            e.is_cancelled(),
+            "the exporter task must not have panicked: {e:?}"
+        );
+    }
 }
 
 /// `OtlpDisabled` default: `enabled = false` means `OtlpExporter::new`
