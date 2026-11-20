@@ -25,20 +25,23 @@ const READY_MAILBOX_FILL_RATIO: f64 = 0.90;
 
 /// Health check endpoint - liveness probe
 ///
-/// # Panics
-///
-/// Panics if `state.health.read()` returns a poisoned `RwLock`.
-/// In practice this only happens if another thread panicked
-/// while holding the write lock; vLLM-lite treats that as a fatal
-/// error and the process aborts on the spot, so propagation here
-/// is the correct behaviour.
+/// A poisoned health lock reports `Ok`: poison means some other thread
+/// panicked, which is not evidence that this process stopped serving. Failing
+/// the liveness probe would make the orchestrator restart a pod that is still
+/// answering traffic. The writers (`main.rs` shutdown hook, `/shutdown`) also
+/// degrade with a warning on poison, so the readers are not stricter.
 ///
 /// Must be `async` for axum 0.8 `Handler` trait — the function
 /// body contains no `.await` points because all work is synchronous.
 #[allow(clippy::unused_async)]
 pub async fn health_handler(State(state): State<ApiState>) -> Response {
-    // invariant: lock is only held for synchronous field access; no panic possible while holding.
-    let status = state.health.read().unwrap().check_liveness();
+    let status = match state.health.read() {
+        Ok(checker) => checker.check_liveness(),
+        Err(poisoned) => {
+            tracing::warn!("health lock poisoned; reporting liveness as Ok");
+            poisoned.into_inner().check_liveness()
+        }
+    };
     let http_status = StatusCode::from_u16(status.http_status()).unwrap_or(StatusCode::OK);
 
     let body = json!({ "status": status.as_str() });
@@ -68,18 +71,22 @@ pub async fn health_handler(State(state): State<ApiState>) -> Response {
 /// details (`status`, `mailbox_len`, `mailbox_capacity`,
 /// `mailbox_fill_ratio`) without parsing the HTTP status code.
 ///
-/// # Panics
-///
-/// Panics if `state.health.read()` returns a poisoned `RwLock`;
-/// see [`health_handler`] for the rationale.
+/// A poisoned health lock reports `NotReady`: poison means the state it held
+/// can no longer be trusted, so the pod should be drained rather than
+/// declared healthy (contrast [`health_handler`], which stays `Ok` because
+/// liveness asks a weaker question).
 ///
 /// Must be `async` for axum 0.8 `Handler` trait — the function
 /// body contains no `.await` points (all work is synchronous).
 #[allow(clippy::unused_async)]
 pub async fn ready_handler(State(state): State<ApiState>) -> Response {
-    // invariant: the health RwLock is only held for synchronous field
-    // access, so it cannot be poisoned (see also `health_handler`).
-    let static_status = state.health.read().unwrap().check_readiness();
+    let static_status = match state.health.read() {
+        Ok(checker) => checker.check_readiness(),
+        Err(poisoned) => {
+            tracing::warn!("health lock poisoned; reporting readiness as NotReady");
+            poisoned.into_inner().check_readiness()
+        }
+    };
 
     let max_capacity = state.engine_tx.max_capacity();
     let available_capacity = state.engine_tx.capacity();
@@ -128,4 +135,48 @@ pub async fn metrics_handler(State(state): State<ApiState>) -> Response {
         .header("content-type", "text/plain; charset=utf-8")
         .body(output.into())
         .unwrap_or_else(|_| Response::new(axum::body::Body::empty()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_fixtures;
+    use vllm_model::config::Architecture;
+
+    /// Poison the health lock by panicking while holding its write guard.
+    fn poison_health(state: &ApiState) {
+        let health = state.health.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = health.write().unwrap();
+            panic!("intentional panic while holding the health write lock");
+        })
+        .join();
+    }
+
+    /// A poisoned health lock must not take the pod down.
+    ///
+    /// The liveness and readiness probes are what the orchestrator polls;
+    /// panicking in them makes the pod fail its probe and get restarted for
+    /// a fault that is entirely unrelated to serving traffic. The writers
+    /// (`main.rs` shutdown hook, `/shutdown`) already degrade with a warning
+    /// on poison, so the readers must not be stricter than the writers.
+    #[tokio::test]
+    async fn probes_survive_a_poisoned_health_lock() {
+        let state = test_fixtures::api_state(Architecture::Llama);
+        poison_health(&state);
+        assert!(
+            state.health.read().is_err(),
+            "fixture must actually poison the lock"
+        );
+
+        let live = health_handler(State(state.clone())).await;
+        assert_eq!(live.status(), StatusCode::OK);
+
+        let ready = ready_handler(State(state)).await;
+        assert!(
+            ready.status() == StatusCode::OK || ready.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "readiness must answer with a status, not panic: got {}",
+            ready.status()
+        );
+    }
 }
