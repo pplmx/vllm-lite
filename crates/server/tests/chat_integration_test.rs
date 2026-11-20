@@ -9037,3 +9037,98 @@ async fn completions_n_gt_1_choices_follow_candidate_order() {
         );
     }
 }
+
+/// When one candidate of an `n > 1` chat request fails, the request fails.
+///
+/// The fan-out collects through a `JoinSet`; a candidate that errors must
+/// surface as an error response rather than being silently dropped from
+/// `choices[]` (a short array with holes would let a client believe it got
+/// fewer candidates). The completions twin has this coverage; chat did not.
+#[tokio::test]
+async fn chat_n_gt_1_candidate_error_fails_the_request() {
+    use tokio::sync::mpsc;
+
+    let (engine_tx, mut engine_rx) = mpsc::channel::<EngineMessage>(32);
+    tokio::spawn(async move {
+        let mut idx = 0usize;
+        while let Some(msg) = engine_rx.recv().await {
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                let candidate = idx;
+                idx += 1;
+                if candidate == 1 {
+                    // Second candidate: the engine fails this sequence by
+                    // dropping both channels without replying.
+                    drop(seq_id_tx);
+                    drop(response_tx);
+                    drop(finish_reason_tx);
+                } else {
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send((candidate + 1) as u64);
+                    }
+                    drop(finish_reason_tx);
+                    let _ = response_tx
+                        .send(vllm_traits::SampledToken {
+                            token: 10 + candidate as u32,
+                            logprob: 0.0,
+                            top_logprobs: vec![],
+                        })
+                        .await;
+                }
+            }
+        }
+    });
+
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stream": false,
+        "n": 3,
+        "max_tokens": 4
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_ne!(
+        response.status(),
+        StatusCode::OK,
+        "a failed candidate must not yield a 200 with fewer choices"
+    );
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(
+        json.get("error").is_some(),
+        "the failure must use the OpenAI error envelope, got {json}"
+    );
+}
