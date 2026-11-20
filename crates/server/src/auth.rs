@@ -399,6 +399,13 @@ impl AuthMiddleware {
         }
 
         // Sharded rate limiter: locks only the shard for this key.
+        //
+        // Validation MUST stay ahead of this call. `RateLimiter` stores one
+        // bucket per key it is asked about, for the process lifetime; since
+        // `api_keys` is fixed at startup, reaching it only after the check
+        // above is what bounds that map to the configured keys. Moving the
+        // rate-limit call earlier would let an unauthenticated caller grow it
+        // by one entry per request.
         let result = self.rate_limiter.check_and_consume(api_key, cost);
 
         if result.allowed {
@@ -903,6 +910,42 @@ mod tests {
         headers.insert(AUTHORIZATION, "Bearer wrong_key".parse().unwrap());
         let err = auth.verify_with_meta(&headers, 1.0).unwrap_err();
         assert_eq!(err, AuthError::InvalidKey);
+    }
+
+    /// A rejected key must not allocate a rate-limit bucket.
+    ///
+    /// The limiter's map is bounded only because key validation runs first:
+    /// an unauthenticated caller can pick the `Authorization` header freely,
+    /// so letting a rejected key reach `check_and_consume` would let it add
+    /// one permanent entry per request. This pins the ordering.
+    #[test]
+    fn rejected_key_allocates_no_rate_limit_bucket() {
+        let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
+        for i in 0..100 {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                AUTHORIZATION,
+                format!("Bearer guessing-{i}").parse().unwrap(),
+            );
+            assert_eq!(
+                auth.verify_with_meta(&headers, 1.0).unwrap_err(),
+                AuthError::InvalidKey
+            );
+        }
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer test_key".parse().unwrap());
+        assert!(auth.verify(&headers).is_ok());
+
+        let buckets: usize = auth
+            .rate_limiter
+            .shards
+            .iter()
+            .map(|s| s.read().len())
+            .sum();
+        assert_eq!(
+            buckets, 1,
+            "only the accepted key may hold a bucket; rejected keys found {buckets}"
+        );
     }
 
     #[test]
