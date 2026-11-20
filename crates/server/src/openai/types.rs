@@ -33,7 +33,11 @@ impl Usage {
         Self {
             prompt_tokens: prompt,
             completion_tokens: completion,
-            total_tokens: prompt + completion,
+            // Saturating for the same reason the conversions above are
+            // defensive: a plain `+` would panic on overflow in debug builds
+            // and wrap silently in release, after the counts were already
+            // clamped to fit `i64`.
+            total_tokens: prompt.saturating_add(completion),
         }
     }
 }
@@ -1110,6 +1114,35 @@ mod tests {
         assert_eq!(usage.prompt_tokens, 100);
         assert_eq!(usage.completion_tokens, 50);
         assert_eq!(usage.total_tokens, 150);
+    }
+
+    /// `total_tokens` must not overflow when both counts are large.
+    ///
+    /// Each count is clamped to `i64` on the way in, so the sum is the only
+    /// place left that can overflow — a plain `+` panics in debug builds and
+    /// wraps in release, turning a huge usage report into a negative one.
+    #[test]
+    fn usage_new_saturates_the_total() {
+        // `usize::MAX` does not fit in `i64` and is reported as 0 (the
+        // existing portability fallback); use the largest values that DO fit.
+        let big = usize::try_from(i64::MAX).expect("i64::MAX fits in usize on 64-bit");
+        let usage = Usage::new(big, big);
+        assert_eq!(usage.prompt_tokens, i64::MAX);
+        assert_eq!(usage.completion_tokens, i64::MAX);
+        assert_eq!(
+            usage.total_tokens,
+            i64::MAX,
+            "the sum must saturate, not overflow"
+        );
+    }
+
+    /// A count that does not fit in `i64` is reported as 0, not wrapped.
+    #[test]
+    fn usage_new_reports_unrepresentable_counts_as_zero() {
+        let usage = Usage::new(usize::MAX, usize::MAX);
+        assert_eq!(usage.prompt_tokens, 0);
+        assert_eq!(usage.completion_tokens, 0);
+        assert_eq!(usage.total_tokens, 0);
     }
 
     #[test]
