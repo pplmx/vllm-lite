@@ -182,3 +182,46 @@ async fn peer_client_lazy_connection() {
     let _ = client.invalidate(1).await;
     assert!(client.is_connected().await);
 }
+
+/// Concurrent first use must open exactly one connection.
+///
+/// `ensure_channel` checks for an existing channel, then connects outside the
+/// lock. Without re-checking once the lock is taken, every caller that missed
+/// the fast path opens its own connection and all but the last are discarded —
+/// N connections for N concurrent first calls, invisible in behaviour but real
+/// in resources.
+#[tokio::test]
+async fn concurrent_first_rpc_opens_a_single_connection() {
+    let (_server_handle, server_url) = spawn_server(Arc::new(DistributedKVCache::new(
+        CacheConfig::new(NodeId(0), 1),
+    )))
+    .await;
+
+    let client = Arc::new(PeerClient::new(server_url).expect("valid url"));
+    assert_eq!(
+        client.connect_attempts(),
+        0,
+        "constructing must not connect"
+    );
+
+    // All tasks start from a cold channel and race into `ensure_channel`.
+    let mut handles = Vec::new();
+    for _ in 0..8 {
+        let client = Arc::clone(&client);
+        handles.push(tokio::spawn(async move { client.put(1, 0xCC).await }));
+    }
+    for handle in handles {
+        let result = handle.await.expect("task must not panic");
+        assert!(
+            result.is_ok(),
+            "every concurrent caller must reach the peer, got {result:?}"
+        );
+    }
+
+    assert_eq!(
+        client.connect_attempts(),
+        1,
+        "a cold channel must be connected once, not once per concurrent caller"
+    );
+    assert!(client.is_connected().await);
+}

@@ -46,6 +46,13 @@ pub struct PeerClient {
     /// subsequent calls clone it (cheap — `Channel` is `Clone` and
     /// internally `Arc`-backed).
     channel: Arc<Mutex<Option<Channel>>>,
+    /// `connect()` attempts made on the slow path.
+    ///
+    /// Observability for the lazy-connect handshake: the fast path must
+    /// serve all but the first caller, so this stays at 1 even under
+    /// concurrent first use. Without it, a lost re-check under the lock
+    /// (opening one connection per concurrent caller) is invisible.
+    connects: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl PeerClient {
@@ -70,6 +77,7 @@ impl PeerClient {
             url,
             endpoint,
             channel: Arc::new(Mutex::new(None)),
+            connects: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         })
     }
 
@@ -81,6 +89,16 @@ impl PeerClient {
 
     /// Whether the underlying [`Channel`] has been lazily connected.
     /// False until the first RPC has succeeded; true thereafter.
+    /// Number of `connect()` attempts made so far.
+    ///
+    /// Exposed for tests and diagnostics: the lazy-connect handshake must
+    /// hand every caller the installed channel, so a burst of concurrent
+    /// first calls still produces exactly one attempt.
+    #[must_use]
+    pub fn connect_attempts(&self) -> usize {
+        self.connects.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     pub async fn is_connected(&self) -> bool {
         self.channel.lock().await.is_some()
     }
@@ -153,9 +171,8 @@ impl PeerClient {
 
     /// Ensure a [`Channel`] exists in the cache, connecting if not.
     async fn ensure_channel(&self) -> Result<Channel, tonic::Status> {
-        // Fast path: someone already connected. Return their channel
-        // clone and drop the guard before the await so other callers
-        // can take the lock instead of waiting on us.
+        // Fast path: someone already connected. Drop the guard before
+        // returning so concurrent callers are not serialized behind us.
         {
             let guard = self.channel.lock().await;
             if let Some(c) = guard.as_ref() {
@@ -163,18 +180,23 @@ impl PeerClient {
             }
         }
 
-        // Slow path: take the lock briefly to insert, then drop it
-        // before returning so the channel lock isn't held across
-        // `Ok` propagation.
+        // The slow path holds the lock ACROSS `connect()`. Connecting outside
+        // it let every caller that missed the fast path open its own
+        // connection — a burst of N concurrent first calls produced N
+        // connections and discarded all but one. Re-checking after the
+        // connect did not help: the duplicate work had already happened.
+        let mut guard = self.channel.lock().await;
+        if let Some(existing) = guard.as_ref() {
+            return Ok(existing.clone());
+        }
+        self.connects
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let channel = self
             .endpoint
             .connect()
             .await
             .map_err(|e| tonic::Status::unavailable(format!("connect to {}: {e}", self.url)))?;
-        let clone = channel.clone();
-        let mut guard = self.channel.lock().await;
-        *guard = Some(clone);
-        drop(guard);
+        *guard = Some(channel.clone());
         Ok(channel)
     }
 }
