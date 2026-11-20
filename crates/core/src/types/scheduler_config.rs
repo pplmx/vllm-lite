@@ -170,6 +170,9 @@ impl SchedulerConfigBuilder {
         self
     }
     /// Toggle prefill/decode batch separation.
+    ///
+    /// Not-yet-effective: accepted for API compatibility; the scheduler
+    /// builds only pure-phase batches today.
     #[must_use]
     pub const fn with_enable_pd_separation(mut self, v: bool) -> Self {
         self.inner.enable_pd_separation = v;
@@ -184,6 +187,9 @@ impl SchedulerConfigBuilder {
     }
     /// Set the decode-vs-prefill preference ratio (0.0–1.0). Higher values
     /// weight decode latency more heavily when assembling mixed-phase batches.
+    ///
+    /// Not-yet-effective: accepted for API compatibility; the scheduler
+    /// builds only pure-phase batches, so no mixed batch ever consults it.
     #[must_use]
     pub const fn with_decode_preference_ratio(mut self, v: f32) -> Self {
         self.inner.decode_preference_ratio = v;
@@ -196,6 +202,9 @@ impl SchedulerConfigBuilder {
         self
     }
     /// Toggle dynamic batching (group similar requests automatically).
+    ///
+    /// Not-yet-effective: accepted for API compatibility; the scheduler does
+    /// not consult it.
     #[must_use]
     pub const fn with_enable_dynamic_batching(mut self, v: bool) -> Self {
         self.inner.enable_dynamic_batching = v;
