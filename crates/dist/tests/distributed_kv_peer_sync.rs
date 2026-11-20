@@ -253,3 +253,45 @@ async fn failed_connect_does_not_wedge_later_calls() {
         "each RPC retries the connection after a failure"
     );
 }
+
+/// A `put` must reach every configured peer.
+///
+/// The broadcast task is detached, so "did it fan out" is not directly
+/// awaitable. This pins the reachability half: poll the peers'
+/// `connect_attempts` until all three have been tried.
+///
+/// Scope note: the broadcasts were serialized per peer (up to
+/// `peers * PEER_RPC_TIMEOUT` for one `put`, with one such task spawned per
+/// `put`) and now fan out with a `JoinSet` like `fetch_block` already did.
+/// That change is *not* discriminated by this test — unreachable peers on
+/// loopback fail fast, so serial and parallel both finish quickly. A timing
+/// assertion here would be flaky rather than meaningful, so the parallelism
+/// itself rests on the code shape rather than on this test.
+#[tokio::test]
+async fn broadcast_put_reaches_all_peers_promptly() {
+    let cfg = CacheConfig::new(NodeId(0), 4).with_peer_urls(vec![
+        "http://127.0.0.1:1".to_string(),
+        "http://127.0.0.1:2".to_string(),
+        "http://127.0.0.1:3".to_string(),
+    ]);
+    let mut cache = DistributedKVCache::new(cfg);
+    cache.connect_peers().expect("valid urls");
+    assert_eq!(cache.peer_client_count(), 3);
+
+    let started = std::time::Instant::now();
+    cache.put(7, 0xEE);
+
+    // All three peers are unreachable, so each broadcast RPC ends in a
+    // connect failure. Wait until every peer has been tried.
+    loop {
+        if cache.peers_all_reached() {
+            break;
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(4),
+            "peers were not all reached within 4s: {:?}",
+            started.elapsed()
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+}

@@ -196,6 +196,18 @@ impl DistributedKVCache {
     /// [`Self::connect_peers`] is called or when the config has no
     /// peer URLs.
     #[must_use]
+    /// `true` once every configured peer has had at least one connection
+    /// attempt made to it.
+    ///
+    /// Broadcasts are detached, so a test cannot await them; this turns "the
+    /// fan-out reached every peer" into a pollable fact.
+    #[must_use]
+    pub fn peers_all_reached(&self) -> bool {
+        self.peer_clients
+            .as_ref()
+            .is_some_and(|clients| clients.iter().all(|c| c.connect_attempts() > 0))
+    }
+
     pub fn peer_client_count(&self) -> usize {
         self.peer_clients.as_ref().map_or(0, |v| v.len())
     }
@@ -576,28 +588,39 @@ impl DistributedKVCache {
             return;
         };
         handle.spawn(async move {
+            // Fan out: each peer has its own `PEER_RPC_TIMEOUT` cap, so a
+            // serial loop costs up to `peers * PEER_RPC_TIMEOUT` per put
+            // when peers are wedged — and every put spawns another such
+            // task. `fetch_block` already fans out with a `JoinSet`; the
+            // broadcasts now match it.
+            let mut tasks = tokio::task::JoinSet::new();
             for client in clients.iter() {
-                // cap each broadcast RPC so a wedged peer's
-                // fire-and-forget task terminates instead of leaking forever.
-                match tokio::time::timeout(PEER_RPC_TIMEOUT, client.put(key, value_hash)).await {
-                    Ok(Ok(())) => {}
-                    Ok(Err(status)) => {
-                        tracing::warn!(
-                            peer = %client.url(),
-                            block_id = key,
-                            error = %status,
-                            "peer put failed; local update stands"
-                        );
+                let client = client.clone();
+                tasks.spawn(async move {
+                    // cap each broadcast RPC so a wedged peer's
+                    // fire-and-forget task terminates instead of leaking forever.
+                    match tokio::time::timeout(PEER_RPC_TIMEOUT, client.put(key, value_hash)).await
+                    {
+                        Ok(Ok(())) => {}
+                        Ok(Err(status)) => {
+                            tracing::warn!(
+                                peer = %client.url(),
+                                block_id = key,
+                                error = %status,
+                                "peer put failed; local update stands"
+                            );
+                        }
+                        Err(_elapsed) => {
+                            tracing::warn!(
+                                peer = %client.url(),
+                                block_id = key,
+                                "peer put timed out; local update stands"
+                            );
+                        }
                     }
-                    Err(_elapsed) => {
-                        tracing::warn!(
-                            peer = %client.url(),
-                            block_id = key,
-                            "peer put timed out; local update stands"
-                        );
-                    }
-                }
+                });
             }
+            while tasks.join_next().await.is_some() {}
         });
     }
 
@@ -618,27 +641,33 @@ impl DistributedKVCache {
             return;
         };
         handle.spawn(async move {
+            // Fan out, same reasoning as `broadcast_put`.
+            let mut tasks = tokio::task::JoinSet::new();
             for client in clients.iter() {
-                // cap each broadcast RPC (see `broadcast_put`).
-                match tokio::time::timeout(PEER_RPC_TIMEOUT, client.invalidate(key)).await {
-                    Ok(Ok(())) => {}
-                    Ok(Err(status)) => {
-                        tracing::warn!(
-                            peer = %client.url(),
-                            block_id = key,
-                            error = %status,
-                            "peer invalidate failed; local drop stands"
-                        );
+                let client = client.clone();
+                tasks.spawn(async move {
+                    // cap each broadcast RPC (see `broadcast_put`).
+                    match tokio::time::timeout(PEER_RPC_TIMEOUT, client.invalidate(key)).await {
+                        Ok(Ok(())) => {}
+                        Ok(Err(status)) => {
+                            tracing::warn!(
+                                peer = %client.url(),
+                                block_id = key,
+                                error = %status,
+                                "peer invalidate failed; local drop stands"
+                            );
+                        }
+                        Err(_elapsed) => {
+                            tracing::warn!(
+                                peer = %client.url(),
+                                block_id = key,
+                                "peer invalidate timed out; local drop stands"
+                            );
+                        }
                     }
-                    Err(_elapsed) => {
-                        tracing::warn!(
-                            peer = %client.url(),
-                            block_id = key,
-                            "peer invalidate timed out; local drop stands"
-                        );
-                    }
-                }
+                });
             }
+            while tasks.join_next().await.is_some() {}
         });
     }
 
