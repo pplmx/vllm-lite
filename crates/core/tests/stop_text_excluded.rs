@@ -204,9 +204,14 @@ fn cuda_graph_path_also_withholds_stop_tokens() {
     };
     // Same engine construction the CUDA-graph integration tests use.
     let mut engine = Engine::with_config(FakeModel::new(1000), None, config, 4, 1024);
+    // `cuda_graph_enabled` reports readiness-to-replay, so the fixture must
+    // actually capture before the graph path is taken.
+    engine
+        .capture_cuda_graphs()
+        .expect("capturing the configured batch sizes must succeed");
     assert!(
         engine.cuda_graph_enabled(),
-        "fixture must enable the graph path"
+        "fixture must have captured graphs for the graph path"
     );
 
     let (tx, mut rx) = mpsc::channel(64);
@@ -466,9 +471,14 @@ fn cuda_graph_path_withholds_a_stop_on_the_boundary() {
         ..Default::default()
     };
     let mut engine = Engine::with_config(StubModel::returning(7), None, config, 4, 1024);
+    // `cuda_graph_enabled` reports readiness-to-replay, so the fixture must
+    // actually capture before the graph path is taken.
+    engine
+        .capture_cuda_graphs()
+        .expect("capturing the configured batch sizes must succeed");
     assert!(
         engine.cuda_graph_enabled(),
-        "fixture must enable the graph path"
+        "fixture must have captured graphs for the graph path"
     );
 
     let (tx, mut rx) = mpsc::channel(64);

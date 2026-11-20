@@ -162,8 +162,13 @@ fn test_end_to_end_engine_with_cuda_graph_config() {
         ..Default::default()
     };
     let target_model = MockModel;
-    let engine = Engine::with_config(target_model, None, config, 4, 1024);
-    // Verify CUDA Graph is configured
+    let mut engine = Engine::with_config(target_model, None, config, 4, 1024);
+    // `cuda_graph_enabled` reports readiness-to-replay (the trait's contract),
+    // not the configured flag — an executor that never captured a graph is not
+    // enabled. Capture first, then verify.
+    engine
+        .capture_cuda_graphs()
+        .expect("capturing the configured batch sizes must succeed");
     assert!(engine.cuda_graph_enabled());
 }
 

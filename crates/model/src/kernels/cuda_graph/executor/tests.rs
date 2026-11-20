@@ -65,8 +65,43 @@ fn test_executor_enabled_when_config_enabled() {
         enabled: true,
         ..Default::default()
     };
-    let executor = BatchCudaGraphExecutor::new(config).unwrap();
+    let mut executor = BatchCudaGraphExecutor::new(config).unwrap();
+    // `is_enabled` means "capture completed and replay is possible", per the
+    // trait contract — configuring the executor is not enough.
+    assert!(
+        !executor.is_enabled(),
+        "a fresh executor has captured nothing"
+    );
+    executor
+        .capture_all_graphs()
+        .expect("capture must succeed for the configured sizes");
     assert!(executor.is_enabled());
+}
+
+/// An executor that has captured nothing must not claim readiness.
+///
+/// The trait documents `is_enabled` as "graph capture has completed and the
+/// executor can replay", and the engine's run loop uses it to pick
+/// `step_with_graph` over the regular step. Reporting the CONFIGURED flag made
+/// an uncaptured executor claim readiness: every step took the graph path,
+/// `execute` failed with `GraphNotFound`, and the engine fell back — a wasted
+/// attempt and a warning per step, for a feature that never did any work.
+#[test]
+fn test_is_enabled_is_false_before_capture() {
+    let executor = BatchCudaGraphExecutor::new(CudaGraphConfig {
+        enabled: true,
+        batch_sizes: vec![1, 4],
+        ..Default::default()
+    })
+    .unwrap();
+    assert!(
+        !executor.is_enabled(),
+        "configuring the executor must not report replay readiness"
+    );
+    assert!(
+        executor.available_batch_sizes().is_empty(),
+        "nothing is captured yet"
+    );
 }
 
 #[test]
@@ -244,8 +279,12 @@ fn test_trait_dispatch_via_cuda_graph_executor() {
     .unwrap();
     let boxed: Box<dyn CudaGraphExecutor + Send> = Box::new(executor);
 
-    // `is_enabled` reflects the config flag.
-    assert!(boxed.is_enabled());
+    // `is_enabled` means "replay is possible", so it is false until capture
+    // has run — through the trait, which is how the engine calls it.
+    assert!(
+        !boxed.is_enabled(),
+        "an uncaptured executor must not report readiness"
+    );
 
     // `capture_all_graphs` succeeds and is idempotent.
     let mut owned = boxed;

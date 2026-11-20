@@ -106,8 +106,15 @@ impl BatchCudaGraphExecutor {
     }
 
     /// Check if CUDA Graph is enabled
-    pub const fn is_enabled(&self) -> bool {
-        self.enabled
+    pub fn is_enabled(&self) -> bool {
+        // The trait documents this as "graph capture has completed and the
+        // executor can replay", and the engine's run loop uses it to choose
+        // `step_with_graph` over the regular step. Reporting the CONFIGURED
+        // flag here made an executor whose `capture_all_graphs` had never run
+        // claim readiness: every step then took the graph path, `execute`
+        // failed with `GraphNotFound`, and the engine fell back — one wasted
+        // attempt plus a warning per step, for a feature that never worked.
+        self.enabled && !self.graphs.is_empty()
     }
 
     /// Check if graph exists for given batch size
