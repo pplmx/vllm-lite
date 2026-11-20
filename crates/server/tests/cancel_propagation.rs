@@ -63,6 +63,20 @@ fn build_state(engine_tx: EngineHandle) -> ApiState {
     }
 }
 
+/// Router exposing `/v1/completions` (the legacy endpoint) with the same
+/// correlation middleware as production.
+fn completions_router(state: ApiState) -> Router {
+    Router::new()
+        .route(
+            "/v1/completions",
+            post(vllm_server::openai::completions::completions),
+        )
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ))
+}
+
 fn router(state: ApiState) -> Router {
     Router::new()
         .route("/v1/chat/completions", post(chat_completions))
@@ -386,5 +400,55 @@ async fn non_streaming_n_gt_1_disconnect_cancels_every_candidate() {
         recorded,
         vec![1, 2, 3],
         "all three candidate sequences must be cancelled, got {recorded:?}"
+    );
+}
+
+/// The legacy `/v1/completions` candidate path needs the same guard: it had
+/// the identical `seq_id_tx: None` shape as the chat candidate, so an
+/// abandoned `n > 1` completions request also left N sequences generating.
+#[tokio::test]
+async fn non_streaming_completions_disconnect_sends_cancel_request() {
+    let (engine_tx, cancels) = spawn_stalled_mock_engine(Vec::new());
+    let state = build_state(engine_tx);
+    let app = completions_router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "prompt": "Hello",
+        "stream": false,
+        "n": 2,
+        "max_tokens": 4096
+    })
+    .to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/completions")
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap();
+
+    let handle = tokio::spawn(async move { app.oneshot(request).await });
+    for _ in 0..64 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+    assert!(!handle.is_finished(), "the handler must still be waiting");
+    handle.abort();
+    let _ = handle.await;
+
+    let mut recorded = Vec::new();
+    for _ in 0..50 {
+        recorded = cancels.lock().await.clone();
+        if recorded.len() >= 2 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    recorded.sort_unstable();
+    assert_eq!(
+        recorded,
+        vec![1, 2],
+        "both completions candidates must be cancelled, got {recorded:?}"
     );
 }

@@ -312,6 +312,18 @@ async fn spawn_n_candidate(
 
     let (response_tx, mut response_rx) = mpsc::channel(64);
     let (finish_reason_tx, finish_reason_rx) = tokio::sync::oneshot::channel();
+    // Each candidate owns its own sequence. Without the seq_id the handler
+    // has no way to release it when the client goes away, so an abandoned
+    // `n > 1` / `best_of > 1` request would leave every candidate generating
+    // to `max_tokens`. Built before the enqueue so any drop after the engine
+    // takes ownership still cancels.
+    let (seq_id_tx, seq_id_rx) = tokio::sync::oneshot::channel();
+    let cancel_guard = super::chat::CancelOnDrop {
+        engine_tx: state.engine_tx.clone(),
+        seq_id: std::sync::atomic::AtomicU64::new(0),
+        fired: std::sync::atomic::AtomicBool::new(false),
+        request_id: correlation_id.to_string(),
+    };
 
     // REL-01: try_send surfaces saturation as 503 instead of blocking.
     state
@@ -319,17 +331,24 @@ async fn spawn_n_candidate(
         .try_send(vllm_core::types::EngineMessage::AddRequest {
             request: Box::new(request),
             response_tx,
-            seq_id_tx: None, // non-streaming — no client disconnect to propagate
+            seq_id_tx: Some(seq_id_tx),
             finish_reason_tx: Some(finish_reason_tx),
             request_id: Some(correlation_id),
         })
         .map_err(|e| super::chat::map_engine_send_error(&e))?;
+
+    if let Ok(seq_id) = seq_id_rx.await {
+        cancel_guard
+            .seq_id
+            .store(seq_id, std::sync::atomic::Ordering::Release);
+    }
 
     // Collect the candidate's full token stream.
     let mut tokens = Vec::new();
     while let Some(sampled) = response_rx.recv().await {
         tokens.push(sampled);
     }
+    cancel_guard.disarm();
 
     // Engine sends the reason before closing the response channel,
     // so this resolves immediately in the normal case. Fall back to
@@ -496,13 +515,17 @@ async fn run_n_parallel_completions(
     // post-join assembly differs. P39 passes `i in 0..n` as the
     // `candidate_index` so each candidate gets a distinct
     // per-candidate seed via `per_candidate_seed(seed, i)`.
-    let mut handles = Vec::with_capacity(n);
+    let mut candidates_set: tokio::task::JoinSet<_> = tokio::task::JoinSet::new();
     for i in 0..n {
         let state = state.clone();
         let req = req.clone();
         let prompt_tokens = prompt_tokens.clone();
         let correlation_id = correlation_id.0.clone();
-        let candidate = tokio::spawn(spawn_n_candidate(
+        // `JoinSet` rather than detached handles: dropping it aborts the
+        // candidates that have not finished, so an abandoned request (client
+        // gone, or one candidate erroring and returning early) does not leave
+        // the rest generating to `max_tokens` for nobody.
+        candidates_set.spawn(spawn_n_candidate(
             state,
             req,
             prompt_tokens,
@@ -510,7 +533,6 @@ async fn run_n_parallel_completions(
             correlation_id,
             i,
         ));
-        handles.push(candidate);
     }
 
     // Join all candidates. First failure wins (the other candidates
@@ -522,8 +544,8 @@ async fn run_n_parallel_completions(
     // needs the single best candidate's pair; `n > 1` needs all N.
     let mut candidates: Vec<Vec<vllm_traits::SampledToken>> = Vec::with_capacity(n);
     let mut candidate_finish_reasons: Vec<vllm_traits::FinishReason> = Vec::with_capacity(n);
-    for handle in handles {
-        match handle.await {
+    while let Some(joined) = candidates_set.join_next().await {
+        match joined {
             Ok(Ok((tokens, finish_reason))) => {
                 candidates.push(tokens);
                 candidate_finish_reasons.push(finish_reason);
@@ -1334,13 +1356,17 @@ async fn run_best_of(
     // candidate's 503 try_send error, which we propagate below).
     // P39: pass `i` as `candidate_index` so each candidate gets a
     // distinct per-candidate seed via `per_candidate_seed(seed, i)`.
-    let mut handles = Vec::with_capacity(n);
+    let mut candidates_set: tokio::task::JoinSet<_> = tokio::task::JoinSet::new();
     for i in 0..n {
         let state = state.clone();
         let req = req.clone();
         let prompt_tokens = prompt_tokens.clone();
         let correlation_id = correlation_id.0.clone();
-        let candidate = tokio::spawn(spawn_n_candidate(
+        // `JoinSet` rather than detached handles: dropping it aborts the
+        // candidates that have not finished, so an abandoned request (client
+        // gone, or one candidate erroring and returning early) does not leave
+        // the rest generating to `max_tokens` for nobody.
+        candidates_set.spawn(spawn_n_candidate(
             state,
             req,
             prompt_tokens,
@@ -1348,7 +1374,6 @@ async fn run_best_of(
             correlation_id,
             i,
         ));
-        handles.push(candidate);
     }
 
     // Join all candidates. First failure wins (the other candidates
@@ -1356,8 +1381,8 @@ async fn run_best_of(
     // comment in the module doc above).
     let mut candidates: Vec<Vec<vllm_traits::SampledToken>> = Vec::with_capacity(n);
     let mut candidate_finish_reasons: Vec<vllm_traits::FinishReason> = Vec::with_capacity(n);
-    for handle in handles {
-        match handle.await {
+    while let Some(joined) = candidates_set.join_next().await {
+        match joined {
             Ok(Ok((tokens, finish_reason))) => {
                 candidates.push(tokens);
                 candidate_finish_reasons.push(finish_reason);
