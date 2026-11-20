@@ -215,7 +215,9 @@ impl Engine {
         match lock_mutex(&self.target_model)
             .and_then(|mut model| model.embed(input_tokens, &positions).map_err(Into::into))
         {
-            Ok(embeddings) => {}
+            Ok(embeddings) => {
+                let _ = response_tx.send(embeddings);
+            }
             Err(e) => {
                 error!(error = %e, "Embeddings error");
             }

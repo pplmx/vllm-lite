@@ -266,3 +266,43 @@ fn engine_loop_survives_a_panicking_embed() {
         .join()
         .expect("the engine loop thread must exit cleanly on Shutdown");
 }
+
+/// `GetEmbeddings` must actually deliver the vectors it computed.
+///
+/// The handler computes embeddings and sends them on the caller's channel. A
+/// previous change that removed a debug print also removed the `send`, leaving
+/// an empty `Ok(embeddings) => {}` arm — the RPC then silently produced
+/// nothing and the HTTP layer answered 503 for every embeddings request. No
+/// test covered the delivery, so it shipped.
+#[test]
+fn get_embeddings_delivers_the_vectors() {
+    use tokio::sync::mpsc;
+    use vllm_core::engine::Engine;
+    use vllm_core::types::EngineMessage;
+    use vllm_testing::StubModel;
+    use vllm_traits::ModelBackend;
+
+    let mut engine = Engine::new_boxed(
+        Box::new(StubModel::returning(7)),
+        None::<Box<dyn ModelBackend>>,
+    );
+    let (msg_tx, msg_rx) = mpsc::channel::<EngineMessage>(16);
+    let loop_handle = std::thread::spawn(move || engine.run(msg_rx));
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    let (tx, mut rx) = mpsc::unbounded_channel::<Vec<Vec<f32>>>();
+    msg_tx
+        .blocking_send(EngineMessage::GetEmbeddings {
+            input_tokens: vec![vec![1, 2]],
+            response_tx: tx,
+        })
+        .expect("engine mailbox");
+
+    let delivered = rx
+        .blocking_recv()
+        .expect("the engine must send the computed embeddings back");
+    assert_eq!(delivered.len(), 1, "one vector per input");
+
+    msg_tx.blocking_send(EngineMessage::Shutdown).ok();
+    loop_handle.join().expect("engine loop exits on Shutdown");
+}
