@@ -7,13 +7,17 @@ use crate::types::sequence_packing::SequencePackingConfig;
 ///
 /// Controls batching behavior, prefill/decode separation, and priority handling.
 ///
-/// **Not-yet-effective flags:** the engine currently builds
-/// only pure-phase (`Prefill`/`Decode`) batches on the FCFS policy by
-/// default. [`Self::enable_pd_separation`], [`Self::enable_dynamic_batching`],
-/// [`Self::prefill_chunk_size`] and [`Self::decode_preference_ratio`] are
-/// accepted for API compatibility but are not read by the scheduler yet —
-/// setting them changes nothing today. [`Self::enable_priority_scheduling`]
-/// IS honored: it installs `PriorityPolicy` at engine construction.
+/// **Effective flags:** [`Self::enable_priority_scheduling`] installs
+/// `PriorityPolicy` at engine construction, and [`Self::prefill_chunk_size`]
+/// caps the per-round prompt tokens when a prompt overfills
+/// [`Self::max_num_batched_tokens`] — the sequence is chunked across rounds
+/// instead of being left unservable.
+///
+/// **Not-yet-effective flags:** the engine builds only pure-phase
+/// (`Prefill`/`Decode`) batches on the FCFS policy by default, so
+/// [`Self::enable_pd_separation`], [`Self::decode_preference_ratio`] and
+/// [`Self::enable_dynamic_batching`] are accepted for API compatibility but
+/// are not read by the scheduler yet — setting them changes nothing today.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub struct SchedulerConfig {

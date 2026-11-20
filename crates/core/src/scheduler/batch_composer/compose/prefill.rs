@@ -153,11 +153,23 @@ impl BatchComposer {
         // Prefill forever, producing zero tokens, while the phase scheduler
         // kept selecting the (never-drained) prefill phase. Only
         // over-fitting prompts are chunked; prompts that fit run whole, so
-        // mid-size prompt behaviour is unchanged. The chunk is capped by
-        // `prefill_chunk_size` (the documented per-chunk token bound).
+        // mid-size prompt behaviour is unchanged.
+        //
+        // The chunk is capped by `prefill_chunk_size` (the documented
+        // per-chunk token bound). Applying the cap only on the round that
+        // first overflows the budget let the next round take the whole
+        // remainder at once: a 40-token prompt with chunk size 8 went
+        // 8 then 32, defeating the bound. The cap is therefore applied to
+        // every round where the sequence cannot be served whole.
+        let chunk_cap = self.chunked_prefill.target_chunk_size.max(1);
         let budget_room = self.config.max_token_budget.saturating_sub(total_tokens);
         let tokens_to_process = if tokens_to_process > budget_room {
-            budget_room.min(self.chunked_prefill.target_chunk_size.max(1))
+            budget_room.min(chunk_cap)
+        } else if tokens_to_process > chunk_cap && seq.num_computed_tokens > 0 {
+            // A resumed prefill that is still longer than one chunk keeps
+            // chunking; a fresh whole prompt that fits the budget is not
+            // split (mid-size prompts keep their single-round behaviour).
+            tokens_to_process.min(chunk_cap)
         } else {
             tokens_to_process
         };

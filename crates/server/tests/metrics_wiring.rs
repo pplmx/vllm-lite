@@ -25,9 +25,8 @@
 //!    `true`). This is the property main.rs relies on.
 //!
 //! For end-to-end coverage of the HTTP `/metrics` path, see
-//! `metrics_handler_test.rs` (TODO if missing) — this file
-//! deliberately targets the engine-side invariant because that's
-//! where regressions would first appear.
+//! `metrics_timeout.rs` — this file deliberately targets the engine-side
+//! invariant because that's where regressions would first appear.
 
 use std::sync::Arc;
 

@@ -432,6 +432,91 @@ fn long_prompt_is_served_via_chunked_prefill() {
     );
 }
 
+// `prefill_chunk_size` is the documented per-round cap on prompt tokens
+// for an over-budget prompt: every round must carry exactly that many
+// tokens until the tail, and the tail carries the remainder. This pins the
+// config field to observable scheduler behaviour so the two cannot drift
+// apart again (the field was documented as inert long after it was wired).
+#[test]
+fn prefill_chunk_size_caps_every_chunk_round() {
+    // Budget 32 is larger than the cap 8, so the chunk cap is the binding
+    // constraint on every round; 40 tokens => 5 chunks of 8.
+    let config = SchedulerConfig::builder()
+        .with_max_num_batched_tokens(32)
+        .with_prefill_chunk_size(8)
+        .with_packing(SequencePackingConfig {
+            enabled: false,
+            ..Default::default()
+        })
+        .build();
+    let mut engine = create_test_engine(config, 64);
+
+    engine.add_request(Request::new(11, vec![7; 40], 4));
+
+    let mut chunks: Vec<usize> = Vec::new();
+    while engine.waiting_count() > 0 {
+        let batch = engine.build_batch();
+        assert_eq!(
+            batch.seq_ids.len(),
+            1,
+            "the single sequence must be admitted every round"
+        );
+        chunks.push(batch.input_tokens[0].len());
+        step(&mut engine, &batch);
+        assert!(
+            chunks.len() <= 8,
+            "40 tokens in chunks of 8 must finish well within 8 rounds, got {chunks:?}"
+        );
+    }
+
+    assert_eq!(
+        chunks,
+        vec![8, 8, 8, 8, 8],
+        "every round must carry exactly prefill_chunk_size tokens"
+    );
+    let seq = engine.get_sequence(11).expect("prefill completed");
+    assert_eq!(
+        seq.num_computed_tokens, 40,
+        "the chunks must cover the whole prompt exactly once"
+    );
+}
+
+// The chunk cap applies to a resumed chunked prefill, and its tail chunk
+// carries the remainder rather than another full chunk. Chunking starts
+// only when a prompt overfills the token budget; 20 tokens against a
+// 16-token budget is 8 + 8 + 4.
+#[test]
+fn chunked_prefill_tail_carries_the_remainder() {
+    let config = SchedulerConfig::builder()
+        .with_max_num_batched_tokens(16)
+        .with_prefill_chunk_size(8)
+        .with_packing(SequencePackingConfig {
+            enabled: false,
+            ..Default::default()
+        })
+        .build();
+    let mut engine = create_test_engine(config, 64);
+
+    // 20 = 8 + 8 + 4: the last round must carry the 4-token remainder.
+    engine.add_request(Request::new(12, vec![7; 20], 4));
+
+    let mut chunks: Vec<usize> = Vec::new();
+    while engine.waiting_count() > 0 {
+        let batch = engine.build_batch();
+        chunks.push(batch.input_tokens[0].len());
+        step(&mut engine, &batch);
+        assert!(
+            chunks.len() <= 6,
+            "20 tokens in chunks of 8, got {chunks:?}"
+        );
+    }
+    assert_eq!(
+        chunks,
+        vec![8, 8, 4],
+        "the tail chunk carries the remainder"
+    );
+}
+
 // a prompt that FITS the batch token budget is NOT chunked —
 // mid-size prefills keep their single-round behavior (no regression).
 #[test]
