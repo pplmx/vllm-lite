@@ -191,13 +191,19 @@ impl JwtValidator {
         Self { config }
     }
 
-    ///
     /// Verifies the JWT's signature, then validates standard claims
+    /// (iss, aud, exp). Returns the deserialized `Claims` on success.
     ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
-    /// (iss, aud, exp). Returns the deserialized `Claims` on success.
+    /// - `InvalidFormat` — the token is not three dot-separated parts, or its
+    ///   header does not decode
+    /// - `UnsupportedAlgorithm` — the header names an algorithm outside the
+    ///   configured allowlist
+    /// - `InvalidSignature` / `SignatureVerification` — the signature does
+    ///   not verify against the configured key
+    /// - `TokenExpired` / `InvalidIssuer` / `MissingClaim` — a standard claim
+    ///   failed validation
     pub fn validate(&self, token: &str) -> Result<Claims, JwtError> {
         // Structural sanity check (3 parts) before delegating to
         // jsonwebtoken (which will reject malformed tokens anyway, but

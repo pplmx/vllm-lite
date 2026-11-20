@@ -280,9 +280,14 @@ impl ModelLoader {
     }
 
     /// Run the loader and produce the target type (model, cache, etc.).
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Returns `Err` when the checkpoint config names no architecture this
+    /// build registered, when the architecture is a stub and
+    /// `allow_stub` was not requested, when a required weight is missing
+    /// from the checkpoint, or when a tensor operation fails while
+    /// assembling the model.
     pub fn load(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {
         register_all_archs(&ARCHITECTURE_REGISTRY);
 

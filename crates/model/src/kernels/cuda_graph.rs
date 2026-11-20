@@ -157,9 +157,15 @@ impl CudaGraph {
     }
 
     /// Capture a sequence of tensor ops into a CUDA graph for fast replay.
+    ///
+    /// The current implementation is a CPU-side stub: it records no nodes and
+    /// always succeeds. [`Self::execute`] detects the empty capture and
+    /// returns `Err` so callers fall back to the eager forward.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Never returns `Err` today; the `Result` mirrors the planned real
+    /// capture, which can fail on the device side.
     pub const fn capture(&mut self) -> Result<(), CudaGraphError> {
         self.cached = true;
         Ok(())

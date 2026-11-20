@@ -19,10 +19,13 @@ pub trait FormatLoader {
     where
         Self: Sized;
 
+    /// Load weights from the given path.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
-    /// Load weights from the given path.
+    /// Returns `Err` when the file cannot be read, when its contents do not
+    /// parse as this loader's format, or when a tensor cannot be placed on
+    /// `device`.
     fn load(path: &Path, device: &Device) -> Result<HashMap<String, Tensor>>
     where
         Self: Sized;

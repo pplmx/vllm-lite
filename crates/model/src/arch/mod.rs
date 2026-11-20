@@ -51,9 +51,12 @@ pub trait Architecture: Send + Sync + 'static {
     ///
     /// Returns `(backend, kv_cache)` where `kv_cache` is `Some(Arc<Mutex<PagedKvCache>>)`
     /// for architectures with paged KV cache integration, or `None` for stubs.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Returns `Err` when the checkpoint lacks a weight the architecture
+    /// requires, a weight has an unexpected shape, or a tensor operation
+    /// fails while assembling the layers.
     fn create_model(
         &self,
         config: ModelConfig,
