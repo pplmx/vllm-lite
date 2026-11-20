@@ -334,3 +334,57 @@ async fn non_streaming_client_disconnect_sends_cancel_request() {
         "dropping a non-streaming handler must cancel its sequence; got {recorded:?}"
     );
 }
+
+/// A non-streaming `n > 1` request that the client abandons must release
+/// every candidate sequence.
+///
+/// The `n > 1` fan-out spawns one tokio task per candidate and each sends
+/// `seq_id_tx: None`, so an abandoned request leaves N sequences generating
+/// to `max_tokens` — N times the wasted work of the single-candidate case
+/// fixed alongside this test.
+#[tokio::test]
+async fn non_streaming_n_gt_1_disconnect_cancels_every_candidate() {
+    let (engine_tx, cancels) = spawn_stalled_mock_engine(Vec::new());
+    let state = build_state(engine_tx);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "stream": false,
+        "n": 3,
+        "max_tokens": 4096
+    })
+    .to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap();
+
+    let handle = tokio::spawn(async move { app.oneshot(request).await });
+    for _ in 0..64 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+    assert!(!handle.is_finished(), "the handler must still be waiting");
+    handle.abort();
+    let _ = handle.await;
+
+    let mut recorded = Vec::new();
+    for _ in 0..50 {
+        recorded = cancels.lock().await.clone();
+        if recorded.len() >= 3 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    recorded.sort_unstable();
+    assert_eq!(
+        recorded,
+        vec![1, 2, 3],
+        "all three candidate sequences must be cancelled, got {recorded:?}"
+    );
+}
