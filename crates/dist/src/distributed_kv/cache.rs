@@ -192,10 +192,6 @@ impl DistributedKVCache {
         self.peer_clients.is_some()
     }
 
-    /// Number of currently-connected peer clients. `0` before
-    /// [`Self::connect_peers`] is called or when the config has no
-    /// peer URLs.
-    #[must_use]
     /// `true` once every configured peer has had at least one connection
     /// attempt made to it.
     ///
@@ -208,6 +204,10 @@ impl DistributedKVCache {
             .is_some_and(|clients| clients.iter().all(|c| c.connect_attempts() > 0))
     }
 
+    /// Number of currently-connected peer clients. `0` before
+    /// [`Self::connect_peers`] is called or when the config has no
+    /// peer URLs.
+    #[must_use]
     pub fn peer_client_count(&self) -> usize {
         self.peer_clients.as_ref().map_or(0, |v| v.len())
     }
