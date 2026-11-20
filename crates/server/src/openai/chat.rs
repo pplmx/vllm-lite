@@ -29,6 +29,14 @@ use super::types::{
 use crate::ApiState;
 use crate::security::correlation::CorrelationId;
 
+/// Bound on the engine's `seq_id` round-trip.
+///
+/// The engine assigns the id synchronously in its run loop, so this resolves
+/// immediately in the normal case. A wedged engine (long forward before it
+/// drains the mailbox) would otherwise hang the handler forever — the
+/// streaming paths have always bounded it; the non-streaming paths must too.
+pub(crate) const SEQ_ID_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
 fn should_skip_token_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &str) -> bool {
     text.is_empty() || tokenizer.is_special_token(text)
 }
@@ -669,10 +677,15 @@ async fn handle_chat(
         })
         .map_err(|e| map_engine_send_error(&e))?;
 
-    if let Ok(seq_id) = seq_id_rx.await {
-        cancel_guard
-            .seq_id
-            .store(seq_id, std::sync::atomic::Ordering::Release);
+    // Bounded like the streaming path: a wedged engine must fail the request
+    // (503 engine_unavailable) rather than park this handler forever.
+    match tokio::time::timeout(SEQ_ID_TIMEOUT, seq_id_rx).await {
+        Ok(Ok(seq_id)) => {
+            cancel_guard
+                .seq_id
+                .store(seq_id, std::sync::atomic::Ordering::Release);
+        }
+        Ok(Err(_)) | Err(_) => return Err(engine_unavailable_error()),
     }
 
     let mut tokens = Vec::new();
@@ -857,10 +870,15 @@ async fn spawn_chat_n_candidate(
         })
         .map_err(|e| map_engine_send_error(&e))?;
 
-    if let Ok(seq_id) = seq_id_rx.await {
-        cancel_guard
-            .seq_id
-            .store(seq_id, std::sync::atomic::Ordering::Release);
+    // Bounded like the streaming path: a wedged engine must fail the request
+    // (503 engine_unavailable) rather than park this handler forever.
+    match tokio::time::timeout(SEQ_ID_TIMEOUT, seq_id_rx).await {
+        Ok(Ok(seq_id)) => {
+            cancel_guard
+                .seq_id
+                .store(seq_id, std::sync::atomic::Ordering::Release);
+        }
+        Ok(Err(_)) | Err(_) => return Err(engine_unavailable_error()),
     }
 
     let mut tokens = Vec::new();

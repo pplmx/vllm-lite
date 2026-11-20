@@ -337,10 +337,24 @@ async fn spawn_n_candidate(
         })
         .map_err(|e| super::chat::map_engine_send_error(&e))?;
 
-    if let Ok(seq_id) = seq_id_rx.await {
-        cancel_guard
-            .seq_id
-            .store(seq_id, std::sync::atomic::Ordering::Release);
+    // Bounded like the streaming path: a wedged engine must fail this
+    // candidate rather than park the worker forever.
+    match tokio::time::timeout(super::chat::SEQ_ID_TIMEOUT, seq_id_rx).await {
+        Ok(Ok(seq_id)) => {
+            cancel_guard
+                .seq_id
+                .store(seq_id, std::sync::atomic::Ordering::Release);
+        }
+        Ok(Err(_)) | Err(_) => {
+            return Err((
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse::with_code(
+                    "Failed to reach the engine",
+                    "server_error",
+                    "engine_unavailable",
+                )),
+            ));
+        }
     }
 
     // Collect the candidate's full token stream.

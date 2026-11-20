@@ -452,3 +452,49 @@ async fn non_streaming_completions_disconnect_sends_cancel_request() {
         "both completions candidates must be cancelled, got {recorded:?}"
     );
 }
+
+/// A wedged engine must fail the non-streaming request, not hang it.
+///
+/// The streaming paths bound the `seq_id` round-trip at 1s and answer 503
+/// `engine_unavailable`. The non-streaming paths awaited it without a bound,
+/// so an engine that never replies (wedged mid-forward before draining its
+/// mailbox) left the HTTP request open indefinitely instead of failing it.
+#[tokio::test]
+async fn non_streaming_request_fails_when_engine_never_replies() {
+    // Engine that swallows every message without answering seq_id_tx.
+    let (engine_tx, mut engine_rx) = mpsc::channel::<EngineMessage>(16);
+    let mut held = Vec::new();
+    tokio::spawn(async move {
+        while let Some(msg) = engine_rx.recv().await {
+            held.push(msg);
+        }
+    });
+
+    let state = build_state(engine_tx);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "llama-test",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "stream": false,
+        "max_tokens": 8
+    })
+    .to_string();
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = tokio::time::timeout(std::time::Duration::from_secs(5), app.oneshot(request))
+        .await
+        .expect("the handler must not hang on an engine that never replies")
+        .expect("response");
+
+    assert_eq!(
+        response.status(),
+        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+        "a wedged engine must surface as 503 engine_unavailable"
+    );
+}

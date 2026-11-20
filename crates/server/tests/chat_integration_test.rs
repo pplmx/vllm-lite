@@ -1291,7 +1291,9 @@ fn spawn_capturing_mock_engine() -> (
                             top_logprobs: vec![],
                         })
                         .await;
-                    break;
+                    // Keep serving: `n > 1` / `best_of > 1` send one
+                    // AddRequest per candidate and each awaits its own
+                    // seq_id.
                 }
                 EngineMessage::Shutdown => break,
                 _ => {}
@@ -6091,11 +6093,17 @@ async fn test_completions_best_of_with_partial_engine_failure_returns_503() {
         while let Some(msg) = engine_rx.recv().await {
             if let EngineMessage::AddRequest {
                 response_tx,
+                seq_id_tx,
                 finish_reason_tx,
                 ..
             } = msg
             {
                 count += 1;
+                // The handler awaits this before it can cancel on client
+                // disconnect; every candidate needs one.
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send(count);
+                }
                 if count == 2 {
                     // Second candidate: drop the response channel
                     // immediately (simulates engine error). The
