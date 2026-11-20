@@ -176,3 +176,52 @@ async fn rejected_body_uses_openai_error_envelope() {
     assert_eq!(payload["error"]["type"], "invalid_request_error");
     assert_eq!(payload["error"]["code"], "request_too_large");
 }
+
+/// A 413 must reach the audit trail.
+///
+/// `app.rs` mounts the audit layer outside the body limit specifically so
+/// that oversized requests are recorded ("audit: sees 413s (from the
+/// limit)"), but the layer-order tests above build the router without an
+/// audit layer, so that claim was never exercised. An operator needs the
+/// row for exactly this case: a client repeatedly hitting the size limit is
+/// what the audit trail is for.
+#[tokio::test]
+async fn oversized_body_is_recorded_in_the_audit_trail() {
+    use std::sync::Arc;
+    use vllm_server::security::audit::AuditLogger;
+    use vllm_server::security::audit_middleware::audit_middleware;
+
+    let audit = Arc::new(AuditLogger::new(100));
+    // Production order, outermost last: correlation → audit → body limit →
+    // handler. Built the same way `app.rs` layers them.
+    let app = with_default_body_limit(Router::new().route("/stub", post(stub_handler)))
+        .layer(axum::middleware::from_fn_with_state(
+            audit.clone(),
+            audit_middleware,
+        ))
+        .layer(from_fn(correlation_id_middleware));
+
+    let body = vec![b'x'; DEFAULT_BODY_LIMIT_BYTES + 1024];
+    let req = HttpRequest::builder()
+        .method("POST")
+        .uri("/stub")
+        .header("content-type", "application/octet-stream")
+        .body(Body::from(body))
+        .unwrap();
+
+    let resp: Response = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
+
+    let events = audit.get_events().await;
+    assert_eq!(
+        events.len(),
+        1,
+        "an oversized request must leave exactly one audit row, got {events:?}"
+    );
+    assert_eq!(events[0].resource, "/stub");
+    assert!(
+        events[0].result.starts_with("failure: 413"),
+        "the audit row must record the rejection, got {:?}",
+        events[0].result
+    );
+}
