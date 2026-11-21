@@ -31,9 +31,56 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import subprocess
 import sys
 from pathlib import Path
+
+
+class StaleSpanError(RuntimeError):
+    """The recorded span does not point at the code it describes."""
+
+
+def span_text(text: str, span: dict) -> str:
+    """The exact source text a span covers."""
+    start, end = span["start"], span["end"]
+    lines = text.splitlines(keepends=True)
+    if start["line"] == end["line"]:
+        return lines[start["line"] - 1][start["column"] - 1 : end["column"] - 1]
+    parts = [lines[start["line"] - 1][start["column"] - 1 :]]
+    parts.extend(lines[start["line"] : end["line"] - 1])
+    parts.append(lines[end["line"] - 1][: end["column"] - 1])
+    return "".join(parts)
+
+
+def check_span_is_current(text: str, record: dict) -> None:
+    """Refuse to apply a span drawn from a different revision of the file.
+
+    `cargo mutants --list --json` records offsets for the file as it stood when
+    the list was produced. Reusing that JSON after the file changes edits the
+    WRONG line silently - that is how a `-` -> `/` mutation for `log_softmax`
+    landed inside `renormalized_top_p_logprobs`. The mutant's own `diff` names
+    the original text on its `-` lines, so comparing against it catches the
+    drift.
+    """
+    removed = [
+        line[1:]
+        for line in record["diff"].splitlines()
+        if line.startswith("-") and not line.startswith("---")
+    ]
+    if not removed:
+        return
+    expected = removed[0].strip()
+    actual = span_text(text, record["span"]).strip()
+    # The span may cover a single operator while the diff quotes the whole line,
+    # and `fn_value` mutants quote the signature instead of the body. What must
+    # hold in every case is that the span's text still appears in the line the
+    # mutant claims to edit.
+    if actual and actual not in expected:
+        raise StaleSpanError(
+            f"{record['name']}: span covers {actual!r} but the mutant targets "
+            f"{expected!r} - regenerate the mutant list from the current file"
+        )
 
 
 def apply_span_edit(text: str, span: dict, replacement: str) -> str:
@@ -58,11 +105,33 @@ def apply_span_edit(text: str, span: dict, replacement: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mutants_json", type=Path)
+    parser.add_argument("mutants_json", type=Path, nargs="?")
     parser.add_argument(
         "--test-cmd",
         required=True,
         help="shell command run for each mutant; non-zero exit means KILLED",
+    )
+    parser.add_argument(
+        "--file",
+        action="append",
+        default=None,
+        help=(
+            "source file whose mutant list is regenerated with `cargo mutants "
+            "--list --json --no-config` before verifying (repeatable); prefer "
+            "this over a hand-carried JSON, which goes stale on any edit"
+        ),
+    )
+    parser.add_argument(
+        "--features",
+        action="append",
+        default=None,
+        help="cargo feature for relisting (repeatable)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=1800.0,
+        help="per-mutant wall-clock limit for the test command, in seconds",
     )
     parser.add_argument(
         "--only",
@@ -72,7 +141,22 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    records = json.loads(args.mutants_json.read_text())
+    if args.file:
+        combined: list[dict] = []
+        for source in args.file:
+            command = [
+                "cargo", "mutants", "--package", "vllm-core",
+                "--file", source, "--list", "--json", "--no-config",
+            ]
+            for feature in args.features or []:
+                command += ["--features", feature]
+            completed = subprocess.run(command, capture_output=True, text=True, check=True)
+            combined.extend(json.loads(completed.stdout))
+        records = combined
+    elif args.mutants_json is not None:
+        records = json.loads(args.mutants_json.read_text())
+    else:
+        parser.error("pass a mutants JSON positional argument or --file")
     if args.only:
         records = [
             r for r in records if any(sub in r["name"] for sub in args.only)
@@ -82,25 +166,55 @@ def main() -> int:
     survived: list[str] = []
     unviable: list[str] = []
 
-    for record in records:
-        path = Path(record["file"])
-        original = path.read_text()
-        try:
-            path.write_text(apply_span_edit(original, record["span"], record["replacement"]))
-            completed = subprocess.run(
-                args.test_cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-            )
-            if "error[E" in completed.stderr or "error: could not compile" in completed.stderr:
-                unviable.append(record["name"])
-            elif completed.returncode != 0:
-                killed.append(record["name"])
-            else:
-                survived.append(record["name"])
-        finally:
-            path.write_text(original)
+    pending: dict[Path, str] = {}
+
+    def restore_pending(*_unused: object) -> None:
+        for pending_path, pending_text in pending.items():
+            pending_path.write_text(pending_text)
+        pending.clear()
+
+    def on_signal(signum: int, _frame: object) -> None:
+        restore_pending()
+        raise SystemExit(128 + signum)
+
+    signal.signal(signal.SIGTERM, on_signal)
+    signal.signal(signal.SIGINT, on_signal)
+
+    try:
+        for record in records:
+            path = Path(record["file"])
+            original = path.read_text()
+            try:
+                check_span_is_current(original, record)
+            except StaleSpanError as error:
+                print(f"STALE SPAN: {error}")
+                return 2
+            pending[path] = original
+            try:
+                path.write_text(apply_span_edit(original, record["span"], record["replacement"]))
+                try:
+                    completed = subprocess.run(
+                        args.test_cmd,
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=args.timeout,
+                    )
+                except subprocess.TimeoutExpired:
+                    print(f"TIMEOUT after {args.timeout}s: {record['name']}")
+                    survived.append(record["name"])
+                    continue
+                if "error[E]" in completed.stderr or "error: could not compile" in completed.stderr:
+                    unviable.append(record["name"])
+                elif completed.returncode != 0:
+                    killed.append(record["name"])
+                else:
+                    survived.append(record["name"])
+            finally:
+                path.write_text(original)
+                pending.pop(path, None)
+    finally:
+        restore_pending()
 
     for label, entries in (
         ("KILLED (cargo-mutants was wrong)", killed),
