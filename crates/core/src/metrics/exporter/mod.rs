@@ -153,4 +153,47 @@ mod tests {
         let output = exporter.export().await.expect("default export succeeds");
         assert!(output.is_empty());
     }
+
+    /// `InMemoryMetricsExporter` must record, list and export what it was given.
+    ///
+    /// `cargo mutants` emptied `record`, replaced `snapshot` with eight
+    /// different fixed vectors, and turned `export` into `Ok(String::new())` —
+    /// every variant survived, because the three existing tests in this module
+    /// exercise `PrometheusExporter` and the `default_arc` stub instead.
+    #[tokio::test]
+    async fn in_memory_exporter_records_and_exports_its_values() {
+        let exporter = InMemoryMetricsExporter::default();
+        assert!(
+            exporter.snapshot().is_empty(),
+            "a fresh exporter has no values"
+        );
+
+        exporter.record("alpha", 1.5);
+        exporter.record("beta", 2.0);
+        // Recording the same name again must OVERWRITE, not duplicate.
+        exporter.record("alpha", 9.5);
+
+        let mut snapshot = exporter.snapshot();
+        snapshot.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            snapshot,
+            vec![("alpha".to_string(), 9.5), ("beta".to_string(), 2.0)],
+            "snapshot must return the recorded pairs with the latest value"
+        );
+
+        let body = exporter.export().await.expect("export succeeds");
+        assert!(
+            body.contains("alpha 9.5"),
+            "export must render the latest value for a name; got:\n{body}"
+        );
+        assert!(
+            body.contains("beta 2"),
+            "export must render every recorded name; got:\n{body}"
+        );
+        assert_eq!(
+            body.lines().count(),
+            2,
+            "one line per metric, no duplicates; got:\n{body}"
+        );
+    }
 }
