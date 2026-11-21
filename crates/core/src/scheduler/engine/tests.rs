@@ -1600,3 +1600,67 @@ fn filter_fully_allocated_prefills_requeues_short_tables() {
         "the short-table prefill must return to the waiting queue"
     );
 }
+
+/// `requeue_uncomposed_prefills` must return admitted-but-uncomposed prefills
+/// to the queue, leave composed ones alone, and do nothing outside Prefill.
+///
+/// `cargo mutants` emptied the whole method, flipped the phase guard and
+/// flipped the `composed.contains` test. A freshly-admitted prefill that is
+/// never composed would stay `Status::Prefilling` in `running`, where it is
+/// never re-scheduled (running is only re-included when `Decoding`, and prefill
+/// work comes from the queue) — a permanent stall that also pins its KV blocks.
+#[test]
+fn requeue_uncomposed_prefills_returns_only_the_uncomposed() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 1024);
+
+    let make = |id: u64| Sequence {
+        id,
+        tokens: vec![1; block_size],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: 0,
+        prompt_len: block_size,
+        status: Status::Prefilling,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    // Two admitted prefill; only seq 1 made it into the composed batch.
+    engine.running.push(make(1));
+    engine.running.push(make(2));
+    let admitted: std::collections::HashSet<u64> = [1, 2].into_iter().collect();
+    let mut batch = vllm_traits::Batch::empty();
+    batch.seq_ids = vec![1];
+
+    // Outside Prefill the method must do NOTHING, even with an uncomposed seq.
+    let before = engine.waiting_count();
+    engine.requeue_uncomposed_prefills(&admitted, &batch, Phase::Decode);
+    assert_eq!(
+        engine.waiting_count(),
+        before,
+        "outside Prefill nothing may be requeued"
+    );
+    assert_eq!(engine.running.len(), 2, "and nothing may leave running");
+
+    // In Prefill: seq 1 stays (composed), seq 2 is requeued.
+    engine.requeue_uncomposed_prefills(&admitted, &batch, Phase::Prefill);
+    assert_eq!(
+        engine.running.len(),
+        1,
+        "the uncomposed prefill must leave running; got {:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        engine.running[0].id, 1,
+        "the COMPOSED prefill must stay in running"
+    );
+    assert_eq!(
+        engine.waiting_count(),
+        before + 1,
+        "the uncomposed prefill must return to the waiting queue"
+    );
+}
