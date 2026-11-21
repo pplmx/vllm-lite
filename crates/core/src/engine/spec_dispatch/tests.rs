@@ -778,6 +778,142 @@ fn test_speculative_all_accepted_folds_every_token_into_sequence() {
 ///
 /// The invariant pinned below is the one decode relies on: the instant the
 /// sequence is `Decoding`, its recorded frontier and its token list agree.
+/// Drafts must be generated at consecutive absolute positions starting right
+/// after the sequence's last real token.
+///
+/// `generate_per_seq_drafts` computes
+/// `base = num_computed_tokens + input_tokens.len() - 1` and then decodes at
+/// `base + pos` for `pos in 0..=max_draft` (one extra iteration so the last
+/// draft's KV lands in the draft cache). `cargo mutants` found that `+`
+/// -> `*` on both the base and the per-step position survive the suite, as
+/// does flipping the `pos >= max_draft` guard: every variant changes WHERE
+/// the drafts are generated, which with a real model silently degrades the
+/// acceptance rate rather than producing a visible failure.
+#[test]
+fn drafts_are_generated_at_consecutive_positions_after_the_prompt() {
+    #[derive(Clone)]
+    struct PositionRecorder {
+        positions: std::sync::Arc<std::sync::Mutex<Vec<usize>>>,
+    }
+
+    impl ModelBackend for PositionRecorder {
+        fn forward(
+            &mut self,
+            seq_ids: &[SeqId],
+            _input_tokens: &[Vec<TokenId>],
+            positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            is_prefill: &[bool],
+        ) -> ModelResult<BatchOutput> {
+            // Draft generation is the only non-prefill `forward` on this path.
+            if !is_prefill[0] {
+                self.positions
+                    .lock()
+                    .expect("positions lock")
+                    .push(positions[0][0]);
+            }
+            Ok(BatchOutput {
+                seq_ids: seq_ids.to_vec(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 11,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect(),
+            })
+        }
+
+        fn forward_logits(
+            &mut self,
+            _seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| {
+                    tokens
+                        .iter()
+                        .flat_map(|_| {
+                            let mut logits = vec![-10.0_f32; 64];
+                            logits[11] = 10.0;
+                            logits
+                        })
+                        .collect()
+                })
+                .collect())
+        }
+
+        fn embed(
+            &mut self,
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            Ok(Vec::new())
+        }
+
+        fn vocab_size(&self) -> usize {
+            64
+        }
+
+        fn num_layers(&self) -> usize {
+            1
+        }
+
+        fn num_heads(&self) -> usize {
+            1
+        }
+    }
+
+    let recorder = PositionRecorder {
+        positions: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+    };
+    let positions = std::sync::Arc::clone(&recorder.positions);
+
+    let mut engine = Engine::new_boxed(Box::new(recorder.clone()), Some(Box::new(recorder)));
+    engine.max_draft_tokens = 2;
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio_mpsc::channel(64);
+    // 3-token prompt: the first draft position must be 2 (the prompt's last
+    // token index), not 3 (a skipped position) and not 0.
+    engine.add_request(Request::new(1, vec![1, 2, 3], 20), tx);
+    // Two steps: on the FIRST, `num_computed_tokens` is still 0 at the time
+    // drafts are generated (so `nct + len - 1` and `nct * (len - 1)` agree);
+    // the second step is what distinguishes them.
+    engine.step().unwrap();
+    engine.step().unwrap();
+
+    let recorded = positions.lock().expect("positions lock").clone();
+    assert_eq!(
+        &recorded[..3],
+        &[2, 3, 4],
+        "the first step must generate drafts at consecutive positions from the \
+         prompt's last token index (max_draft + 1 iterations write the extra \
+         slot's KV); got {recorded:?}"
+    );
+    // On the second step the sequence has advanced: the base must follow
+    // `num_computed_tokens + input_len - 1`, and the positions must stay
+    // consecutive.
+    let second = &recorded[3..6];
+    assert_eq!(
+        second[1] - second[0],
+        1,
+        "draft positions must advance by one per iteration; got {second:?}"
+    );
+    assert_eq!(
+        second[2] - second[1],
+        1,
+        "draft positions must advance by one per iteration; got {second:?}"
+    );
+}
+
 #[test]
 fn test_speculative_prefill_step_advances_frontier_over_accepted_drafts() {
     let target = FakeModel::new(42);

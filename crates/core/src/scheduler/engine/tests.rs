@@ -58,6 +58,81 @@ fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> Schedule
 /// are simply unused capacity) but leaks KV capacity on every speculative step,
 /// and the function's return value is documented as "the number of blocks the
 /// sequence holds afterwards".
+/// Phase-2 preemption must stop as soon as it has freed enough blocks.
+///
+/// `blocks_freed += block_count` at the end of the phase-2 loop is what lets
+/// the `if blocks_freed >= blocks_needed { break }` guard fire. `cargo
+/// mutants` replaced it with `*=`, which pins the counter at 0 (or 0 after the
+/// first multiply) so the guard never fires and EVERY preemptable sequence is
+/// evicted — the whole running set is rolled back to full re-prefill when
+/// freeing one sequence would have been enough. The existing preemption tests
+/// check a single sequence, where the guard cannot be distinguished from its
+/// absence.
+#[test]
+fn test_phase2_preemption_stops_once_enough_blocks_are_freed() {
+    use crate::scheduler::SchedulerEngine;
+    use crate::types::{Request, SchedulerConfig};
+    use std::sync::Arc;
+
+    let config = SchedulerConfig {
+        max_num_seqs: 8,
+        max_num_batched_tokens: 256,
+        max_consecutive_decode: 2,
+        enable_pd_separation: false,
+        prefill_chunk_size: 128,
+        decode_preference_ratio: 0.5,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 8,
+        ..Default::default()
+    };
+    let mut scheduler = SchedulerEngine::new(
+        config,
+        16,
+        Arc::new(crate::metrics::EnhancedMetricsCollector::new()),
+    );
+
+    // Four 32-token prompts (2 blocks each) admitted and decoded, so they all
+    // hold real KV and are preemptable.
+    for i in 0..4u64 {
+        scheduler.add_request(Request::new(i + 1, vec![7; 32], 50));
+    }
+    let _ = scheduler.build_batch();
+    for i in 0..4u64 {
+        scheduler.update(
+            &[i + 1],
+            &[vllm_traits::SampledToken {
+                token: 9,
+                logprob: 0.0,
+                top_logprobs: vec![],
+            }],
+            &[32],
+        );
+    }
+    let occupied = scheduler.running_count();
+    assert!(occupied > 0, "setup: sequences must be running");
+
+    // A 96-token request (6 blocks) that cannot fit alongside all four.
+    scheduler.add_request(Request::new(99, vec![3; 96], 50));
+    let batch = scheduler.build_batch();
+
+    assert!(
+        batch.seq_ids.contains(&99),
+        "the new request must be admitted; batched={:?}",
+        batch.seq_ids
+    );
+    assert_eq!(
+        scheduler.waiting_count(),
+        0,
+        "preemption must free exactly what the new request needs — over-evicting \
+         pushes otherwise-runnable sequences into the waiting queue \
+         (running={}, waiting={})",
+        scheduler.running_count(),
+        scheduler.waiting_count()
+    );
+}
+
 #[test]
 fn test_ensure_blocks_for_tokens_allocates_only_the_shortfall() {
     use crate::scheduler::SchedulerEngine;
