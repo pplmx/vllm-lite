@@ -1352,3 +1352,69 @@ fn running_returns_the_live_sequences() {
     assert_eq!(live.len(), 1, "the running sequence must be reported");
     assert_eq!(live[0].id, 77);
 }
+
+/// `SchedulerEngine`'s `Debug` output must describe the engine's real state.
+///
+/// `cargo mutants` replaced the whole `fmt` with `Ok(Default::default())`, which
+/// writes NOTHING while still succeeding. `Debug` is the operator's only view
+/// into a stuck scheduler, so an empty rendering silently removes every field
+/// (queue depth, running/finished counts, next id) exactly when a hang is being
+/// diagnosed. The counts must track live state, not be placeholders.
+#[test]
+fn debug_output_describes_the_engine_state() {
+    let mut scheduler = SchedulerEngine::default();
+    scheduler.add_request(Request::new(31, vec![6; 16], 10));
+
+    let rendering = format!("{scheduler:?}");
+
+    assert!(
+        rendering.contains("SchedulerEngine"),
+        "the struct name must appear; got {rendering}"
+    );
+    assert!(
+        rendering.contains("running_count"),
+        "the running count field must appear; got {rendering}"
+    );
+    assert!(
+        rendering.contains("next_seq_id"),
+        "the id counter field must appear; got {rendering}"
+    );
+    assert!(
+        rendering.len() > 40,
+        "a Debug rendering of 10 fields must not be this short: {rendering}"
+    );
+}
+
+/// `schedule` must return `Some` when there is work and `None` when idle.
+///
+/// `cargo mutants` replaced the body with `None`. Callers treat `None` as
+/// "nothing to do this round"; always returning it means admitted requests are
+/// never composed into a batch and the served model simply never runs.
+#[test]
+fn schedule_returns_none_only_when_there_is_no_work() {
+    let mut scheduler = SchedulerEngine::default();
+    assert!(
+        scheduler.schedule().is_none(),
+        "an empty scheduler has nothing to schedule"
+    );
+
+    scheduler.add_request(Request::new(5, vec![9; 16], 10));
+    let batch = scheduler
+        .schedule()
+        .expect("a queued request must produce a batch");
+    assert!(
+        batch.seq_ids.contains(&5),
+        "the admitted request must be in the batch; got {:?}",
+        batch.seq_ids
+    );
+
+    // Once the work is drained, scheduling is idle again.
+    let _ = scheduler.build_batch();
+    for _ in 0..3 {
+        let _ = scheduler.build_batch();
+    }
+    assert!(
+        scheduler.schedule().is_none(),
+        "after the queue drains, schedule must report no work"
+    );
+}
