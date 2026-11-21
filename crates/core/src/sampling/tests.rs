@@ -2081,3 +2081,42 @@ fn sample_batch_greedy_at_zero_temperature_without_scaling() {
         );
     }
 }
+
+/// `sample_batch` must apply the repeat penalty only when it is BOTH enabled
+/// and backed by history.
+///
+/// The guard is `(repeat_penalty - 1.0).abs() > EPSILON && !seen.is_empty()`.
+/// Seven operator mutants of that one line survived, because no test drove
+/// `sample_batch` through the penalty at all. `T = 0` makes each case a
+/// deterministic greedy pick, so the three arms are cleanly separable:
+/// a strong penalty demotes the repeated argmax, a neutral penalty changes
+/// nothing, and an empty history disables the penalty regardless of its value.
+#[test]
+fn sample_batch_repeat_penalty_requires_history_and_a_non_neutral_value() {
+    // logits [0, 3, 1]; token 1 is the argmax.
+    let logits = vec![vec![0.0_f32, 3.0, 1.0]];
+
+    // Penalising the argmax hard enough (3.0 / 8.0 = 0.375) drops it below
+    // token 2 (1.0), so the greedy pick moves.
+    let with_history: Vec<Vec<TokenId>> = vec![vec![1]];
+    assert_eq!(
+        sample_batch(&logits, 0.0, 1.0, 0, 8.0, &with_history)[0],
+        2,
+        "a repeat penalty of 8.0 on the argmax must demote it below token 2"
+    );
+
+    // A neutral penalty is a no-op even with history.
+    assert_eq!(
+        sample_batch(&logits, 0.0, 1.0, 0, 1.0, &with_history)[0],
+        1,
+        "repeat_penalty = 1.0 must leave the argmax untouched"
+    );
+
+    // Without history the penalty cannot apply, however large it is.
+    let no_history: Vec<Vec<TokenId>> = vec![vec![]];
+    assert_eq!(
+        sample_batch(&logits, 0.0, 1.0, 0, 8.0, &no_history)[0],
+        1,
+        "an empty history must disable the penalty regardless of its value"
+    );
+}

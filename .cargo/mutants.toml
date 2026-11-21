@@ -70,4 +70,20 @@ exclude_re = [
   # Differs only at `|T - 1| == f32::EPSILON`, where both branches divide by a
   # temperature within one f32 ulp of 1.0 - unobservable in the result.
   'sampling\.rs:372:63: replace > with >= in sample_batch',
+
+  # `(repeat_penalty - 1.0).abs() > EPSILON` guards a division BY the penalty.
+  # Replacing `-` with `+` or `/` makes the guard true at `penalty == 1.0`,
+  # where `apply_repeat_penalty` divides by 1.0 and changes nothing; for every
+  # other penalty the original guard was already true.
+  'sampling\.rs:368:32: replace - with \+ in sample_batch',
+  'sampling\.rs:368:32: replace - with / in sample_batch',
+
+  # Differs only at `|penalty - 1| == f32::EPSILON`, a penalty within one f32
+  # ulp of 1.0, where the division cannot move the result.
+  'sampling\.rs:368:45: replace > with >= in sample_batch',
+
+  # `||` opens two paths that were closed: (empty history, any penalty) makes
+  # `apply_repeat_penalty` iterate nothing, and (non-neutral penalty,
+  # penalty == 1.0) divides by 1.0. Both are no-ops.
+  'sampling\.rs:368:60: replace && with \|\| in sample_batch',
 ]

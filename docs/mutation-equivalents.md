@@ -140,6 +140,23 @@ The `temperature > 0.0` half of the same guard is NOT equivalent and is
 covered: `>=` admits `T = 0`, and a logit of exactly `0.0` divides to
 `0.0 / 0.0 = NaN`, which `greedy_sample` then runs on.
 
+### `sampling.rs:368` — the repeat-penalty guard
+
+`if (repeat_penalty - 1.0).abs() > EPSILON && !seen.is_empty() { apply_repeat_penalty(..) }`.
+
+- Replacing `-` with `+` or `/` makes the predicate true at `penalty == 1.0`,
+  where `apply_repeat_penalty` divides by 1.0; for every other penalty the
+  original guard was already true, so the work performed is identical.
+- `>` to `>=` differs only when `|penalty - 1|` is exactly `f32::EPSILON` — a
+  penalty within one f32 ulp of 1.0.
+- `&&` to `||` opens two paths the `&&` closes, and both are no-ops: an empty
+  history makes `apply_repeat_penalty` iterate nothing, and a non-neutral
+  penalty paired with `penalty == 1.0` divides by 1.0.
+
+The `!seen.is_empty()` half is NOT equivalent — deleting the `!` inverts the
+history test and is covered by
+`sample_batch_repeat_penalty_requires_history_and_a_non_neutral_value`.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be
