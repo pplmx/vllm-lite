@@ -20,6 +20,89 @@
 //! are covered by property tests in other modules.
 use super::*;
 
+/// `snapshot()` latency percentiles must use the documented index formula.
+///
+/// The percentiles are `xs[floor(p * (n - 1))]` over the sorted window. No test
+/// compared them against a value, so `cargo mutants` could turn the `- 1` into
+/// `+` or `/`, or the index into a modulo, without a failure. Samples `1..=100`
+/// make every rank unambiguous.
+#[test]
+fn test_snapshot_percentiles_match_the_index_formula() {
+    let collector = MetricsCollector::new();
+    for ms in 1..=100 {
+        #[allow(clippy::cast_precision_loss)]
+        collector.record_latency(f64::from(ms));
+    }
+
+    let snapshot = collector.snapshot();
+
+    // floor(p * 99) -> p50 = 49, p90 = 89, p99 = 98 over 1..=100.
+    assert!(
+        (snapshot.p50_latency_ms - 50.0).abs() < 1e-6,
+        "p50 of 1..=100 must be 50; got {}",
+        snapshot.p50_latency_ms
+    );
+    assert!(
+        (snapshot.p90_latency_ms - 90.0).abs() < 1e-6,
+        "p90 of 1..=100 must be 90; got {}",
+        snapshot.p90_latency_ms
+    );
+    assert!(
+        (snapshot.p99_latency_ms - 99.0).abs() < 1e-6,
+        "p99 of 1..=100 must be 99; got {}",
+        snapshot.p99_latency_ms
+    );
+    assert!(
+        (snapshot.avg_latency_ms - 50.5).abs() < 1e-6,
+        "mean of 1..=100 must be 50.5; got {}",
+        snapshot.avg_latency_ms
+    );
+}
+
+/// Throughput is phase tokens divided by uptime, and must be non-zero once
+/// tokens have been recorded.
+///
+/// `prefill_throughput` / `decode_throughput` divide by `uptime` behind a
+/// `uptime > 0.0` guard. `cargo mutants` flipped that guard and the divisions
+/// with no failure, because no test ever recorded phase tokens and then read
+/// the throughput back.
+#[test]
+fn test_snapshot_throughput_is_positive_after_recording_phase_tokens() {
+    let collector = MetricsCollector::new();
+    collector.record_prefill_tokens(1_000);
+    collector.record_decode_tokens(500);
+
+    let snapshot = collector.snapshot();
+
+    assert!(
+        snapshot.prefill_throughput > 0.0,
+        "1000 prefill tokens over a non-zero uptime must yield positive \
+         throughput; got {}",
+        snapshot.prefill_throughput
+    );
+    assert!(
+        snapshot.decode_throughput > 0.0,
+        "500 decode tokens over a non-zero uptime must yield positive \
+         throughput; got {}",
+        snapshot.decode_throughput
+    );
+    // Decode recorded half as many tokens, so its rate must be strictly lower.
+    assert!(
+        snapshot.decode_throughput < snapshot.prefill_throughput,
+        "decode (500) must be slower than prefill (1000); got {} vs {}",
+        snapshot.decode_throughput,
+        snapshot.prefill_throughput
+    );
+
+    // A collector with no phase tokens reports exactly zero, not NaN.
+    let idle = MetricsCollector::new();
+    let snapshot = idle.snapshot();
+    assert!(
+        snapshot.prefill_throughput.abs() < 1e-9 && snapshot.decode_throughput.abs() < 1e-9,
+        "an idle collector must report 0 throughput"
+    );
+}
+
 #[test]
 fn test_metrics_snapshot_new_fields() {
     let collector = MetricsCollector::new();
