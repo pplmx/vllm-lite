@@ -124,6 +124,22 @@ with `f32` the term `exp(v + max_val)` overflows to `inf` once `max_val` passes
 about 88, the sum becomes `inf`, and every probability collapses to `NaN`.
 `renormalized_top_p_logprobs_stays_finite_for_large_logits` pins that.
 
+### `sampling.rs:372` — the temperature-scaling guard
+
+`if temperature > 0.0 && (temperature - 1.0).abs() > EPSILON { *l /= temperature }`.
+
+- Replacing `-` with `+` or `/` changes the predicate to
+  `|T + 1| > EPSILON` / `|T / 1| > EPSILON`, both true at `T == 1.0`. The
+  guard then performs `*l /= 1.0`, which is a no-op; for every other
+  temperature the original guard was already true, so the work is identical.
+- Relaxing `>` to `>=` differs only when `|T - 1|` is exactly `f32::EPSILON`.
+  In that case the mutant divides by a temperature within one f32 ulp of 1.0,
+  which cannot change the resulting sampling distribution.
+
+The `temperature > 0.0` half of the same guard is NOT equivalent and is
+covered: `>=` admits `T = 0`, and a logit of exactly `0.0` divides to
+`0.0 / 0.0 = NaN`, which `greedy_sample` then runs on.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

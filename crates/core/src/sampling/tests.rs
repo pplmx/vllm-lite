@@ -1986,3 +1986,98 @@ fn sample_batch_top_k_masks_below_the_threshold() {
          k = 1 assertion above proves nothing"
     );
 }
+
+/// `sample_batch` must apply temperature scaling, and skip it at `T = 1.0`.
+///
+/// The guard is `temperature > 0.0 && (temperature - 1.0).abs() > EPSILON`,
+/// followed by `*l /= temperature`. `cargo mutants` found six variants of those
+/// three operators survive, because existing tests only check that a token is
+/// produced. Temperature is what turns a flat distribution into a sharp one, so
+/// its effect is measurable: at `T = 0.5` the argmax dominates and the tail
+/// becomes unreachable, while at `T = 1.0` the tail stays reachable.
+#[test]
+fn sample_batch_applies_temperature_scaling() {
+    // logits [2, 1, 0]: at T = 0.5 they become [4, 2, 0], so token 0 takes
+    // ~0.867 of the mass and the tail is effectively unreachable.
+    let logits = vec![vec![2.0_f32, 1.0, 0.0]];
+    let seen: Vec<Vec<TokenId>> = vec![vec![]];
+
+    // Cold: the argmax should dominate the sample.
+    let mut cold_argmax = 0usize;
+    for _ in 0..200 {
+        if sample_batch(&logits, 0.5, 1.0, 0, 1.0, &seen)[0] == 0 {
+            cold_argmax += 1;
+        }
+    }
+    assert!(
+        cold_argmax >= 150,
+        "at T = 0.5 the argmax must take most draws (~0.867 expected); got \
+         {cold_argmax}/200, which means the logits were NOT divided by the \
+         temperature"
+    );
+
+    // Hot: the same logits with T = 1.0 must reproduce the unscaled mix, so
+    // the tail token is reachable. This is the control that stops the cold
+    // assertion above from passing vacuously.
+    let mut hot_tail = 0usize;
+    for _ in 0..400 {
+        if sample_batch(&logits, 1.0, 1.0, 0, 1.0, &seen)[0] == 2 {
+            hot_tail += 1;
+        }
+    }
+    assert!(
+        hot_tail > 0,
+        "at T = 1.0 the tail token (logit 0.0, ~0.09 of the mass) must be \
+         reachable, otherwise the cold assertion proves nothing"
+    );
+
+    // T = 2.0 flattens: the argmax share must DROP below its T = 1.0 share.
+    let mut warm_argmax = 0usize;
+    for _ in 0..400 {
+        if sample_batch(&logits, 2.0, 1.0, 0, 1.0, &seen)[0] == 0 {
+            warm_argmax += 1;
+        }
+    }
+    let cold_share = cold_argmax as f32 / 200.0;
+    let warm_share = warm_argmax as f32 / 400.0;
+    assert!(
+        warm_share < cold_share - 0.1,
+        "T = 2.0 must flatten the distribution relative to T = 0.5; got \
+         {warm_share:.3} vs {cold_share:.3}"
+    );
+}
+
+/// `temperature = 0` must select the argmax WITHOUT scaling the logits.
+///
+/// The guard opens with `temperature > 0.0`. Relaxing it to `>=` lets
+/// `T = 0` through into `*l /= temperature`, and a logit of exactly 0.0
+/// divides to `0.0 / 0.0 = NaN` rather than `inf`. The dispatch below still
+/// routes `T = 0` to `greedy_sample`, but it now runs on a NaN-poisoned row,
+/// where the argmax is whatever the comparison happens to favour. The
+/// unscaled row has an unambiguous answer.
+#[test]
+fn sample_batch_greedy_at_zero_temperature_without_scaling() {
+    // A logit of exactly 0.0 is what turns division by zero into NaN.
+    let logits = vec![vec![1.0_f32, 0.0, -1.0]];
+    let seen: Vec<Vec<TokenId>> = vec![vec![]];
+
+    for _ in 0..50 {
+        let out = sample_batch(&logits, 0.0, 1.0, 0, 1.0, &seen);
+        assert_eq!(
+            out[0], 0,
+            "T = 0 must pick the argmax (token 0) from the UNSCALED row; a \
+             NaN-poisoned row can pick anything"
+        );
+    }
+
+    // Same row with the argmax NOT first, so a positional accident cannot
+    // make the assertion above pass.
+    let shifted = vec![vec![-1.0_f32, 0.0, 3.0]];
+    for _ in 0..50 {
+        let out = sample_batch(&shifted, 0.0, 1.0, 0, 1.0, &seen);
+        assert_eq!(
+            out[0], 2,
+            "T = 0 must pick the argmax (token 2) from the unscaled row"
+        );
+    }
+}
