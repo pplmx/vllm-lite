@@ -1851,3 +1851,114 @@ fn scheduler_wait_time_is_recorded_in_milliseconds() {
          A `+` mutant would give ~1000 and a `/` mutant ~0.00002."
     );
 }
+
+/// An EXACT block fit must not trigger preemption.
+///
+/// `build_batch` gates preemption on `additional > available_blocks()`. With
+/// `>=` an exact fit also calls `execute_preemption`, whose phase 1 selects
+/// victims by LRU — and a decode victim is preempted WHOLESALE, its whole table
+/// released and its progress reset to a full re-prefill, to free blocks the new
+/// sequence did not even need. The batch must be built from the blocks already
+/// free.
+#[test]
+fn exact_block_fit_does_not_preempt() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    // Pool of 6 blocks. One decoder holds 4, leaving exactly 2 free.
+    let mut engine = create_test_engine(SchedulerConfig::default(), 6);
+
+    let mut decoder = Sequence {
+        id: 1,
+        tokens: vec![1; block_size * 4],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size * 4,
+        prompt_len: block_size * 4,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut decoder));
+    assert_eq!(decoder.kv_blocks.len(), 4, "setup: decoder holds 4 blocks");
+    engine.running.push(decoder);
+    assert_eq!(
+        engine.memory.available_blocks(),
+        2,
+        "setup: exactly two blocks free"
+    );
+
+    // A new prompt of exactly 2 blocks: an exact fit for the free space.
+    engine.add_request(Request::new(2, vec![2; block_size * 2], 10));
+    let batch = engine.build_batch();
+
+    assert!(
+        batch.seq_ids.contains(&2),
+        "the exactly-fitting request must be admitted; got {:?}",
+        batch.seq_ids
+    );
+    assert!(
+        engine.running.iter().any(|s| s.id == 1),
+        "the running decoder must NOT be preempted for an exact fit; \
+         running = {:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        engine
+            .running
+            .iter()
+            .find(|s| s.id == 1)
+            .map(|s| s.kv_blocks.len()),
+        Some(4),
+        "the decoder's table must be untouched"
+    );
+}
+
+/// A request needing LESS than the free pool must not preempt anything.
+///
+/// Companion to `exact_block_fit_does_not_preempt`: `>` relaxed to `<` INVERTS
+/// the gate, so the exact fit passes while this case — where the need is
+/// smaller than the free space — wrongly preempts a healthy decoder, rolling it
+/// back to a full re-prefill to free blocks nobody asked for.
+#[test]
+fn smaller_than_free_request_does_not_preempt() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 8);
+
+    let mut holder = Sequence {
+        id: 10,
+        tokens: vec![1; block_size * 2],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size * 2,
+        prompt_len: block_size * 2,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut holder));
+    engine.running.push(holder);
+
+    let free = engine.memory.available_blocks();
+    assert!(free >= 3, "setup: several blocks free, got {free}");
+
+    // One block needed against several free: additional < available.
+    engine.add_request(Request::new(11, vec![3; block_size], 10));
+    let batch = engine.build_batch();
+
+    assert!(
+        batch.seq_ids.contains(&11),
+        "the small request must be admitted; got {:?}",
+        batch.seq_ids
+    );
+    assert!(
+        engine.running.iter().any(|s| s.id == 10),
+        "nothing may be preempted when the need is SMALLER than the free pool; \
+         running = {:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+}
