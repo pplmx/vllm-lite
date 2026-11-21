@@ -113,18 +113,24 @@ impl crate::engine::Engine {
         // withhold it (OpenAI: "the returned text will not contain the stop
         // sequence"). The fold touches only scheduler state, so ordering it
         // ahead of the channel writes changes nothing it observes.
-        let collected: Vec<(SeqId, SampledToken)> = verified
-            .iter()
-            .filter(|(seq_id, _)| !stale_by_seq.get(seq_id).copied().unwrap_or(false))
-            .cloned()
-            .collect();
-        self.fold_speculative_update(&batch, &verified, &accepted_counts, &stale_by_seq);
+        let folded =
+            self.fold_speculative_update(&batch, &verified, &accepted_counts, &stale_by_seq);
 
-        // Emit verified tokens to their client channels (gating stale
-        // mid-chunk prefill predictions) — `results` still
-        // carries every entry so the fold above advanced frontiers from it.
+        // Emit what the fold KEPT, in burst order. A `stop` that completed
+        // inside the burst trimmed its tail there, so the full burst must not
+        // reach the send loop: without the trim it streams the stop sequence,
+        // and re-creating a `pending_stream` entry for an already-ended
+        // sequence would leave it there forever.
+        let collected: Vec<(SeqId, SampledToken)> =
+            keep_folded_tokens(&verified, &folded, &stale_by_seq);
+
         let mut disconnected = Vec::new();
         let results = self.emit_verified_tokens(&collected, &stale_by_seq, &mut disconnected);
+
+        // End the sequences whose `stop` completed INSIDE their burst, before
+        // the closed-channel pass (so a disconnect of this same step does not
+        // finalize them twice under different reasons).
+        self.finalize_mid_burst_stops(&folded);
 
         // cancel sequences whose response channel closed
         // (client disconnect) — after the fold, so the fold's per-sequence
@@ -327,9 +333,11 @@ impl crate::engine::Engine {
         results: &[(SeqId, SampledToken)],
         accepted_counts: &[usize],
         stale_by_seq: &std::collections::HashMap<SeqId, bool>,
-    ) {
+    ) -> std::collections::HashMap<SeqId, FoldedBurst> {
         let mut per_seq: Vec<(SeqId, Vec<SampledToken>)> = Vec::new();
         let mut seq_index: std::collections::HashMap<SeqId, usize> =
+            std::collections::HashMap::new();
+        let mut folded: std::collections::HashMap<SeqId, FoldedBurst> =
             std::collections::HashMap::new();
         for (seq_id, sampled) in results {
             if let Some(&i) = seq_index.get(seq_id) {
@@ -358,17 +366,138 @@ impl crate::engine::Engine {
             // continuation starting at `prompt_len`. `stale_by_seq` encodes
             // exactly this mid-chunk predicate (start + chunk < prompt_len).
             let mid_chunk = stale_by_seq.get(seq_id).copied().unwrap_or(false);
+            // The burst can also complete a `stop` sequence, and it is
+            // folded into `seq.tokens` as ONE update: by the time the send
+            // loop and `finalize_stop_sequences` look at the sequence the
+            // match is no longer at the tail, so neither of them can see it.
+            // Cut the burst here, at the fold point — the matching stop and
+            // everything after it are output the client must never receive.
+            // A mid-chunk prefill's entries are stale predictions the send
+            // loop discards, so a stop "match" in them is not output and
+            // must not end the sequence.
+            let trim = if mid_chunk {
+                BurstTrim {
+                    kept: tokens.clone(),
+                    stop_starts_before_burst: false,
+                }
+            } else {
+                self.trim_burst_at_stop(*seq_id, tokens)
+            };
+            let stop_starts_before_burst = trim.stop_starts_before_burst;
+            let kept = trim.kept;
+            let stopped = kept.len() < tokens.len();
             let input_count = if mid_chunk {
                 chunk_len
             } else {
-                chunk_len + accepted_counts[i]
+                // Accepted tokens after the cut have no kept successor, so
+                // they must not advance the computed frontier either.
+                chunk_len + accepted_counts[i].min(kept.len().saturating_sub(1))
             };
             self.scheduler.update_speculative(
                 std::slice::from_ref(seq_id),
-                std::slice::from_ref(tokens),
+                std::slice::from_ref(&kept),
                 std::slice::from_ref(&input_count),
             );
+            folded.insert(
+                *seq_id,
+                FoldedBurst {
+                    tokens: kept,
+                    stopped,
+                    stop_starts_before_burst,
+                },
+            );
         }
+        folded
+    }
+
+    /// End every sequence whose `stop` completed INSIDE its speculative
+    /// burst, reporting [`FinishReason::Stop`].
+    ///
+    /// This replaces [`Self::finalize_stop_sequences`] for those sequences:
+    /// that pass suffix-matches the folded sequence and therefore cannot see
+    /// a stop the fold already cut away. It runs after the send loop, so the
+    /// tokens generated before the stop reach the client first.
+    ///
+    /// `stop_ended` is recorded only when the match began in an earlier
+    /// burst. The send loop holds back the trailing `stop_len - 1` tokens of
+    /// every burst precisely because they may start a stop: when one of them
+    /// did, they ARE the stop and `finalize_finished` must discard them. A
+    /// match contained entirely in this burst leaves only ordinary output in
+    /// that buffer, which must be flushed instead.
+    fn finalize_mid_burst_stops(&mut self, folded: &std::collections::HashMap<SeqId, FoldedBurst>) {
+        for (seq_id, burst) in folded {
+            if !burst.stopped {
+                continue;
+            }
+            tracing::debug!(
+                seq_id = %seq_id,
+                kept = burst.tokens.len(),
+                "stop completed inside a speculative burst; ending the sequence"
+            );
+            if burst.stop_starts_before_burst {
+                self.scheduler.stop_ended.insert(*seq_id);
+            }
+            self.scheduler.finish_sequence(*seq_id);
+            self.finalize_finished(*seq_id, FinishReason::Stop);
+        }
+    }
+
+    /// Cut a speculative burst at the first point where it completes one of
+    /// the sequence's configured `stop` token sequences.
+    ///
+    /// The burst is returned untouched when the sequence has no stops, when
+    /// nothing matches, or when it is unknown. On a match the stop and every
+    /// token after it are dropped — the stop is what the client must not
+    /// receive, and the tokens past it were produced by a sequence that has
+    /// already stopped — and `stop_starts_before_burst` reports whether the
+    /// match began in tokens generated by an EARLIER step (a stop can span
+    /// bursts).
+    ///
+    /// The window is anchored at `seq.prompt_len`, mirroring
+    /// [`Self::finalize_stop_sequences`]: a stop-shaped suffix of the PROMPT
+    /// is never a match.
+    fn trim_burst_at_stop(&self, seq_id: SeqId, tokens: &[SampledToken]) -> BurstTrim {
+        let unchanged = BurstTrim {
+            kept: tokens.to_vec(),
+            stop_starts_before_burst: false,
+        };
+        let Some(seq) = self.scheduler.get_sequence(seq_id) else {
+            return unchanged;
+        };
+        let Some(stops) = seq
+            .sampling_params
+            .stop_token_sequences
+            .as_ref()
+            .filter(|s| !s.is_empty())
+        else {
+            return unchanged;
+        };
+        // Only the newly generated region can match; the prompt's own tail is
+        // excluded exactly as in `finalize_stop_sequences`.
+        let mut window: Vec<vllm_traits::TokenId> =
+            seq.tokens.get(seq.prompt_len..).unwrap_or(&[]).to_vec();
+        for (idx, sampled) in tokens.iter().enumerate() {
+            window.push(sampled.token);
+            if let Some(stop_len) = crate::sampling::matched_stop_len(&window, stops) {
+                // The match may reach back into tokens generated by an
+                // earlier step, in which case this burst contributes only the
+                // stop's last `matched` tokens. Cut from where it began.
+                let matched = idx + 1;
+                let keep = matched.saturating_sub(stop_len);
+                tracing::debug!(
+                    seq_id = %seq_id,
+                    kept = keep,
+                    stop_len,
+                    stop_starts_before_burst = stop_len > matched,
+                    "stop completed inside a speculative burst; trimming the tail"
+                );
+                return BurstTrim {
+                    kept: tokens[..keep].to_vec(),
+                    stop_starts_before_burst: stop_len > matched,
+                };
+            }
+        }
+        unchanged
     }
 
     /// Grow each batch sequence's block table to cover the full speculative
@@ -400,4 +529,49 @@ impl crate::engine::Engine {
             }
         }
     }
+}
+
+/// The tokens the fold kept for the client, in burst order.
+///
+/// `verified` is flat (a sequence contributes several entries per burst) and
+/// `folded` holds the post-trim list per sequence, so the two are walked in
+/// lockstep: every burst entry for a sequence takes the next kept token, and
+/// entries past a trim simply run out. Stale mid-chunk prefill predictions
+/// are dropped, as in the send loop.
+fn keep_folded_tokens(
+    verified: &[(SeqId, SampledToken)],
+    folded: &std::collections::HashMap<SeqId, FoldedBurst>,
+    stale_by_seq: &std::collections::HashMap<SeqId, bool>,
+) -> Vec<(SeqId, SampledToken)> {
+    let mut cursor: std::collections::HashMap<SeqId, usize> = std::collections::HashMap::new();
+    verified
+        .iter()
+        .filter(|(seq_id, _)| !stale_by_seq.get(seq_id).copied().unwrap_or(false))
+        .filter_map(|(seq_id, _)| {
+            let next = cursor.entry(*seq_id).or_insert(0);
+            let token = folded.get(seq_id)?.tokens.get(*next)?.clone();
+            *next += 1;
+            Some((*seq_id, token))
+        })
+        .collect()
+}
+
+/// Result of cutting a speculative burst at a `stop` match.
+struct BurstTrim {
+    /// Burst tokens preceding the match — the only ones the client may
+    /// receive.
+    kept: Vec<SampledToken>,
+    /// The match began in tokens generated by an earlier step, so its opening
+    /// tokens sit in the send loop's hold-back buffer rather than in this
+    /// burst.
+    stop_starts_before_burst: bool,
+}
+
+/// What a speculative burst contributed to one sequence after the `stop`
+/// trim: the tokens kept for the client, and whether the fold cut the burst
+/// short (a stop completed inside it).
+struct FoldedBurst {
+    tokens: Vec<SampledToken>,
+    stopped: bool,
+    stop_starts_before_burst: bool,
 }
