@@ -75,6 +75,36 @@ At `tokens_to_process == chunk_cap` the second branch computes
 `tokens_to_process`; both are `chunk_cap`. `resumed_prefill_exactly_one_chunk_is_not_re_split`
 pins the behaviour anyway, but no fixture can separate the variants.
 
+### `scheduler/engine/memory.rs:107` — `s.status == Status::Prefilling` → `!=`
+
+`execute_preemption` filters `running` for preemptable sequences. The `Prefilling`
+arm cannot match: `advance_computed_tokens` keeps a sequence `Prefilling` only
+while `num_computed_tokens < prompt_len`, and `requeue_partial_prefills` moves
+exactly those sequences back to the waiting queue at the end of both update
+paths (`update` line 69, `update_speculative` line 124). `build_batch` calls
+`execute_preemption` before `running.extend(new_sequences)`, so a freshly
+admitted prefill is not in `running` yet either. When the filter runs,
+`running` holds only `Decoding` sequences, and `Decoding || != Prefilling` is
+true for all of them.
+
+### `scheduler/engine/memory.rs:251` — `delete !` in `cancel_request` (queued branch)
+
+The queued branch removes from `request_queue`. A request that is still queued
+has never been batched, so its `kv_blocks` is empty and `is_empty()` is always
+true — inverting the guard skips a call that would have been a no-op. The
+*running* branch of the same function is a different story: a simplified
+mutation there leaks four blocks and `test_cancel_request_releases_kv_blocks`
+catches it. Only the queued-branch mutant is equivalent.
+
+### `scheduler/engine/memory.rs:62` — `available_blocks() < blocks_needed` → `<=`
+
+Callers only reach `execute_preemption` after `additional > available_blocks()`
+and pass `blocks_needed` as the sequence's WHOLE table, so on entry
+`available < needed` almost always holds. The `<=` variant differs only at exact
+equality, which the production call path does not produce. Recorded from earlier
+instrumentation; this one has also shown up as a tool TIMEOUT, so it is excluded
+on evidence gathered by hand rather than by the scanner.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

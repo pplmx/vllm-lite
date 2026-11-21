@@ -996,6 +996,46 @@ fn test_seed_zero_is_valid_seed() {
     assert!(token_nonzero.token < logits.len() as TokenId);
 }
 
+/// `random_f32` must produce values in `[0, 1)`.
+///
+/// Every temperature/top-p draw multiplies or compares against this value, so a
+/// constant outside the unit interval silently breaks unseeded sampling for
+/// every request. `cargo mutants` replaced the whole body with `-1.0` and the
+/// suite stayed green: the existing seed test only checks that a `seed = None`
+/// request still produces a token, which a constant also does.
+#[test]
+fn random_f32_stays_in_the_unit_interval() {
+    let mut seen_distinct = std::collections::HashSet::new();
+    for _ in 0..512 {
+        let value = random_f32();
+        assert!(
+            (0.0..1.0).contains(&value),
+            "random_f32 must stay in [0, 1); got {value}"
+        );
+        // Two values in a 512-draw sample colliding would indicate a constant.
+        seen_distinct.insert(value.to_bits());
+    }
+    assert!(
+        seen_distinct.len() > 1,
+        "random_f32 must vary between draws, not return a constant"
+    );
+}
+
+/// `splitmix64` must be the documented bijection, not a re-rolled hash.
+///
+/// The seeded stream is defined by these exact constants and shifts; changing
+/// any of them changes every seeded output. `cargo mutants` flipped `>>` to
+/// `<<` and `^` to `&` and nothing failed, so the reproducibility contract had
+/// no regression test. The values below are computed from the published
+/// SplitMix64 finalizer.
+#[test]
+fn splitmix64_matches_the_reference_finalizer() {
+    // Reference values computed with the constants in the implementation.
+    assert_eq!(splitmix64(0), 0xE220_A839_7B1D_CDAF);
+    assert_eq!(splitmix64(1), 0x910A_2DEC_8902_5CC1);
+    assert_eq!(splitmix64(u64::MAX), 0xE4D9_7177_1B65_2C20);
+}
+
 #[test]
 fn test_seed_none_falls_back_to_thread_rng() {
     // seed = None must NOT crash and must NOT silently use a stale

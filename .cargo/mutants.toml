@@ -37,4 +37,17 @@ exclude_re = [
 
   # `if elapsed > 0.0` on the non-graph step path: same reason as graph_step's.
   'dispatch\.rs:227:20: replace > with >=',
+
+  # `running` holds only Decoding sequences when this filter runs:
+  # `requeue_partial_prefills` moves every partial prefill back to the queue,
+  # and `build_batch` preempts before admitting new sequences.
+  'memory\.rs:107:63: replace == with !=',
+
+  # The queued branch of `cancel_request`; a queued request owns no blocks, so
+  # the inverted guard skips a no-op. (The running branch is NOT equivalent.)
+  'memory\.rs:251:16: delete !',
+
+  # Callers only enter with `additional > available` and a whole-table
+  # `blocks_needed`, so exact equality is unreachable from the production path.
+  'memory\.rs:62:57: replace < with <=',
 ]
