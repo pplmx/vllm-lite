@@ -75,10 +75,25 @@ jobs:
         #     verification) → 95% floor
         #   - engine/cuda_graph.rs: no prior scan; 50% floor
         #     until first nightly run establishes a real baseline
+        #
+        # engine/spec_dispatch was added after a manual scan of the
+        # module found a surviving mutant that mattered: flipping
+        # `completes_stop || ended_on_stop` to `&&` in
+        # `emit_verified_tokens` leaked every tail stop on the
+        # speculative path, and no test in the workspace noticed.
+        # Two defect batches fixed in this module (mid-burst stop,
+        # mid-burst EOS) had also gone undetected for as long — the
+        # module simply was not scanned. Observed score at add time:
+        # 83.67% (41 caught / 6 missed / 2 timeout); the 75% floor
+        # leaves headroom for the known-equivalent mutants
+        # (`elapsed > 0.0` latency guard, the `total_draft > 0`
+        # metrics guard, the `ensure_blocks_for_tokens` idempotent
+        # re-entry, and the `stop_len > matched` log field).
         module:
           - { path: sampling.rs,               baseline: '40' }
           - { path: scheduler/policy,          baseline: '95' }
           - { path: engine/cuda_graph.rs,      baseline: '50' }
+          - { path: engine/spec_dispatch,      baseline: '75' }
     steps:
       - uses: actions/checkout@v7
 
@@ -122,13 +137,27 @@ jobs:
       # hatch — and the per-PR `ci` job's `cargo nextest run` will
       # have already caught the underlying test failure separately.
       #
-      # The `module.path` is fed verbatim to `--file`; cargo-mutants
-      # accepts a single file or a directory (recursive scan).
+      # `module.path` is fed to `--file`, which is a glob; directory-shaped
+      # entries get a `/**/*.rs` glob (see the comment on the step below).
       - name: Run mutation scan (${{ matrix.module.path }})
         run: |
+          # `--file` is a GLOB, not a directory. The two directory-shaped
+          # entries used to match no files at all, so those scans examined
+          # ZERO mutants and their baselines gated nothing (verified:
+          # `--file crates/core/src/scheduler/policy` lists 0,
+          # `--file 'crates/core/src/scheduler/policy/**/*.rs'` lists 14).
+          # File-shaped entries (sampling.rs, engine/cuda_graph.rs) are
+          # valid globs as-is.
+          TARGET="crates/core/src/${{ matrix.module.path }}"
+          if [ -d "$TARGET" ]; then
+            FILE_ARG="${TARGET}/**/*.rs"
+          else
+            FILE_ARG="$TARGET"
+          fi
+          echo "scanning: $FILE_ARG"
           cargo mutants \
             --package vllm-core \
-            --file "crates/core/src/${{ matrix.module.path }}" \
+            --file "$FILE_ARG" \
             --timeout 30 \
             --jobs $(($(nproc) > 4 ? 4 : $(nproc))) \
             --output .mutants-out/ \
@@ -140,15 +169,27 @@ jobs:
             .mutants-out/mutants.out \
             "${{ matrix.module.baseline }}"
 
+      # `mutants.json` carries no outcome field (cargo-mutants 27.x lists
+      # each mutant's diff/span/function only), so this step used to select
+      # `.status == "SURVIVED"` from a key that does not exist and print
+      # nothing even when mutants survived. The outcomes live in the
+      # per-category .txt files instead.
       - name: Render survived-mutant summary
         if: always()
         run: |
-          if [ -f .mutants-out/mutants.out/mutants.json ]; then
-            jq -r '.[] | select(.status == "SURVIVED") |
-              "\(.file):\(.span.start_line)  \(.mutant_name)"' \
-              .mutants-out/mutants.out/mutants.json | head -30
+          SCAN_DIR=.mutants-out/mutants.out
+          if [ -d "$SCAN_DIR" ]; then
+            for outcome in missed timeout; do
+              if [ -s "$SCAN_DIR/$outcome.txt" ]; then
+                echo "=== $outcome ==="
+                head -30 "$SCAN_DIR/$outcome.txt"
+              fi
+            done
+            if [ ! -s "$SCAN_DIR/missed.txt" ] && [ ! -s "$SCAN_DIR/timeout.txt" ]; then
+              echo "no undetected mutants"
+            fi
           else
-            echo "no mutants.json — scan failed or skipped"
+            echo "no $SCAN_DIR — scan failed or skipped"
           fi
 
       - name: Upload mutation artifacts

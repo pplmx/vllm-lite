@@ -332,8 +332,12 @@ mutants MODULE:
     #!/usr/bin/env bash
     set -euo pipefail
     TARGET="crates/core/src/{{MODULE}}"
+    # `cargo mutants --file` takes a GLOB, not a directory: passing a bare
+    # directory matched no files and the scan silently examined nothing
+    # (verified: `--file crates/core/src/scheduler/policy` lists 0 mutants,
+    # `--file 'crates/core/src/scheduler/policy/**/*.rs'` lists 14).
     if [ -d "$TARGET" ]; then
-        FILE_ARGS=$(find "$TARGET" -name '*.rs' -type f -printf '--file=%p\n')
+        FILE_ARGS="--file=${TARGET}/**/*.rs"
     elif [ -f "$TARGET" ]; then
         FILE_ARGS="--file=$TARGET"
     elif [ -f "${TARGET}.rs" ]; then
@@ -344,7 +348,7 @@ mutants MODULE:
     fi
     cargo mutants \
         --package vllm-core \
-        $FILE_ARGS \
+        "$FILE_ARGS" \
         --timeout 30 \
         --jobs $(($(nproc) > 8 ? 8 : $(nproc))) \
         --output .mutants-out/ \
