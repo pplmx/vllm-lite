@@ -977,4 +977,70 @@ mod tests {
         assert_eq!(ratio_scale_for("{sequence}"), 1.0);
         assert_eq!(ratio_scale_for("By"), 1.0);
     }
+    /// The OTLP defaults in `impl Default` are the contract with a collector.
+    ///
+    /// `cargo mutants` replaced the endpoint, service name, version, export
+    /// interval and sampling ratio with an empty string or an arbitrary
+    /// constant. Only the `impl Default` body is exercised here; the separate
+    /// `#[serde(default = ...)]` hooks cannot be reached without a serde
+    /// dependency in this crate.
+    #[test]
+    fn otlp_config_defaults_are_the_documented_values() {
+        let cfg = OtlpConfig::default();
+
+        assert_eq!(
+            cfg.endpoint, "http://localhost:4317",
+            "the default OTLP/gRPC endpoint is localhost:4317"
+        );
+        assert_eq!(cfg.service_name, "vllm-lite");
+        assert_eq!(cfg.service_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(cfg.metrics_export_interval_secs, 30);
+        assert!((cfg.trace_sampling_ratio - 1.0).abs() < f64::EPSILON);
+    }
+
+    /// `snapshot_f64` and `snapshot_u64` must map each wire name to its field.
+    ///
+    /// Both are long `match`es over the Prometheus wire names. `cargo mutants`
+    /// deleted individual arms and replaced the whole function with constants,
+    /// and all of it survived, because no test called either function: the
+    /// metric that vanished from `/metrics` was simply never observed.
+    #[test]
+    fn snapshot_accessors_map_each_wire_name() {
+        let snap = MetricsSnapshot {
+            tokens_total: 11,
+            requests_total: 3,
+            avg_latency_ms: 1.5,
+            p50_latency_ms: 2.5,
+            p90_latency_ms: 3.5,
+            p99_latency_ms: 4.5,
+            avg_batch_size: 5.5,
+            current_batch_size: 6,
+            requests_in_flight: 7,
+            kv_cache_blocks_used: 8,
+            kv_cache_blocks_total: 9,
+            kv_cache_usage_percent: 10.5,
+            prefix_cache_hit_rate: 12.5,
+            prefix_cache_nodes: 13,
+            prefill_throughput: 14.5,
+            decode_throughput: 15.5,
+            avg_scheduler_wait_time_ms: 16.5,
+        };
+
+        assert_eq!(snapshot_u64(&snap, "tokens_total"), 11);
+        assert_eq!(snapshot_u64(&snap, "requests_in_flight"), 7);
+        assert_eq!(snapshot_u64(&snap, "unknown_metric"), 0);
+
+        assert!((snapshot_f64(&snap, "avg_latency_ms") - 1.5).abs() < f64::EPSILON);
+        assert!((snapshot_f64(&snap, "latency_p50_ms") - 2.5).abs() < f64::EPSILON);
+        assert!((snapshot_f64(&snap, "latency_p90_ms") - 3.5).abs() < f64::EPSILON);
+        assert!((snapshot_f64(&snap, "latency_p99_ms") - 4.5).abs() < f64::EPSILON);
+        assert!((snapshot_f64(&snap, "avg_batch_size") - 5.5).abs() < f64::EPSILON);
+        assert!((snapshot_f64(&snap, "current_batch_size") - 6.0).abs() < f64::EPSILON);
+        assert!((snapshot_f64(&snap, "kv_cache_usage_percent") - 10.5).abs() < f64::EPSILON);
+        assert!((snapshot_f64(&snap, "prefix_cache_hit_rate") - 12.5).abs() < f64::EPSILON);
+        assert!((snapshot_f64(&snap, "prefill_throughput_tps") - 14.5).abs() < f64::EPSILON);
+        assert!((snapshot_f64(&snap, "decode_throughput_tps") - 15.5).abs() < f64::EPSILON);
+        assert!((snapshot_f64(&snap, "avg_scheduler_wait_time_ms") - 16.5).abs() < f64::EPSILON);
+        assert!(snapshot_f64(&snap, "unknown_metric").abs() < f64::EPSILON);
+    }
 }
