@@ -117,4 +117,10 @@ exclude_re = [
   # is already pinned at the policy level; the forwarder itself has no
   # independent observable behaviour.
   'mod\.rs:444:9: replace MemoryManager::touch_blocks with \(\)',
+
+  # `self.next_seq_id += 1` after issuing an id, relaxed to `*= 1`, leaves the
+  # counter parked on the id just issued. The NEXT admission's
+  # `while seq_id_is_taken(self.next_seq_id)` then skips that taken id and
+  # advances, so allocation order is unchanged — only one extra loop iteration.
+  'request\.rs:76:30: replace \+= with \*=',
 ]

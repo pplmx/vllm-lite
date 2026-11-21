@@ -1106,3 +1106,58 @@ fn add_request_without_prefix_cache_returns_a_real_id() {
         "the returned id must name the queued sequence"
     );
 }
+
+/// The id counter must SKIP taken ids and ADVANCE after issuing one.
+///
+/// `add_request_inner` walks `next_seq_id` forward past any id already held,
+/// then adopts it and advances again. `cargo mutants` turned both `+= 1` into
+/// `-= 1` / `*= 1`. With `-= 1` the counter runs backwards below the ids it
+/// already issued; with `*= 1` (an infallible multiply by one) it never moves,
+/// so the skip loop cannot terminate and every request would reuse one id.
+#[test]
+fn sequence_id_counter_skips_taken_ids_and_advances() {
+    let mut scheduler = SchedulerEngine::default();
+
+    // A caller claims a HIGH explicit id; the counter starts at 1 and is not
+    // aware of it, so it must skip that id rather than hand it out twice.
+    let explicit = scheduler.add_request(Request::new(500, vec![1; 16], 10));
+    assert_eq!(explicit, 500, "an explicit uncontended id is honoured");
+
+    let first = scheduler.add_request(Request::new(0, vec![2; 16], 10));
+    let second = scheduler.add_request(Request::new(0, vec![3; 16], 10));
+    assert_ne!(first, 0, "auto-assigned ids must never be 0");
+    assert_ne!(
+        first, second,
+        "the counter must advance between auto-assigned ids"
+    );
+    assert_ne!(first, 500, "the counter must skip the explicitly taken id");
+
+    // Walking the counter onto an occupied id must skip it and keep going.
+    scheduler.next_seq_id = 500;
+    let after_skip = scheduler.add_request(Request::new(0, vec![4; 16], 10));
+    assert_ne!(
+        after_skip, 500,
+        "an id already held must be skipped, not reused"
+    );
+    assert!(
+        after_skip > 500,
+        "the counter must move FORWARD past a taken id; got {after_skip}"
+    );
+    // The counter must have ADVANCED past the id it just issued, so the next
+    // auto-assigned request cannot reuse it.
+    let next = scheduler.add_request(Request::new(0, vec![5; 16], 10));
+    assert_ne!(
+        next, after_skip,
+        "the counter must advance after issuing an id, or the next request          would reuse it"
+    );
+    assert!(
+        next > after_skip,
+        "the counter must move forward; got {next} after {after_skip}"
+    );
+
+    assert_eq!(
+        scheduler.waiting_count(),
+        5,
+        "every request must be queued exactly once"
+    );
+}

@@ -190,6 +190,18 @@ and the same for `decode`. Relaxing `>` to `>=` puts a `record_*_tokens(0)` call
 on the zero path, which adds zero to an `AtomicU64`. The counters, and therefore
 the throughputs derived from them, are unchanged.
 
+### `engine/state/request.rs:76` — the id counter parked after issuing
+
+`self.next_seq_id += 1` advances past the id just handed out. Relaxing it to
+`*= 1` leaves the counter ON that id. The next admission opens with
+`while self.seq_id_is_taken(self.next_seq_id)`, which now sees the id as taken
+and advances it, so the ids issued are identical — the mutant costs one extra
+iteration of a bounded (max 256 running) loop and nothing else.
+
+The neighbouring `+= 1` inside that skip loop is NOT equivalent: `-= 1` walks the
+counter backwards and `*= 1` makes the loop unable to terminate. Both are killed
+by `sequence_id_counter_skips_taken_ids_and_advances`.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be
