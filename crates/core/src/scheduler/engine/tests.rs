@@ -20,7 +20,7 @@ use vllm_traits::{BatchPhase, SampledToken};
 use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::SchedulerCudaGraphConfig;
 use crate::scheduler::engine::SchedulerEngine;
-use crate::types::{Request, SchedulerConfig};
+use crate::types::{Priority, Request, SamplingParams, SchedulerConfig, Sequence, Status};
 
 fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
     let metrics = Arc::new(EnhancedMetricsCollector::new());
@@ -987,4 +987,51 @@ fn test_build_batch_with_graph_does_not_over_preempt_full_table_decode() {
     assert_eq!(engine.running.len(), 1);
     assert_eq!(engine.running[0].id, 1);
     assert_eq!(engine.waiting_count(), 0, "no sequence should be preempted");
+}
+
+/// `requeue_stuck_prefills` must rescue orphaned Prefilling/Waiting sequences.
+///
+/// A sequence left in `running` while still Prefilling or Waiting is never
+/// re-scheduled (running is only re-included when `status == Decoding`), so it
+/// stalls forever AND pins its pre-allocated KV blocks. `cargo mutants` replaced
+/// the whole method with `()` and relaxed both loop conditions, all surviving —
+/// nothing called it with an orphaned sequence in place.
+#[test]
+fn requeue_stuck_prefills_rescues_orphans_and_keeps_decoders() {
+    let mut scheduler = SchedulerEngine::default();
+
+    // One healthy decoder and two orphans, injected directly: `update()` would
+    // normally have promoted them, which is exactly why they are orphans.
+    let mut make_seq = |id: u64, status: Status| Sequence {
+        id,
+        tokens: vec![7; 32],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: 32,
+        prompt_len: 32,
+        status,
+        max_tokens: 50,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    scheduler.running.push(make_seq(1, Status::Decoding));
+    scheduler.running.push(make_seq(2, Status::Prefilling));
+    scheduler.running.push(make_seq(3, Status::Waiting));
+
+    scheduler.requeue_stuck_prefills();
+
+    assert_eq!(
+        scheduler.running.len(),
+        1,
+        "only the healthy decoder may remain in running; got {:?}",
+        scheduler.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert_eq!(scheduler.running[0].id, 1, "the decoder must be untouched");
+    assert_eq!(
+        scheduler.waiting_count(),
+        2,
+        "both orphans must return to the waiting queue, not vanish"
+    );
 }
