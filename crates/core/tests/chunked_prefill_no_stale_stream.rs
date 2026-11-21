@@ -165,3 +165,66 @@ fn chunked_prefill_never_streams_stale_midchunk_predictions() {
          (final-chunk first token + 7 decodes), no stale mid-chunk predictions\n  got {received:?}"
     );
 }
+
+/// The CUDA-graph step path must apply the SAME mid-chunk suppression.
+///
+/// `Engine::process_output` (graph path) computes its own `stale_mask` with
+/// `batch.num_computed_tokens[i] + batch.input_tokens[i].len() < prompt_len`.
+/// `cargo mutants` flipped that `<` to `>` and the whole suite stayed green:
+/// the CPU `chunked_prefill_never_streams_stale_midchunk_predictions` above
+/// drives `engine.step()`, never `step_with_graph()`, so the graph copy of the
+/// predicate was unverified. Inverted, the mask marks the WRONG rounds — the
+/// stale mid-chunk predictions get through and the real final-chunk token is
+/// withheld.
+#[test]
+#[cfg(feature = "cuda-graph")]
+fn cuda_graph_step_never_streams_stale_midchunk_predictions() {
+    use vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig;
+
+    let config = SchedulerConfig::builder()
+        .with_max_num_batched_tokens(32)
+        .with_prefill_chunk_size(16)
+        .build();
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..config
+    };
+    let mut engine = Engine::with_config_boxed(Box::new(PhaseMarkModel), None, config, 0, 64);
+    engine
+        .capture_cuda_graphs()
+        .expect("capturing the configured batch sizes must succeed");
+    assert!(
+        engine.cuda_graph_enabled(),
+        "fixture must have captured graphs for the graph path"
+    );
+
+    let (tx, mut rx) = mpsc::channel(64);
+    engine.add_request(Request::new(7, vec![7; 100], 8), tx);
+
+    let mut rounds = 0;
+    while engine.has_pending() {
+        engine
+            .step_with_graph()
+            .expect("every graph chunk/decode step must succeed");
+        rounds += 1;
+        assert!(
+            rounds <= 40,
+            "must finish within 7 chunks + 8 decode rounds"
+        );
+    }
+
+    let received = drain_tokens(&mut rx);
+    assert_eq!(
+        received,
+        {
+            let mut expect = vec![PREFILL_MARK];
+            expect.extend(std::iter::repeat_n(DECODE_MARK, 7));
+            expect
+        },
+        "the graph path must stream exactly max_tokens real tokens (final-chunk \
+         first token + 7 decodes) and suppress every stale mid-chunk prediction\n  got {received:?}"
+    );
+}
