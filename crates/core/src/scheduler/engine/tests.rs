@@ -1962,3 +1962,55 @@ fn smaller_than_free_request_does_not_preempt() {
         engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
     );
 }
+
+/// A Prefill round must not pull leftover Decoding sequences into the batch.
+///
+/// `if phase == Phase::Decode { sequences = self.admit_decode_sequences(); }`
+/// guards the phase. `cargo mutants` flipped it to `!=`, so a Prefill round
+/// would ALSO run decode admission and mix decoders into a batch whose
+/// `is_prefill` flags and `kv_block_ids` describe prefill work.
+///
+/// Reaching Prefill WHILE a decoder sits in `running` is the whole difficulty:
+/// `PhaseScheduler` starts in Prefill and switches to Decode only once
+/// `prefill_queue_len == 0`, so a queued prefill request is what holds the
+/// scheduler in the Prefill phase. A first attempt without a queued request saw
+/// the selector choose Decode and admitted the decoder legitimately, which is
+/// why this fixture queues one.
+#[test]
+fn prefill_round_does_not_admit_decode_sequences() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 1024);
+
+    let mut decoder = Sequence {
+        id: 1,
+        tokens: vec![1; block_size],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size,
+        prompt_len: block_size,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut decoder));
+    engine.running.push(decoder);
+
+    // A QUEUED prefill request keeps the phase selector in Prefill, so the
+    // decode-admission branch must not run this round.
+    engine.add_request(Request::new(2, vec![4; block_size], 10));
+    let batch = engine.build_batch();
+
+    assert!(
+        batch.is_prefill.iter().any(|&p| p),
+        "setup: this round must be a Prefill round; got phase {:?}",
+        batch.phase
+    );
+    assert!(
+        !batch.seq_ids.contains(&1),
+        "a Prefill round must not admit a leftover decoder; got {:?}",
+        batch.seq_ids
+    );
+}
