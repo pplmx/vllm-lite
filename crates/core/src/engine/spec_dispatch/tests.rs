@@ -789,6 +789,120 @@ fn test_speculative_all_accepted_folds_every_token_into_sequence() {
 /// does flipping the `pos >= max_draft` guard: every variant changes WHERE
 /// the drafts are generated, which with a real model silently degrades the
 /// acceptance rate rather than producing a visible failure.
+/// The speculative step must record its latency.
+///
+/// `step_speculative_inner` ends with `if elapsed > 0.0 {
+/// record_latency(elapsed) }`. A fast mock finishes under a millisecond, so the
+/// guard never fires and the `<` / `==` mutants look equivalent — that is a
+/// property of the fixture, not of the code. With a 5 ms backend the guard does
+/// fire, and the mutant leaves `avg_latency_ms` at 0 while the engine still
+/// serves: speculative decode is exactly the path whose tail latency an
+/// operator watches, so losing its samples hides a regression.
+#[test]
+fn speculative_step_records_its_latency() {
+    use std::time::Duration;
+
+    #[derive(Clone)]
+    struct SlowModel;
+
+    impl ModelBackend for SlowModel {
+        fn forward(
+            &mut self,
+            seq_ids: &[SeqId],
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<BatchOutput> {
+            std::thread::sleep(Duration::from_millis(5));
+            Ok(BatchOutput {
+                seq_ids: seq_ids.to_vec(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 11,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect(),
+            })
+        }
+
+        fn forward_logits(
+            &mut self,
+            _seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            std::thread::sleep(Duration::from_millis(5));
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| {
+                    tokens
+                        .iter()
+                        .flat_map(|_| {
+                            let mut logits = vec![-10.0_f32; 64];
+                            logits[11] = 10.0;
+                            logits
+                        })
+                        .collect()
+                })
+                .collect())
+        }
+
+        fn embed(
+            &mut self,
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            Ok(Vec::new())
+        }
+
+        fn vocab_size(&self) -> usize {
+            64
+        }
+
+        fn num_layers(&self) -> usize {
+            1
+        }
+
+        fn num_heads(&self) -> usize {
+            1
+        }
+    }
+
+    let mut engine = Engine::with_config(
+        SlowModel,
+        Some(SlowModel),
+        SchedulerConfig::default(),
+        2,
+        64,
+    );
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio_mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![5, 6], 3), tx);
+    for _ in 0..5 {
+        if !engine.has_pending() {
+            break;
+        }
+        engine.step().unwrap();
+    }
+
+    let snapshot = engine.scheduler.metrics.snapshot();
+    assert_eq!(snapshot.tokens_total, 3, "setup: the steps must have run");
+    assert!(
+        snapshot.avg_latency_ms >= 1.0,
+        "a 5 ms backend must produce a recorded speculative step latency; got \
+         {} (0 means the latency guard dropped every sample)",
+        snapshot.avg_latency_ms
+    );
+}
+
 /// The RESOLVER draft path must generate at the same absolute positions as
 /// the batched path.
 ///

@@ -89,6 +89,68 @@ fn test_enqueue_and_dequeue() {
     assert!(queue.is_empty());
 }
 
+/// `ScheduledSequence`'s identity is its sequence id.
+///
+/// `PartialEq` compares only `seq_id`, so two entries that differ in priority
+/// or arrival time are still the same scheduled entity. `cargo mutants` made
+/// `eq` return a constant `true` / `false` and inverted its comparison, and
+/// nothing failed — the type is only ever stored in a `BinaryHeap` (which uses
+/// `Ord`), so the equality impl had no test. Pinning it keeps the id-based
+/// identity from being silently redefined: `Eq`/`Ord` must agree on what makes
+/// two entries the same thing, or heap dedup logic becomes meaningless.
+#[test]
+fn scheduled_sequence_identity_is_the_sequence_id() {
+    let now = Instant::now();
+    let first = ScheduledSequence {
+        seq_id: 11,
+        priority: PriorityScore(5),
+        arrival_time: now,
+    };
+    let same_id_later = ScheduledSequence {
+        seq_id: 11,
+        priority: PriorityScore(9),
+        arrival_time: now + std::time::Duration::from_millis(1),
+    };
+    let other_id = ScheduledSequence {
+        seq_id: 12,
+        priority: PriorityScore(5),
+        arrival_time: now,
+    };
+
+    assert_eq!(
+        first, same_id_later,
+        "identity is the sequence id; priority and arrival time must not split it"
+    );
+    assert_ne!(first, other_id, "different ids are different entries");
+}
+
+#[test]
+fn get_mut_exposes_a_mutable_reference() {
+    // `get_mut` is the mutable sibling of `get`; `cargo mutants` replaced its
+    // body with `None` and nothing failed, because only the immutable `get`
+    // had a test. A caller that updates a queued sequence in place (priority
+    // bumps, prompt extension) would silently stop working.
+    let mut queue = RequestQueue::new();
+    queue.enqueue(
+        make_sequence(7, Status::Waiting),
+        &FcfsPolicy::new(),
+        &test_ctx(),
+    );
+
+    let seq = queue.get_mut(7).expect("the queued sequence must be found");
+    seq.max_tokens = 99;
+    seq.consecutive_decode_rounds = 3;
+
+    let after = queue.get(7).expect("still queued");
+    assert_eq!(after.max_tokens, 99, "get_mut must expose the live value");
+    assert_eq!(after.consecutive_decode_rounds, 3);
+
+    assert!(
+        queue.get_mut(404).is_none(),
+        "an unknown id must yield None, not a fabricated entry"
+    );
+}
+
 #[test]
 fn test_get_o1() {
     let mut queue = RequestQueue::new();
