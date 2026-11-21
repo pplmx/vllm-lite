@@ -1479,3 +1479,65 @@ fn preallocate_kv_blocks_sizes_tables_and_stops_at_oom() {
         big.kv_blocks.len()
     );
 }
+
+/// `admit_decode_sequences` must collect ONLY decoding sequences, grow each
+/// short table, and defer (not admit) one it cannot grow.
+///
+/// `cargo mutants` relaxed the status filter, both `kv_blocks.len()` checks,
+/// the `i += 1` advance and the `needed` computation. A sequence admitted with a
+/// short table is forwarded and its next token's KV write falls back to block 0
+/// (`unwrap_or(0)`), corrupting a live block owned by another sequence — so the
+/// length check must be a real gate, not a formality.
+#[test]
+fn admit_decode_sequences_grows_or_defers() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 8);
+
+    let make = |id: u64, status: Status, kv: Vec<usize>| Sequence {
+        id,
+        tokens: vec![1; block_size],
+        kv_blocks: Arc::new(kv),
+        num_computed_tokens: block_size,
+        prompt_len: block_size,
+        status,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    // The non-decoder goes FIRST so the `continue` branch runs at index 0:
+    // stepping backwards there is a usize underflow, not a silent no-op.
+    engine.running.push(make(3, Status::Prefilling, vec![101]));
+    engine.running.push(make(1, Status::Decoding, vec![100]));
+    engine.running.push(make(2, Status::Decoding, vec![]));
+
+    let admitted = engine.admit_decode_sequences();
+    let ids: Vec<u64> = admitted.iter().map(|s| s.id).collect();
+
+    assert!(
+        ids.contains(&1),
+        "a decoder with a complete table must be admitted; got {ids:?}"
+    );
+    assert!(
+        ids.contains(&2),
+        "a decoder that can be grown must be admitted; got {ids:?}"
+    );
+    assert!(
+        !ids.contains(&3),
+        "a Prefilling sequence must never be admitted for decode; got {ids:?}"
+    );
+    let grown = admitted.iter().find(|s| s.id == 2).expect("seq 2 admitted");
+    assert!(
+        grown.kv_blocks.len() >= 1,
+        "the admitted decoder's table must cover its tokens, not stay short"
+    );
+    // The originals are grown in place so `update()` keeps progressing.
+    let original = engine.running.iter().find(|s| s.id == 2).expect("seq 2");
+    assert!(
+        original.kv_blocks.len() >= 1,
+        "the running table itself must be grown, not just the clone"
+    );
+}

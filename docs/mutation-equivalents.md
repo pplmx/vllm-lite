@@ -202,6 +202,14 @@ The neighbouring `+= 1` inside that skip loop is NOT equivalent: `-= 1` walks th
 counter backwards and `*= 1` makes the loop unable to terminate. Both are killed
 by `sequence_id_counter_skips_taken_ids_and_advances`.
 
+### `engine/state/batch.rs:338` — growing a table that is already big enough
+
+`admit_decode_sequences` guards growth with `if kv_blocks.len() < needed`. With
+`<=` the call also happens at equality, but `grow_running_table` computes
+`needed - have == 0`, builds an empty `additions` vector, and returns before
+recording or cloning anything. The following `len() >= needed` check admits the
+sequence in both versions.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

@@ -123,4 +123,10 @@ exclude_re = [
   # `while seq_id_is_taken(self.next_seq_id)` then skips that taken id and
   # advances, so allocation order is unchanged — only one extra loop iteration.
   'request\.rs:76:30: replace \+= with \*=',
+
+  # `if kv_blocks.len() < needed { grow_running_table(i, have, needed) }`.
+  # At equality `needed - have` is 0, so `grow_running_table` builds an empty
+  # additions vector and returns before touching anything; the sequence is then
+  # admitted by the very next check either way.
+  'batch\.rs:338:48: replace < with <=',
 ]
