@@ -1908,3 +1908,81 @@ fn renormalized_top_p_cutoff_is_strict_at_the_boundary() {
         "both tokens carry half the mass, so both are -ln 2; got {out:?}"
     );
 }
+
+/// A `top_p < 1.0` request must draw from the TRUNCATED nucleus, not the full
+/// distribution.
+///
+/// The dispatch is `temperature <= 0.0` -> greedy, else `top_p < 1.0` ->
+/// `top_p_sample`, else `temperature_sample`. `cargo mutants` flipped that
+/// `top_p < 1.0` to `==`, `>` and `<=`, and every variant survived: the
+/// existing test only checks that SOME token comes back. The consequence is
+/// real — a nucleus that excludes a token must never emit it, so sampling
+/// repeatedly makes the leak visible as an out-of-nucleus token.
+#[test]
+fn sample_batch_respects_the_nucleus() {
+    // logits [1, 0, -1]: token 0 holds ~0.665 of the mass, so `top_p = 0.5`
+    // cuts the nucleus to token 0 ALONE.
+    let logits = vec![vec![1.0_f32, 0.0, -1.0]];
+    let seen: Vec<Vec<TokenId>> = vec![vec![]];
+
+    for _ in 0..200 {
+        let out = sample_batch(&logits, 1.0, 0.5, 0, 1.0, &seen);
+        assert_eq!(
+            out[0], 0,
+            "with top_p = 0.5 only token 0 is inside the nucleus; anything else \
+             means the sampler used the untruncated distribution"
+        );
+    }
+
+    // Sanity: with `top_p = 1.0` the other tokens ARE reachable, so the check
+    // above is not vacuously true.
+    let mut saw_other = false;
+    for _ in 0..400 {
+        if sample_batch(&logits, 1.0, 1.0, 0, 1.0, &seen)[0] != 0 {
+            saw_other = true;
+            break;
+        }
+    }
+    assert!(
+        saw_other,
+        "with top_p = 1.0 the tail tokens must be reachable, otherwise the \
+         nucleus assertion proves nothing"
+    );
+}
+
+/// `top_k` must mask everything below the k-th largest logit.
+///
+/// The mask is `if *l < threshold { *l = -inf }`, where `threshold` is the k-th
+/// largest. `cargo mutants` flipped that `<` to `==`, `>` and `<=` and every
+/// variant survived: existing top-k tests only assert that the result is *in*
+/// range. With `top_k = 1` and `top_p = 1.0` the argmax must be the only
+/// reachable token, which makes any mis-mask visible as a different token.
+#[test]
+fn sample_batch_top_k_masks_below_the_threshold() {
+    // Distinct logits: token 2 is the strict argmax.
+    let logits = vec![vec![0.0_f32, 1.0, 3.0, 2.0]];
+    let seen: Vec<Vec<TokenId>> = vec![vec![]];
+
+    for _ in 0..200 {
+        let out = sample_batch(&logits, 1.0, 1.0, 1, 1.0, &seen);
+        assert_eq!(
+            out[0], 2,
+            "top_k = 1 must leave only the argmax reachable; any other token \
+             means the mask kept the wrong side of the threshold"
+        );
+    }
+
+    // `top_k = 2` admits the second-largest logit (token 3, logit 2.0) too.
+    let mut reached_second = false;
+    for _ in 0..400 {
+        if sample_batch(&logits, 1.0, 1.0, 2, 1.0, &seen)[0] == 3 {
+            reached_second = true;
+            break;
+        }
+    }
+    assert!(
+        reached_second,
+        "top_k = 2 must admit the second-largest logit (token 3), otherwise the \
+         k = 1 assertion above proves nothing"
+    );
+}
