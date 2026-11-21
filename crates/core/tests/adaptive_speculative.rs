@@ -64,7 +64,6 @@ fn test_adaptive_speculative_adjusts_draft_count() {
 }
 
 #[test]
-#[ignore = "requires speculative model setup"]
 fn test_adaptive_speculative_with_same_model_for_draft() {
     use tokio::sync::mpsc;
 
@@ -109,7 +108,6 @@ fn test_adaptive_speculative_with_same_model_for_draft() {
 }
 
 #[test]
-#[ignore = "requires speculative model setup"]
 fn test_adaptive_speculative_run_loop_uses_adaptive() {
     use tokio::sync::mpsc;
 
@@ -157,7 +155,6 @@ fn test_adaptive_speculative_max_draft_tokens() {
 }
 
 #[test]
-#[ignore = "requires speculative model setup"]
 fn test_speculative_verification_with_multiple_drafts() {
     use tokio::sync::mpsc;
 
