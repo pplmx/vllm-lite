@@ -827,6 +827,65 @@ mod tests {
         assert!(matches!(cfg.validate(), Err(OtlpError::Config(_))));
     }
 
+    /// `validate()` must reject an empty or whitespace-only endpoint and a NaN
+    /// sampling ratio.
+    ///
+    /// `cargo mutants` deleted the `!` in `endpoint.trim().is_empty()`, flipped
+    /// both `||` operands of the ratio guard and inverted the interval `== 0`,
+    /// and every variant survived: the existing tests cover only an
+    /// out-of-range ratio and a zero interval, so the endpoint arm and the
+    /// not-finite arm had no assertion at all.
+    #[test]
+    fn otlp_config_rejects_blank_endpoint_and_nan_ratio() {
+        let blank = OtlpConfig {
+            endpoint: String::new(),
+            ..OtlpConfig::default()
+        };
+        assert!(
+            matches!(blank.validate(), Err(OtlpError::Config(_))),
+            "an empty endpoint must be rejected"
+        );
+
+        let whitespace = OtlpConfig {
+            endpoint: "   \t\n".to_string(),
+            ..OtlpConfig::default()
+        };
+        assert!(
+            matches!(whitespace.validate(), Err(OtlpError::Config(_))),
+            "a whitespace-only endpoint must be rejected, not treated as present"
+        );
+
+        let nan = OtlpConfig {
+            trace_sampling_ratio: f64::NAN,
+            ..OtlpConfig::default()
+        };
+        assert!(
+            matches!(nan.validate(), Err(OtlpError::Config(_))),
+            "a NaN ratio must be rejected (the range check alone lets NaN through \
+             because every comparison with NaN is false)"
+        );
+
+        let infinite = OtlpConfig {
+            trace_sampling_ratio: f64::INFINITY,
+            ..OtlpConfig::default()
+        };
+        assert!(
+            matches!(infinite.validate(), Err(OtlpError::Config(_))),
+            "an infinite ratio must be rejected"
+        );
+
+        // The accepted boundaries must still pass.
+        for ratio in [0.0_f64, 1.0] {
+            let ok = OtlpConfig {
+                trace_sampling_ratio: ratio,
+                ..OtlpConfig::default()
+            };
+            assert!(
+                ok.validate().is_ok(),
+                "ratio {ratio} is inside [0.0, 1.0] and must be accepted"
+            );
+        }
+    }
     #[test]
     fn otlp_config_validates_default_as_ok() {
         assert!(OtlpConfig::default().validate().is_ok());
@@ -967,6 +1026,35 @@ mod tests {
         assert_eq!(updown_delta(Some(5), 3), -2);
     }
 
+    /// `updown_delta` must clamp to the CORRECT i64 bound at u64 extremes.
+    ///
+    /// The delta is computed in i128 and then narrowed with `i64::try_from`,
+    /// which fails once the difference leaves i64 range; the fallback picks
+    /// `i64::MIN` for a negative delta and `i64::MAX` for a positive one.
+    /// `cargo mutants` relaxed that `< 0` in three ways and all survived,
+    /// because the existing test only used small values where the narrowing
+    /// never fails.
+    #[test]
+    fn updown_delta_clamps_at_the_i64_bounds() {
+        // Dropping from u64::MAX to 0 is a hugely negative delta.
+        assert_eq!(
+            updown_delta(Some(u64::MAX), 0),
+            i64::MIN,
+            "a negative delta beyond i64 range must clamp to i64::MIN"
+        );
+        // Rising from 0 to u64::MAX is a hugely positive delta.
+        assert_eq!(
+            updown_delta(Some(0), u64::MAX),
+            i64::MAX,
+            "a positive delta beyond i64 range must clamp to i64::MAX"
+        );
+        // A first tick with a value beyond i64::MAX clamps positive.
+        assert_eq!(
+            updown_delta(None, u64::MAX),
+            i64::MAX,
+            "the first-tick value must clamp to i64::MAX when it exceeds i64"
+        );
+    }
     #[test]
     fn ratio_gauge_scale_applies_only_to_ratio_units() {
         // `packing_efficiency` / `speculative_*` / `throughput_speedup_ratio`
