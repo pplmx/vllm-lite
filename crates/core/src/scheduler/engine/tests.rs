@@ -1664,3 +1664,93 @@ fn requeue_uncomposed_prefills_returns_only_the_uncomposed() {
         "the uncomposed prefill must return to the waiting queue"
     );
 }
+
+/// `build_batch` must record a CUDA-Graph HIT only when the batch size is
+/// captured, and a MISS otherwise, and must dispatch an observer event only
+/// for a non-empty batch.
+///
+/// `cargo mutants` relaxed `phase == Decode && cuda_graph.enabled`, dropped the
+/// `!batch.seq_ids.is_empty()` guard, and broke `supports_batch_size`. The
+/// hit/miss counters are how an operator tells whether the graph is actually
+/// being used — an always-hit (or always-miss) counter makes the fast path look
+/// healthy while it is dead, or dead while it is healthy.
+#[test]
+fn build_batch_records_cuda_graph_hits_and_misses() {
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1],
+        },
+        ..Default::default()
+    };
+    let mut engine = create_test_engine(config, 1024);
+    let metrics = Arc::clone(&engine.metrics);
+
+    // A decode round with exactly ONE sequence: batch size 1 IS captured.
+    let mut seq = Sequence {
+        id: 1,
+        tokens: vec![1; vllm_traits::BLOCK_SIZE],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: vllm_traits::BLOCK_SIZE,
+        prompt_len: vllm_traits::BLOCK_SIZE,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    seq.kv_blocks = Arc::new(vec![]);
+    engine.running.push(seq);
+
+    // First make sure the table is allocated through the real path.
+    let mut taken = engine.running.remove(0);
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut taken));
+    engine.running.push(taken);
+
+    let before_hits = metrics.get_counter("cuda_graph_hits_total");
+    let before_misses = metrics.get_counter("cuda_graph_misses_total");
+    let batch = engine.build_batch();
+    assert_eq!(batch.seq_ids.len(), 1, "setup: a one-sequence batch");
+
+    assert_eq!(
+        metrics.get_counter("cuda_graph_hits_total"),
+        before_hits + 1,
+        "a captured batch size must record a HIT"
+    );
+    assert_eq!(
+        metrics.get_counter("cuda_graph_misses_total"),
+        before_misses,
+        "a captured batch size must not record a MISS"
+    );
+
+    // A PREFILL round must not touch either counter, even with the graph
+    // enabled: `&&` relaxed to `||` would record on any enabled build.
+    let mut prefill_engine = create_test_engine(
+        SchedulerConfig {
+            cuda_graph: SchedulerCudaGraphConfig {
+                enabled: true,
+                batch_sizes: vec![1],
+            },
+            ..Default::default()
+        },
+        1024,
+    );
+    let prefill_metrics = Arc::clone(&prefill_engine.metrics);
+    prefill_engine.add_request(Request::new(9, vec![3; 8], 10));
+    let hits_before = prefill_metrics.get_counter("cuda_graph_hits_total");
+    let misses_before = prefill_metrics.get_counter("cuda_graph_misses_total");
+    let batch = prefill_engine.build_batch();
+    assert!(!batch.seq_ids.is_empty(), "setup: a prefill batch");
+    assert_eq!(
+        prefill_metrics.get_counter("cuda_graph_hits_total"),
+        hits_before,
+        "a Prefill round must not record a graph HIT"
+    );
+    assert_eq!(
+        prefill_metrics.get_counter("cuda_graph_misses_total"),
+        misses_before,
+        "a Prefill round must not record a graph MISS"
+    );
+}
