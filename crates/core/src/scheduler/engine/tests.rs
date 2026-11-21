@@ -1035,3 +1035,74 @@ fn requeue_stuck_prefills_rescues_orphans_and_keeps_decoders() {
         "both orphans must return to the waiting queue, not vanish"
     );
 }
+
+/// A colliding sequence id must be replaced, never silently adopted.
+///
+/// `seq_id_is_taken` checks BOTH `running` and the waiting queue. `cargo
+/// mutants` replaced it with the constants `true`/`false` and flipped its `||`
+/// to `&&`, all surviving: no test ever submitted two requests that collide, so
+/// the duplicate-id path — and the "skip ids the counter never handed out"
+/// loop beside it — was never entered. If a collision slipped through, the
+/// second sequence would overwrite the first and the caller would receive an id
+/// naming different work than it asked for.
+#[test]
+fn duplicate_sequence_ids_are_replaced_not_adopted() {
+    let mut scheduler = SchedulerEngine::default();
+
+    // Occupy id 5 through the QUEUE (it is never composed).
+    let first = scheduler.add_request(Request::new(5, vec![1; 16], 10));
+    assert_eq!(first, 5, "an uncontended explicit id must be honoured");
+
+    // Same id again: the scheduler must issue a different one.
+    let second = scheduler.add_request(Request::new(5, vec![2; 16], 10));
+    assert_ne!(
+        second, 5,
+        "a colliding id must not be adopted; the first sequence would be lost"
+    );
+
+    // Both requests must still be present and distinct.
+    assert_eq!(
+        scheduler.waiting_count(),
+        2,
+        "the colliding request must be queued, not dropped"
+    );
+
+    // Now the RUNNING half of the check: occupy id 5 by running it, then ask
+    // for 5 again.
+    let _ = scheduler.build_batch();
+    assert!(
+        scheduler.running_count() > 0,
+        "setup: a sequence is running"
+    );
+    let third = scheduler.add_request(Request::new(5, vec![3; 16], 10));
+    assert_ne!(
+        third, 5,
+        "an id held by a RUNNING sequence must also be treated as taken"
+    );
+}
+
+/// `add_request_without_prefix_cache` must return a real sequence id.
+///
+/// It is the path stateful models take, so that a full prefix hit cannot admit
+/// a sequence into Decode with fresh `None` recurrent state. `cargo mutants`
+/// replaced the whole body with `Default::default()`, i.e. it returned **0** —
+/// a value that is not a valid sequence id — and survived, because the existing
+/// tests only ever call the plain `add_request`.
+#[test]
+fn add_request_without_prefix_cache_returns_a_real_id() {
+    let mut scheduler = SchedulerEngine::default();
+
+    let id = scheduler.add_request_without_prefix_cache(Request::new(11, vec![4; 16], 10));
+
+    assert_ne!(id, 0, "a sequence id must never be 0");
+    assert_eq!(id, 11, "an uncontended explicit id must be honoured");
+    assert_eq!(
+        scheduler.waiting_count(),
+        1,
+        "the request must be queued, not dropped"
+    );
+    assert!(
+        scheduler.request_queue.get(id).is_some(),
+        "the returned id must name the queued sequence"
+    );
+}
