@@ -340,3 +340,81 @@ fn test_touch_blocks_preserves_the_other_entries() {
         "re-recording must move block 2 to the front and keep the rest"
     );
 }
+
+/// `compute_priority` must flip at EXACTLY `> 5` decode rounds.
+///
+/// A long-running decode sequence drops from priority 3 to 1 so the policy
+/// prefers evicting it. `cargo mutants` relaxed `> 5` to `>=`, which moves the
+/// boundary one round earlier; no test inspected the boundary itself, only
+/// values on either side of the old fixture.
+#[test]
+fn test_compute_priority_flips_above_five_decode_rounds() {
+    let mut at_five = create_test_sequence(1, vec![1], Status::Decoding);
+    at_five.consecutive_decode_rounds = 5;
+    assert_eq!(
+        EvictionPolicy::compute_priority(&at_five),
+        3,
+        "5 rounds is NOT above the threshold, so the sequence keeps priority 3"
+    );
+
+    let mut at_six = create_test_sequence(2, vec![2], Status::Decoding);
+    at_six.consecutive_decode_rounds = 6;
+    assert_eq!(
+        EvictionPolicy::compute_priority(&at_six),
+        1,
+        "6 rounds is above the threshold, so the priority drops to 1"
+    );
+
+    // Prefilling is a flat 2 regardless of rounds, and the excluded statuses
+    // are 0 — both arms pinned so a deleted match arm cannot go unnoticed.
+    let mut prefilling = create_test_sequence(3, vec![3], Status::Prefilling);
+    prefilling.consecutive_decode_rounds = 99;
+    assert_eq!(EvictionPolicy::compute_priority(&prefilling), 2);
+
+    let finished = create_test_sequence(4, vec![4], Status::Finished);
+    assert_eq!(EvictionPolicy::compute_priority(&finished), 0);
+}
+
+/// Freeing one block must leave the OTHER blocks in the LRU list.
+///
+/// `release_blocks` removes a block from `block_access_order` with
+/// `retain(|&b| b != block)` once its count hits zero. `cargo mutants` flipped
+/// that `!=` to `==`, which keeps only the freed block and prunes every other
+/// entry. The existing final-reference test uses a SINGLE block, where the two
+/// forms coincide; with several tracked blocks the difference is total.
+#[test]
+fn test_release_blocks_keeps_the_other_entries() {
+    let mut policy = EvictionPolicy::new();
+    policy.record_blocks(&[1, 2, 3]);
+    assert_eq!(
+        policy
+            .block_access_order
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![3, 2, 1]
+    );
+
+    // Block 2 has one reference; releasing it frees and removes it.
+    let freed = policy.release_blocks(&[2]);
+    assert_eq!(freed, vec![2], "block 2 was the last reference");
+
+    assert_eq!(
+        policy
+            .block_access_order
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![3, 1],
+        "the freed block must leave and blocks 3 and 1 must survive in order"
+    );
+
+    // The surviving blocks must still be individually releasable, proving the
+    // bookkeeping stayed consistent after the removal.
+    assert_eq!(policy.release_blocks(&[3]), vec![3]);
+    assert_eq!(policy.release_blocks(&[1]), vec![1]);
+    assert!(
+        policy.block_access_order.is_empty(),
+        "all blocks are released, so the order must be empty"
+    );
+}
