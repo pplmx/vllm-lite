@@ -93,3 +93,39 @@ fn test_allocated_bytes_scales_with_allocations() {
     alloc.free(&more);
     assert_eq!(alloc.allocated_bytes(), 0);
 }
+
+/// `free` must ignore out-of-range block ids and never double-count.
+///
+/// The guard is `if block < self.num_blocks as BlockId`, which protects the
+/// `is_free[block]` index. `cargo mutants` relaxed it to `<=`, which indexes one
+/// past the end. The neighbouring branch — freeing an already-free block —
+/// must also leave the accounting untouched; a corrupted block id reaching
+/// `free` is exactly what the guard exists for.
+#[test]
+fn test_free_ignores_out_of_range_and_duplicate_blocks() {
+    let mut alloc = BlockAllocator::new(4);
+    let blocks = alloc.allocate(2).expect("two blocks fit");
+    assert_eq!(alloc.available(), 2);
+
+    // A block id equal to `num_blocks` is out of range and must be ignored.
+    alloc.free(&[4]);
+    assert_eq!(
+        alloc.available(),
+        2,
+        "an out-of-range id must not change the free count"
+    );
+
+    // A large bogus id must also be ignored, not panic.
+    alloc.free(&[u32::MAX as BlockId]);
+    assert_eq!(alloc.available(), 2);
+
+    // Freeing the same block twice must count once.
+    alloc.free(&blocks[0..1]);
+    assert_eq!(alloc.available(), 3);
+    alloc.free(&blocks[0..1]);
+    assert_eq!(
+        alloc.available(),
+        3,
+        "freeing an already-free block must not inflate the free count"
+    );
+}
