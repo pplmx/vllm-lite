@@ -157,6 +157,19 @@ The `!seen.is_empty()` half is NOT equivalent — deleting the `!` inverts the
 history test and is covered by
 `sample_batch_repeat_penalty_requires_history_and_a_non_neutral_value`.
 
+### `ha/failover.rs:82` and `ha/leader_election.rs:109` — timeout boundaries
+
+- `now.duration_since(req.created_at) > request_timeout`: relaxing `>` to `>=`
+  differs only when the age is EXACTLY the timeout. Both sides are `Duration`
+  values derived from independent `Instant` reads, so equality needs a
+  nanosecond-exact coincidence that a real clock does not produce.
+- `while start.elapsed() < timeout`: relaxing to `<=` matters only for
+  `timeout == 0`, where `elapsed()` is already non-zero. Measured: immediately
+  after `Instant::now()` the value is 121ns, so both `121ns < 0` and
+  `121ns <= 0` are false and a zero-length window never iterates. For every
+  positive timeout the two forms differ only in a sub-nanosecond window after
+  the deadline.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

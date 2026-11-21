@@ -166,6 +166,109 @@ mod tests {
         assert_eq!(manager.get_inflight_count().await, 0);
     }
 
+    /// `leader_election()` must hand out the manager's OWN election state.
+    ///
+    /// Returning a fresh `Arc::new(Default::default())` survived the suite,
+    /// which is the worst kind of failure for this accessor: a caller reads a
+    /// permanent "no leader / not leader" view while the manager's real state
+    /// moves on, so health and routing decisions would be made on a ghost.
+    #[tokio::test]
+    async fn test_leader_election_accessor_shares_the_managers_state() {
+        let manager = FailoverManager::new(std::time::Duration::from_secs(60));
+
+        manager
+            .leader_election()
+            .become_leader("node-0".to_string())
+            .await;
+
+        assert!(
+            manager.leader_election().is_leader().await,
+            "leadership taken through the accessor must be visible through it"
+        );
+        assert!(
+            manager.leader_election.is_leader().await,
+            "the accessor must expose the manager's own state, not a new instance"
+        );
+    }
+
+    /// Stale requests are exactly those past `request_timeout`, and they are
+    /// RELEASED, not merely reported.
+    ///
+    /// `cargo mutants` flipped the `>` comparison four ways and emptied the
+    /// removal loop, all surviving: nothing exercised the timeout path.
+    #[tokio::test]
+    async fn test_get_stale_requests_reports_and_releases() {
+        // A zero timeout makes every tracked request immediately stale.
+        let manager = FailoverManager::new(std::time::Duration::ZERO);
+        manager.track_request(1, 12345, "node-0".to_string()).await;
+        manager.track_request(2, 12346, "node-0".to_string()).await;
+
+        let mut stale = manager.get_stale_requests().await;
+        stale.sort_unstable();
+        assert_eq!(
+            stale,
+            vec![1, 2],
+            "every timed-out request must be reported"
+        );
+        assert_eq!(
+            manager.get_inflight_count().await,
+            0,
+            "reported requests must also be released"
+        );
+
+        // A long timeout keeps a fresh request in flight.
+        let patient = FailoverManager::new(std::time::Duration::from_secs(3600));
+        patient.track_request(3, 12347, "node-0".to_string()).await;
+        assert!(
+            patient.get_stale_requests().await.is_empty(),
+            "a request inside its timeout must not be reported as stale"
+        );
+        assert_eq!(patient.get_inflight_count().await, 1);
+    }
+
+    /// `migrate_request` must move a tracked request and report whether it
+    /// found one.
+    ///
+    /// Replacing the whole function with `true` / `false` survived, so callers
+    /// could not tell a successful migration from a miss.
+    #[tokio::test]
+    async fn test_migrate_request_reports_whether_it_found_the_request() {
+        let manager = FailoverManager::new(std::time::Duration::from_secs(60));
+        manager.track_request(7, 999, "node-0".to_string()).await;
+
+        assert!(
+            manager.migrate_request(7, "node-1".to_string()).await,
+            "migrating a tracked request must succeed"
+        );
+        assert!(
+            !manager.migrate_request(404, "node-1".to_string()).await,
+            "migrating an unknown request must report failure"
+        );
+    }
+
+    /// A leader transfer must demote this node and follow the new leader.
+    #[tokio::test]
+    async fn test_handle_leader_transfer_demotes_and_follows() {
+        let manager = FailoverManager::new(std::time::Duration::from_secs(60));
+        manager
+            .leader_election
+            .become_leader("node-0".to_string())
+            .await;
+        assert!(manager.leader_election.is_leader().await);
+
+        manager.handle_leader_transfer("node-1".to_string()).await;
+
+        assert!(
+            !manager.leader_election.is_leader().await,
+            "a transferred leadership must demote the previous leader"
+        );
+        assert_eq!(
+            manager.leader_election.get_leader_id().await,
+            Some("node-1".to_string()),
+            "the new leader must be recorded"
+        );
+    }
+
     #[tokio::test]
     async fn test_node_failure() {
         let manager = FailoverManager::new(std::time::Duration::from_secs(60));

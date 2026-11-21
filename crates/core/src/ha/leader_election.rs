@@ -136,6 +136,120 @@ impl Default for LeaderElection {
 mod tests {
     use super::*;
 
+    /// `is_leader_or_promote` must return immediately when already leader.
+    ///
+    /// The function is the entry point every caller uses before doing leader-
+    /// only work, and `cargo mutants` found every arm of it unverified. The
+    /// first arm is the common case: an established leader must not wait.
+    #[tokio::test]
+    async fn test_is_leader_or_promote_returns_immediately_when_leader() {
+        let election = LeaderElection::new();
+        election.become_leader("node-1".to_string()).await;
+
+        let start = std::time::Instant::now();
+        let promoted = election
+            .is_leader_or_promote("node-1".to_string(), Duration::from_secs(5))
+            .await;
+
+        assert!(promoted, "an established leader must report leadership");
+        assert!(
+            start.elapsed() < Duration::from_secs(1),
+            "an established leader must not wait for the timeout; took {:?}",
+            start.elapsed()
+        );
+    }
+
+    /// With no leader present the call must promote itself and return true.
+    #[tokio::test]
+    async fn test_is_leader_or_promote_promotes_when_leader_absent() {
+        let election = LeaderElection::new();
+        assert_eq!(election.get_leader_id().await, None);
+
+        let promoted = election
+            .is_leader_or_promote("node-2".to_string(), Duration::from_secs(1))
+            .await;
+
+        assert!(promoted, "an absent leader must be claimed");
+        assert!(
+            election.is_leader().await,
+            "the calling node must actually hold leadership afterwards"
+        );
+        assert_eq!(election.get_leader_id().await, Some("node-2".to_string()));
+    }
+
+    /// A FIXED leader that is not this node must not be stolen, and the call
+    /// must give up once the timeout elapses.
+    ///
+    /// This pins the retry window: `while start.elapsed() < timeout`. A mutant
+    /// that inverts or tightens that comparison either returns `true` without
+    /// leadership or never loops at all.
+    #[tokio::test]
+    async fn test_is_leader_or_promote_times_out_under_another_leader() {
+        let election = LeaderElection::new();
+        // Another node leads and stays alive, so this node must not take over.
+        election.become_leader("other-node".to_string()).await;
+        // `become_leader` makes THIS election the leader; drop that so the
+        // local flag is false while a leader id is still recorded.
+        election
+            .on_leader_lost(Some("other-node".to_string()))
+            .await;
+        assert!(!election.is_leader().await);
+        assert_eq!(
+            election.get_leader_id().await,
+            Some("other-node".to_string())
+        );
+
+        let start = std::time::Instant::now();
+        let promoted = election
+            .is_leader_or_promote("node-3".to_string(), Duration::from_millis(150))
+            .await;
+
+        assert!(
+            !promoted,
+            "a node must not claim leadership while another node holds it"
+        );
+        assert!(
+            start.elapsed() >= Duration::from_millis(100),
+            "the call must honour the timeout window rather than returning at \
+             once; took {:?}",
+            start.elapsed()
+        );
+        assert!(
+            !election.is_leader().await,
+            "a timed-out call must not have promoted itself"
+        );
+    }
+
+    /// A zero timeout must give up immediately, without entering the retry
+    /// loop.
+    ///
+    /// The loop guard is `while start.elapsed() < timeout`. Relaxing `<` to
+    /// `<=` makes a zero-length window executable once, which costs a 100 ms
+    /// retry sleep for a request that cannot possibly succeed. Observable as
+    /// wall-clock: the strict form returns at once.
+    #[tokio::test]
+    async fn test_is_leader_or_promote_zero_timeout_returns_at_once() {
+        let election = LeaderElection::new();
+        // Record another leader so the promote-on-absent arm cannot fire.
+        election.become_leader("other-node".to_string()).await;
+        election
+            .on_leader_lost(Some("other-node".to_string()))
+            .await;
+
+        let start = std::time::Instant::now();
+        let promoted = election
+            .is_leader_or_promote("node-4".to_string(), Duration::ZERO)
+            .await;
+
+        assert!(!promoted, "a zero timeout cannot acquire leadership");
+        assert!(
+            start.elapsed() < Duration::from_millis(50),
+            "a zero timeout must return without sleeping a retry interval; \
+             took {:?}",
+            start.elapsed()
+        );
+    }
+
     #[tokio::test]
     async fn test_leader_election() {
         let election = LeaderElection::new();

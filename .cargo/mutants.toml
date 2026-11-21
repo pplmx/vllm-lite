@@ -86,4 +86,14 @@ exclude_re = [
   # `apply_repeat_penalty` iterate nothing, and (non-neutral penalty,
   # penalty == 1.0) divides by 1.0. Both are no-ops.
   'sampling\.rs:368:60: replace && with \|\| in sample_batch',
+
+  # `now.duration_since(created_at) > request_timeout`: `>=` differs only at
+  # exact Duration equality between two `Instant` differences, which a real
+  # clock does not produce.
+  'failover\.rs:82:67: replace > with >=',
+
+  # `while start.elapsed() < timeout`: `elapsed()` is measured at 121ns
+  # immediately after `Instant::now()`, so with `timeout = 0` both arms are
+  # false. Every positive timeout exhausts identically.
+  'leader_election\.rs:109:31: replace < with <=',
 ]
