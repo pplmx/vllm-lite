@@ -27,6 +27,55 @@ fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> Schedule
     SchedulerEngine::new(config, num_kv_blocks, metrics)
 }
 
+/// Every token folded into a sequence must advance its decode round counter.
+///
+/// `consecutive_decode_rounds` drives eviction priority
+/// (`compute_priority` flips at > 5) and is part of the victim-set cache
+/// key, but every existing test SETS it by hand on a hand-built `Sequence` —
+/// nothing checked the production increment. `cargo mutants` replacing
+/// `+= 1` with `*= 1` (which pins it at 0 forever, so a sequence is never
+/// considered long-running) survived the whole suite.
+#[test]
+fn test_push_token_advances_consecutive_decode_rounds() {
+    use crate::scheduler::SchedulerEngine;
+    use crate::types::{Request, SchedulerConfig};
+    use std::sync::Arc;
+
+    let mut scheduler = SchedulerEngine::new(
+        SchedulerConfig::default(),
+        128,
+        Arc::new(crate::metrics::EnhancedMetricsCollector::new()),
+    );
+    scheduler.add_request(Request::new(1, vec![1, 2], 20));
+
+    // One round per token folded, starting from 0.
+    for expected in 1..=4u32 {
+        let batch = scheduler.build_batch();
+        assert!(
+            !batch.seq_ids.is_empty(),
+            "round {expected}: batch must not be empty"
+        );
+        let input_len = batch.input_tokens[0].len();
+        scheduler.update(
+            &[1],
+            &[vllm_traits::SampledToken {
+                token: 9,
+                logprob: 0.0,
+                top_logprobs: vec![],
+            }],
+            &[input_len],
+        );
+        assert_eq!(
+            scheduler
+                .get_sequence(1)
+                .map(|s| s.consecutive_decode_rounds)
+                .expect("sequence is still running"),
+            expected,
+            "each folded token advances the decode round counter by exactly one"
+        );
+    }
+}
+
 #[test]
 fn test_engine_add_request() {
     let config = SchedulerConfig::default();

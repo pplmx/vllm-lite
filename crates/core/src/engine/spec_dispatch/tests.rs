@@ -1177,6 +1177,174 @@ fn verifier_uses_argmax_when_temperature_is_zero() {
 /// compared draft j against position j's logits, which predict an
 /// *input* token when the prompt has more than one token — rejecting
 /// correct drafts and changing the output distribution.
+/// The verifier must accept a draft that lands on the LAST verification
+/// position.
+///
+/// `verify_tokens` is `input + drafts`, so the final draft is checked against
+/// the final position's logits, where `offset + vocab_size == logits.len()`
+/// exactly. The bounds guard is `if offset + vocab_size > logits.len()
+/// { break }`; relaxing it to `>=` drops that last position and silently
+/// rejects a correct final draft (`cargo mutants` found the mutant survives
+/// the whole suite). Greedy + a model whose argmax IS the next input token
+/// makes the acceptance deterministic.
+/// The `max_tokens` cap must fill the budget from the position AFTER the
+/// accepted drafts.
+///
+/// When the remaining budget is exactly `accepted + 1` the verifier takes the
+/// budget-cap branch and samples one more token from
+/// `(input_len - 1 + accepted) * vocab_size`. `cargo mutants` replacing that
+/// `+` with `*` survived the suite and is observably wrong: with a 2-token
+/// prefill and `max_tokens = 3` against a `+1` model, the stream becomes
+/// `[7, 8, 6]` instead of `[7, 8, 9]` — the third token is sampled from the
+/// wrong position. The existing budget tests only assert the COUNT of tokens,
+/// which the mutant preserves.
+#[test]
+fn budget_cap_samples_from_the_position_after_the_accepted_drafts() {
+    use vllm_testing::ConsistentModel;
+
+    let mut engine = Engine::new_boxed(
+        Box::new(ConsistentModel::new(1000)),
+        Some(Box::new(ConsistentModel::new(1000))),
+    );
+    engine.max_draft_tokens = 4;
+    engine.enable_speculative();
+
+    let (tx, mut rx) = tokio_mpsc::channel(64);
+    // `ConsistentModel` emits `last + 1`, so the correct stream is 7, 8, 9.
+    // `max_tokens = 3` caps the first burst below the 4-draft budget
+    // (`loop_limit = remaining - 1 = 2 < drafts.len() = 4`), taking the
+    // budget-cap branch on that very step.
+    engine.add_request(Request::new(1, vec![5, 6], 3), tx);
+    engine.step().unwrap();
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    assert_eq!(
+        streamed,
+        vec![7, 8, 9],
+        "the budget-cap token must come from the position after the accepted \
+         drafts, not an offset computed from an earlier position"
+    );
+}
+
+#[test]
+fn verifier_accepts_a_draft_on_the_last_verification_position() {
+    #[derive(Clone)]
+    struct NextTokenModel {
+        vocab_size: usize,
+    }
+
+    impl ModelBackend for NextTokenModel {
+        fn forward(
+            &mut self,
+            seq_ids: &[SeqId],
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<BatchOutput> {
+            Ok(BatchOutput {
+                seq_ids: seq_ids.to_vec(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 0,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect(),
+            })
+        }
+
+        fn forward_logits(
+            &mut self,
+            _seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            // Position p predicts input_tokens[p + 1]; the final position
+            // predicts 0 (the "end").
+            let vocab = self.vocab_size;
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| {
+                    tokens
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(p, _)| {
+                            let mut logits = vec![-100.0_f32; vocab];
+                            let next = tokens.get(p + 1).copied().unwrap_or(0);
+                            logits[next as usize % vocab] = 0.0;
+                            logits
+                        })
+                        .collect()
+                })
+                .collect())
+        }
+
+        fn embed(
+            &mut self,
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| vec![0.0; tokens.len()])
+                .collect())
+        }
+
+        fn vocab_size(&self) -> usize {
+            self.vocab_size
+        }
+
+        fn num_layers(&self) -> usize {
+            1
+        }
+
+        fn num_heads(&self) -> usize {
+            1
+        }
+    }
+
+    let mut engine = EngineBuilder::new(Box::new(NextTokenModel { vocab_size: 64 }))
+        .with_num_kv_blocks(64)
+        .build();
+    engine.enable_speculative();
+
+    // input [10, 20, 30] + drafts [40, 50]: the verify token list has 5
+    // entries, so the draft `50` is checked at the LAST position (index 4),
+    // where the bounds check is exactly on its limit.
+    let batch = vllm_traits::types::Batch {
+        seq_ids: vec![1],
+        input_tokens: vec![vec![10, 20, 30]],
+        positions: vec![vec![0, 1, 2]],
+        kv_block_ids: vec![vec![0]],
+        num_computed_tokens: vec![0],
+        is_prefill: vec![true],
+        sampling_params: vec![vllm_traits::SamplingParams::default()],
+        phase: vllm_traits::BatchPhase::Prefill,
+        total_tokens: 3,
+        max_seq_len: 10,
+    };
+    let drafts: Vec<Vec<TokenId>> = vec![vec![40, 50]];
+
+    let (_, accepted_counts) = engine
+        .verify_draft_tokens_logits(&batch, &drafts)
+        .expect("verify should succeed");
+    assert_eq!(
+        accepted_counts,
+        vec![2],
+        "the final draft must be checked and accepted, not skipped by the \
+         bounds guard (offset + vocab == logits.len() is a VALID position)"
+    );
+}
+
 #[test]
 fn verifier_prefill_accepts_drafts_at_position_after_prompt() {
     #[derive(Clone)]
