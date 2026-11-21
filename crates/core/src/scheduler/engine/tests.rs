@@ -2189,3 +2189,92 @@ fn decoding_sequences_are_never_parked_as_partial_prefills() {
         "nothing may be requeued from a decode round"
     );
 }
+
+/// `update_speculative` must fold tokens only for sequences that are NOT a
+/// mid-chunk prefill, while still advancing the computed frontier for both.
+///
+/// A chunked prefill left `Prefilling` after the advance predicted a stale
+/// next-prompt token that is re-derived on the final chunk, so its entries must
+/// NOT enter `seq.tokens`, dispatch decode events, or allocate blocks — only
+/// `num_computed_tokens` moves. `cargo mutants` emptied the whole method and
+/// relaxed both the `.is_some_and(...)` chain and the `status != Prefilling`
+/// test, none of which had a test.
+#[test]
+fn update_speculative_folds_only_non_prefill_sequences() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 1024);
+
+    let make = |id: u64, status: Status, computed: usize, prompt: usize| Sequence {
+        id,
+        tokens: vec![1; prompt],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: computed,
+        prompt_len: prompt,
+        status,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    // Seq 1 is a mid-chunk prefill; seq 2 is a healthy decoder.
+    engine
+        .running
+        .push(make(1, Status::Prefilling, block_size, block_size * 4));
+    engine
+        .running
+        .push(make(2, Status::Decoding, block_size, block_size));
+    // Allocate each table through the real path, one at a time.
+    let mut all = std::mem::take(&mut engine.running);
+    engine.preallocate_kv_blocks(&mut all);
+    engine.running = all;
+
+    let before_tokens_1 = engine.running[0].tokens.len();
+    let before_blocks_1 = engine.running[0].kv_blocks.len();
+    let before_tokens_2 = engine.running[1].tokens.len();
+
+    let tok = |t: u32| vllm_traits::SampledToken {
+        token: t,
+        logprob: 0.0,
+        top_logprobs: vec![],
+    };
+    engine.update_speculative(
+        &[1, 2],
+        &[vec![tok(100), tok(101)], vec![tok(200)]],
+        &[8, 1],
+    );
+
+    // Seq 1 was parked by `requeue_partial_prefills` (it is still Prefilling
+    // with computed < prompt), so read it from the queue.
+    let seq1 = engine.request_queue.get(1).expect("seq 1 is parked");
+    assert_eq!(
+        seq1.num_computed_tokens,
+        block_size + 8,
+        "a mid-chunk prefill must still advance its computed frontier"
+    );
+    assert_eq!(
+        seq1.tokens.len(),
+        before_tokens_1,
+        "a mid-chunk prefill must NOT fold its stale predicted tokens"
+    );
+    assert_eq!(
+        seq1.kv_blocks.len(),
+        before_blocks_1,
+        "and must NOT allocate blocks for them"
+    );
+
+    // Seq 2: the token IS folded.
+    let seq2 = engine.running.iter().find(|s| s.id == 2).expect("seq 2");
+    assert_eq!(
+        seq2.tokens.len(),
+        before_tokens_2 + 1,
+        "a real decoder must fold its emitted token"
+    );
+    assert_eq!(
+        seq2.tokens.last().copied(),
+        Some(200),
+        "the folded token must be the one emitted"
+    );
+}
