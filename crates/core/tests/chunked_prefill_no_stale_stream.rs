@@ -19,7 +19,7 @@
 use tokio::sync::mpsc;
 use vllm_core::Engine;
 use vllm_core::types::{Request, SchedulerConfig};
-use vllm_traits::{ModelBackend, Result as ModelResult, SampledToken, SeqId, TokenId};
+use vllm_traits::{BatchOutput, ModelBackend, Result as ModelResult, SampledToken, SeqId, TokenId};
 
 /// Distinguishing mock: prefill chunks logits peak at `PREFILL_MARK` (111),
 /// decode steps peak at `DECODE_MARK` (222). Because a mid-chunk prefill and
@@ -226,6 +226,127 @@ fn cuda_graph_step_never_streams_stale_midchunk_predictions() {
         },
         "the graph path must stream exactly max_tokens real tokens (final-chunk \
          first token + 7 decodes) and suppress every stale mid-chunk prediction\n  got {received:?}"
+    );
+}
+
+/// The CUDA-graph step path must record per-step LATENCY when a step actually
+/// takes measurable time.
+///
+/// This corrects an earlier conclusion. `if elapsed > 0.0` was first judged
+/// equivalent because `elapsed` is `as_millis()` and a fast mock finishes in
+/// under a millisecond, so the guard never fired. That was a property of the
+/// fixture, not of the code: with a 5 ms mock the guard DOES fire and the
+/// mutant (`elapsed < 0.0`) drops the sample, leaving `avg_latency_ms` at 0
+/// while the engine still serves. Latency is the metric an operator uses to
+/// see a slow graph step at all, so it must be pinned with a model slow enough
+/// to cross the millisecond boundary.
+#[test]
+#[cfg(feature = "cuda-graph")]
+fn cuda_graph_step_records_latency_for_a_slow_step() {
+    use std::time::Duration;
+    use vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig;
+
+    #[derive(Clone)]
+    struct SlowModel;
+
+    impl ModelBackend for SlowModel {
+        fn forward(
+            &mut self,
+            seq_ids: &[SeqId],
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<BatchOutput> {
+            std::thread::sleep(Duration::from_millis(5));
+            Ok(BatchOutput {
+                seq_ids: seq_ids.to_vec(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 11,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect(),
+            })
+        }
+
+        fn forward_logits(
+            &mut self,
+            _seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            std::thread::sleep(Duration::from_millis(5));
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| {
+                    tokens
+                        .iter()
+                        .flat_map(|_| {
+                            let mut logits = vec![-10.0_f32; 64];
+                            logits[11] = 10.0;
+                            logits
+                        })
+                        .collect()
+                })
+                .collect())
+        }
+
+        fn embed(
+            &mut self,
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            Ok(Vec::new())
+        }
+
+        fn vocab_size(&self) -> usize {
+            64
+        }
+
+        fn num_layers(&self) -> usize {
+            1
+        }
+
+        fn num_heads(&self) -> usize {
+            1
+        }
+    }
+
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    let mut engine = Engine::with_config(SlowModel, None, config, 0, 64);
+    engine
+        .capture_cuda_graphs()
+        .expect("capturing the configured batch sizes must succeed");
+
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![5, 6], 3), tx);
+    for _ in 0..6 {
+        if !engine.has_pending() {
+            break;
+        }
+        engine.step_with_graph().expect("graph step must succeed");
+    }
+
+    let snapshot = engine.scheduler.metrics.snapshot();
+    assert_eq!(snapshot.tokens_total, 3, "setup: the steps must have run");
+    assert!(
+        snapshot.avg_latency_ms >= 1.0,
+        "a 5 ms model must produce a recorded step latency; got {} \
+         (0 means the latency guard dropped every sample)",
+        snapshot.avg_latency_ms
     );
 }
 
