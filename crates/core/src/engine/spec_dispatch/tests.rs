@@ -789,6 +789,229 @@ fn test_speculative_all_accepted_folds_every_token_into_sequence() {
 /// does flipping the `pos >= max_draft` guard: every variant changes WHERE
 /// the drafts are generated, which with a real model silently degrades the
 /// acceptance rate rather than producing a visible failure.
+/// The RESOLVER draft path must generate at the same absolute positions as
+/// the batched path.
+///
+/// `step_speculative_inner` takes two different draft routes:
+/// `generate_batched_drafts` when only `draft_model` is set, and
+/// `generate_per_seq_drafts` when a `draft_resolver` is present. The two carry
+/// duplicated position arithmetic (`base = num_computed_tokens + input_len - 1`,
+/// then `base + pos`), and `cargo mutants` showed the resolver copy's `+` -> `*`
+/// mutants survive: every existing test drives the BATCHED route, because
+/// `with_draft_resolver` is crate-private and no in-crate test built a resolver
+/// with a usable backend. This does, and records the positions the draft
+/// backend actually receives.
+#[test]
+fn resolver_draft_path_generates_at_consecutive_positions() {
+    use crate::engine::ctor::EngineBuilder;
+    use crate::metrics::EnhancedMetricsCollector;
+    use crate::speculative::draft_resolver::{DraftLoader, DraftResolver, NoopLoader};
+    use crate::speculative::registry::DraftModelRegistry;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct PositionRecorder {
+        positions: Arc<Mutex<Vec<usize>>>,
+    }
+
+    impl ModelBackend for PositionRecorder {
+        fn forward(
+            &mut self,
+            seq_ids: &[SeqId],
+            _input_tokens: &[Vec<TokenId>],
+            positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            is_prefill: &[bool],
+        ) -> ModelResult<BatchOutput> {
+            if !is_prefill[0] {
+                self.positions
+                    .lock()
+                    .expect("positions lock")
+                    .push(positions[0][0]);
+            }
+            Ok(BatchOutput {
+                seq_ids: seq_ids.to_vec(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 11,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect(),
+            })
+        }
+
+        fn forward_logits(
+            &mut self,
+            _seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| {
+                    tokens
+                        .iter()
+                        .flat_map(|_| {
+                            let mut logits = vec![-10.0_f32; 64];
+                            logits[11] = 10.0;
+                            logits
+                        })
+                        .collect()
+                })
+                .collect())
+        }
+
+        fn embed(
+            &mut self,
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            Ok(Vec::new())
+        }
+
+        fn vocab_size(&self) -> usize {
+            64
+        }
+
+        fn num_layers(&self) -> usize {
+            1
+        }
+
+        fn num_heads(&self) -> usize {
+            1
+        }
+    }
+
+    /// Records the length of each `forward_logits` call, i.e. how many tokens
+    /// the verifier was asked to score (`input + drafts`).
+    struct VerifyLenRecorder {
+        lens: Arc<Mutex<Vec<usize>>>,
+    }
+
+    impl ModelBackend for VerifyLenRecorder {
+        fn forward(
+            &mut self,
+            seq_ids: &[SeqId],
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<BatchOutput> {
+            Ok(BatchOutput {
+                seq_ids: seq_ids.to_vec(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 11,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect(),
+            })
+        }
+
+        fn forward_logits(
+            &mut self,
+            _seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            self.lens
+                .lock()
+                .expect("lens lock")
+                .push(input_tokens[0].len());
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| {
+                    tokens
+                        .iter()
+                        .flat_map(|_| {
+                            let mut logits = vec![-10.0_f32; 64];
+                            logits[11] = 10.0;
+                            logits
+                        })
+                        .collect()
+                })
+                .collect())
+        }
+
+        fn embed(
+            &mut self,
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            Ok(Vec::new())
+        }
+
+        fn vocab_size(&self) -> usize {
+            64
+        }
+
+        fn num_layers(&self) -> usize {
+            1
+        }
+
+        fn num_heads(&self) -> usize {
+            1
+        }
+    }
+
+    let draft_backend = PositionRecorder {
+        positions: Arc::new(Mutex::new(Vec::new())),
+    };
+    let positions = Arc::clone(&draft_backend.positions);
+
+    let loader: Arc<dyn DraftLoader> = Arc::new(NoopLoader);
+    let resolver = Arc::new(DraftResolver::new(
+        Arc::new(DraftModelRegistry::new()),
+        Some(Arc::new(Mutex::new(Box::new(draft_backend)))),
+        loader,
+        Arc::new(EnhancedMetricsCollector::new()),
+    ));
+
+    let verify_lens = Arc::new(Mutex::new(Vec::new()));
+    let mut engine = EngineBuilder::new(Box::new(VerifyLenRecorder {
+        lens: Arc::clone(&verify_lens),
+    }))
+    .with_num_kv_blocks(64)
+    .with_draft_resolver(resolver)
+    .build();
+    engine.max_draft_tokens = 2;
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio_mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![1, 2, 3], 20), tx);
+    engine.step().unwrap();
+
+    let recorded = positions.lock().expect("positions lock").clone();
+    assert_eq!(
+        &recorded[..3],
+        &[2, 3, 4],
+        "the resolver route must generate drafts at consecutive positions from \
+         the prompt's last token index, exactly like the batched route; got {recorded:?}"
+    );
+    let lens = verify_lens.lock().expect("lens lock").clone();
+    assert_eq!(
+        lens.first().copied(),
+        Some(5),
+        "the verifier must be handed the 3-token prompt plus exactly 2 drafts \
+         (max_draft_tokens = 2); the `max_draft + 1`th iteration writes KV \
+         only and must NOT be counted as a draft. Got forward_logits lengths \
+         {lens:?} (a length of 6 means the extra iteration leaked into the \
+         draft list)"
+    );
+}
+
 #[test]
 fn drafts_are_generated_at_consecutive_positions_after_the_prompt() {
     #[derive(Clone)]
