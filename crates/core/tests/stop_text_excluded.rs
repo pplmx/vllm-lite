@@ -742,3 +742,67 @@ fn speculative_two_requests_each_stream_their_own_output_once() {
          not a re-generated prefix; got {streamed_b:?}"
     );
 }
+
+/// A stop completing on the TAIL of a speculative step must be withheld.
+///
+/// This is the non-boundary shape of the same contract: the sequence still has
+/// budget (`max_tokens = 20`), so the `max_tokens`-boundary record
+/// (`stop_ended`) is not what withholds the tail. The step that generates the
+/// stop's last token must drop it together with the held-back prefix.
+///
+/// (The `completes_stop` check in `emit_verified_tokens` that this test used
+/// to exercise became unreachable once the fold trims the burst first — it was
+/// removed, see the `engine/spec_dispatch` changelog entry. The behaviour it
+/// guarded is still required, so the test stays.)
+#[test]
+fn speculative_tail_stop_with_budget_left_is_withheld() {
+    use vllm_testing::ConsistentModel;
+
+    // `ConsistentModel` emits `last + 1`: a 1-token prompt ending in 6
+    // produces 7, 8, 9, ... so `stop = [[8, 9]]` completes on the step that
+    // generates `9`.
+    let mut engine = Engine::new_boxed(
+        Box::new(ConsistentModel::new(1000)),
+        Some(Box::new(ConsistentModel::new(1000))),
+    );
+    engine.max_draft_tokens = 0;
+    engine.enable_speculative();
+
+    let (tx, mut rx) = mpsc::channel(64);
+    let mut request = Request::new(1, vec![6], 20);
+    request.sampling_params.stop_token_sequences = Some(vec![vec![8, 9]]);
+    let seq_id = engine.add_request(request, tx);
+    let (finish_tx, mut finish_rx) = tokio::sync::oneshot::channel();
+    engine.finish_reason_txs.insert(seq_id, finish_tx);
+
+    for _ in 0..5 {
+        if !engine.has_pending() {
+            break;
+        }
+        let _ = engine.step();
+    }
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    assert_eq!(
+        streamed,
+        vec![7],
+        "only the token before the stop may stream (max_tokens = 20, so this is \
+         NOT the max_tokens-boundary path); got {streamed:?}"
+    );
+    assert_eq!(
+        engine.scheduler.stop_ended_len(),
+        0,
+        "the sequence did not end on the max_tokens boundary, so the stop was \
+         caught by `completes_stop`"
+    );
+    assert!(!engine.has_pending(), "the sequence must end on the stop");
+    assert_eq!(
+        finish_rx
+            .try_recv()
+            .expect("the handler must learn why it ended"),
+        vllm_traits::FinishReason::Stop
+    );
+}

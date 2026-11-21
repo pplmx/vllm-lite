@@ -269,7 +269,6 @@ impl crate::engine::Engine {
                 .get_sequence(*seq_id)
                 .map(|s| s.sampling_params.clone());
             let hold = self.stop_hold_back(params.as_ref());
-            let completes_stop = self.token_completes_stop_sequence(*seq_id, params.as_ref());
 
             // Shares the regular path's `try_send_token` contract
             // (scheduler/batch.rs): `Full` (consumer drains slower than
@@ -287,11 +286,11 @@ impl crate::engine::Engine {
             let ended_on_stop = self.scheduler.stop_ended.contains(seq_id);
             let pending = self.scheduler.pending_stream.entry(*seq_id).or_default();
             pending.push(sampled.clone());
-            if completes_stop || ended_on_stop {
+            if ended_on_stop {
                 tracing::debug!(
                     seq_id = %seq_id,
                     held = pending.len(),
-                    "Generated tail completes a stop sequence; withholding it"
+                    "Sequence reached max_tokens on a stop boundary; withholding the tail"
                 );
                 pending.clear();
                 results.push((*seq_id, sampled.clone()));
