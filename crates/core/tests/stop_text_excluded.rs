@@ -686,3 +686,59 @@ fn speculative_mid_burst_eos_ends_the_sequence() {
         "an EOS token must be reported as Stop, not Length"
     );
 }
+
+/// Two speculative requests in one batch must each receive their own output
+/// exactly once.
+///
+/// `fold_speculative_update` folds one sequence per `update_speculative` call,
+/// and that call ends with `requeue_partial_prefills` — which walks the WHOLE
+/// `running` set. A freshly admitted prefill is admitted with
+/// `num_computed_tokens = 0`, so while the first sequence is being folded the
+/// still-unfolded second one looks like a mid-chunk prefill and is requeued:
+/// its tokens were already sent to the client, but they never reach
+/// `seq.tokens`, so the next round generates (and streams) them again and the
+/// sequence ends up emitting more than `max_tokens`.
+#[test]
+fn speculative_two_requests_each_stream_their_own_output_once() {
+    use vllm_testing::ConsistentModel;
+
+    let mut engine = Engine::new_boxed(
+        Box::new(ConsistentModel::new(1000)),
+        Some(Box::new(ConsistentModel::new(1000))),
+    );
+    engine.max_draft_tokens = 4;
+    engine.enable_speculative();
+
+    let (tx_a, mut rx_a) = mpsc::channel(256);
+    let (tx_b, mut rx_b) = mpsc::channel(256);
+    let a = engine.add_request(Request::new(1, vec![5, 6], 6), tx_a);
+    let b = engine.add_request(Request::new(2, vec![5, 6], 6), tx_b);
+
+    for _ in 0..10 {
+        if !engine.has_pending() {
+            break;
+        }
+        let _ = engine.step();
+    }
+
+    let mut streamed_a = Vec::new();
+    while let Ok(sampled) = rx_a.try_recv() {
+        streamed_a.push(sampled.token);
+    }
+    let mut streamed_b = Vec::new();
+    while let Ok(sampled) = rx_b.try_recv() {
+        streamed_b.push(sampled.token);
+    }
+    // Both share the same prompt and the same greedy model, so they must
+    // observe the same stream — and each exactly `max_tokens` long.
+    assert_eq!(
+        streamed_a,
+        vec![7, 8, 9, 10, 11, 12],
+        "seq {a} must stream its 6 tokens once; got {streamed_a:?}"
+    );
+    assert_eq!(
+        streamed_b, streamed_a,
+        "seq {b} must stream the same tokens as seq {a} (same prompt, same model), \
+         not a re-generated prefix; got {streamed_b:?}"
+    );
+}

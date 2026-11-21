@@ -348,6 +348,18 @@ impl crate::engine::Engine {
             }
         }
 
+        // Fold every sequence in ONE `update_speculative` call. That call ends
+        // by running `finalize_finished_sequences` + `requeue_partial_prefills`
+        // over the WHOLE running set, so calling it per sequence moved the
+        // not-yet-folded ones out from under the loop: a freshly admitted
+        // prefill sits at `num_computed_tokens == 0` (below its prompt
+        // length), so it looked like a mid-chunk prefill and was requeued
+        // with this step's already-emitted tokens dropped from `seq.tokens`.
+        // The next round then generated those tokens again, so a client saw
+        // its output twice and the sequence overshot `max_tokens`.
+        let mut fold_ids: Vec<SeqId> = Vec::with_capacity(per_seq.len());
+        let mut fold_input_counts: Vec<usize> = Vec::with_capacity(per_seq.len());
+
         for (seq_id, tokens) in &per_seq {
             let Some(i) = batch.seq_ids.iter().position(|sid| sid == seq_id) else {
                 continue;
@@ -393,11 +405,8 @@ impl crate::engine::Engine {
                 // they must not advance the computed frontier either.
                 chunk_len + accepted_counts[i].min(kept.len().saturating_sub(1))
             };
-            self.scheduler.update_speculative(
-                std::slice::from_ref(seq_id),
-                std::slice::from_ref(&kept),
-                std::slice::from_ref(&input_count),
-            );
+            fold_ids.push(*seq_id);
+            fold_input_counts.push(input_count);
             folded.insert(
                 *seq_id,
                 FoldedBurst {
@@ -406,6 +415,16 @@ impl crate::engine::Engine {
                     match_starts_before_burst,
                 },
             );
+        }
+        // `folded` also supplies the per-sequence token groups the scheduler
+        // needs, so nothing is cloned twice.
+        let fold_tokens: Vec<Vec<SampledToken>> = fold_ids
+            .iter()
+            .filter_map(|seq_id| folded.get(seq_id).map(|burst| burst.tokens.clone()))
+            .collect();
+        if !fold_ids.is_empty() {
+            self.scheduler
+                .update_speculative(&fold_ids, &fold_tokens, &fold_input_counts);
         }
         folded
     }
@@ -452,7 +471,7 @@ impl crate::engine::Engine {
     /// were produced by a sequence that had already ended — and:
     ///
     /// - a `stop` sequence is dropped together with its trailing tokens
-    ///   (OpenAI: "the returned text will not contain the stop sequence");
+    ///   (`OpenAI`: "the returned text will not contain the stop sequence");
     /// - the EOS token itself is KEPT, matching `step_regular`, where it
     ///   reaches the response channel and the HTTP layer drops its text
     ///   (`should_skip_token_text`).
