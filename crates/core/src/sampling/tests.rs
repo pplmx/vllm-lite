@@ -1638,3 +1638,162 @@ fn top_p_at_or_above_one_always_returns_the_argmax() {
     // The `||` also covers an empty vocabulary, which must not panic.
     assert_eq!(top_p_sample(&[], 0.5, 0.5), 0);
 }
+
+/// `top_logprobs = Some(n)` must return the n most likely tokens, ranked.
+///
+/// The guard is `Some(n) if n > 0`. `cargo mutants` replaced it with `true` and
+/// `false`, flipped its `>`, and every variant survived: the only existing
+/// `top_logprobs` test uses EMPTY logits, where the block produces `Vec::new()`
+/// either way. This pins the populated case — the ranking order, the length,
+/// and agreement with the sampled token's own `logprob`.
+#[test]
+fn top_logprobs_returns_the_ranked_most_likely_tokens() {
+    // Distinct logits so the ranking is unambiguous: token 2 is most likely.
+    let logits = vec![0.0_f32, 2.0, 4.0, 1.0];
+
+    let params = SamplingParams::builder()
+        .with_top_logprobs(2)
+        .with_seed(7)
+        .build();
+    let sampled = sample_one_with_params(&logits, &params, &[]);
+
+    assert_eq!(
+        sampled.top_logprobs.len(),
+        2,
+        "asking for 2 must return exactly 2 entries; got {:?}",
+        sampled.top_logprobs
+    );
+    let ranked: Vec<u32> = sampled.top_logprobs.iter().map(|(t, _)| *t).collect();
+    assert_eq!(
+        ranked,
+        vec![2, 1],
+        "the two highest logits are tokens 2 then 1; got {ranked:?}"
+    );
+    assert!(
+        sampled.top_logprobs[0].1 > sampled.top_logprobs[1].1,
+        "entries must be sorted by logprob descending; got {:?}",
+        sampled.top_logprobs
+    );
+
+    // The sampled token's own logprob must match its rank entry when it is in
+    // the top-N, which is the consistency the block exists to guarantee.
+    if let Some((_, ranked_lp)) = sampled
+        .top_logprobs
+        .iter()
+        .find(|(t, _)| *t == sampled.token)
+    {
+        assert!(
+            (sampled.logprob - ranked_lp).abs() < 1e-6,
+            "the sampled token's logprob must equal its top_logprobs entry; \
+             got {} vs {ranked_lp}",
+            sampled.logprob
+        );
+    }
+
+    // `Some(0)` and `None` must both leave the vector empty.
+    let none = SamplingParams::builder().with_seed(7).build();
+    assert!(
+        sample_one_with_params(&logits, &none, &[])
+            .top_logprobs
+            .is_empty(),
+        "top_logprobs = None must produce an empty vector"
+    );
+}
+
+/// A penalty with no history must not touch the logits.
+///
+/// Both guards read `<penalty>… > EPSILON && !seen.is_empty()`. Turning either
+/// `&&` into `||` lets an EMPTY history reach `apply_repeat_penalty` /
+/// `apply_presence_penalty`, which then iterate nothing — harmless in
+/// isolation, but the same mutants also flip the epsilon `>` to `> =`, which
+/// treats a penalty of exactly 1.0 as active. Together they are only
+/// observable through the sampled distribution, so this test pins the
+/// distribution itself for the no-op cases.
+#[test]
+fn penalties_are_no_ops_without_history() {
+    let logits = vec![0.0_f32, 3.0, 1.0];
+
+    // Baseline: no penalties, no history.
+    let plain = SamplingParams::builder().with_seed(11).build();
+    let baseline = sample_one_with_params(&logits, &plain, &[]);
+
+    // Penalty set, but nothing in `seen`: must behave exactly like baseline.
+    let with_penalty = SamplingParams::builder()
+        .with_seed(11)
+        .with_repeat_penalty(2.0)
+        .with_presence_penalty(1.5)
+        .build();
+    let penalised = sample_one_with_params(&logits, &with_penalty, &[]);
+
+    assert_eq!(
+        penalised.token, baseline.token,
+        "a penalty with an empty history must not change the draw"
+    );
+    assert!(
+        (penalised.logprob - baseline.logprob).abs() < 1e-6,
+        "a penalty with an empty history must not change the distribution; \
+         got {} vs {}",
+        penalised.logprob,
+        baseline.logprob
+    );
+
+    // A penalty of exactly 1.0 (and presence 0.0) is a no-op even WITH
+    // history: the epsilon comparisons are strict. The baseline here also has
+    // history so the comparison isolates the penalty, not the history.
+    let history = [0u32, 1];
+    let baseline_with_history = sample_one_with_params(&logits, &plain, &history);
+    let neutral = SamplingParams::builder()
+        .with_seed(11)
+        .with_repeat_penalty(1.0)
+        .with_presence_penalty(0.0)
+        .build();
+    let neutral_draw = sample_one_with_params(&logits, &neutral, &history);
+    assert!(
+        (neutral_draw.logprob - baseline_with_history.logprob).abs() < 1e-6,
+        "repeat_penalty = 1.0 and presence_penalty = 0.0 must be exact no-ops \
+         even with history; got {} vs {}",
+        neutral_draw.logprob,
+        baseline_with_history.logprob
+    );
+}
+
+/// A penalty WITH history must actually be applied.
+///
+/// The guard is `<penalty>… > EPSILON && !seen.is_empty()`. Deleting the `!`
+/// inverts the history test, so a penalty is applied only when there is NO
+/// history — the exact opposite of the contract. `cargo mutants` found the
+/// variant survives because every existing penalty test either uses an empty
+/// history or checks only that a token was produced.
+#[test]
+fn penalties_apply_when_there_is_history() {
+    let logits = vec![0.0_f32, 3.0, 1.0];
+    let history = [1u32]; // token 1 is the argmax
+
+    let plain = SamplingParams::builder().with_seed(11).build();
+    let baseline = sample_one_with_params(&logits, &plain, &history);
+
+    // A strong repeat penalty on the argmax must push the distribution away
+    // from it: the argmax's logit (3.0) becomes 1.5, below token 2's 1.0...
+    // actually 1.5 > 1.0, so use a larger penalty to cross over.
+    let penalised = SamplingParams::builder()
+        .with_seed(11)
+        .with_repeat_penalty(8.0)
+        .build();
+    let after = sample_one_with_params(&logits, &penalised, &history);
+
+    assert!(
+        after.logprob < baseline.logprob + 1e-6,
+        "penalising the current argmax must not raise its own logprob; \
+         got {} vs {}",
+        after.logprob,
+        baseline.logprob
+    );
+    // 3.0 / 8.0 = 0.375, now BELOW token 2 (1.0), so the argmax moves to
+    // token 2.
+    assert_eq!(
+        after.token, 2,
+        "a repeat penalty of 8.0 must demote the repeated argmax below token \
+         2; got token {}",
+        after.token
+    );
+}
