@@ -304,6 +304,66 @@ fn test_repeat_penalty_basic() {
     assert!((logits[2] - 0.5).abs() < 1e-6);
 }
 
+/// The repeat penalty must reach the LAST index and ignore out-of-range ids.
+///
+/// The loop guards `idx < logits.len()`. `cargo mutants` relaxed that to `<=`
+/// (which indexes out of bounds) and flipped it to `>`, and both survived: no
+/// test used a `seen` id at the final position, and none supplied an id past
+/// the end. The boundary is load-bearing — a token id equal to the vocabulary
+/// size arrives from real tokenizers at the edge of the range.
+/// The nucleus cutoff must use a STRICT comparison.
+///
+/// `cumsum > top_p` stops the nucleus once the mass EXCEEDS `top_p`. Relaxing it
+/// to `>=` also stops when the mass equals `top_p` exactly, dropping the token
+/// that completes the nucleus — the sampler then never produces it no matter
+/// how the threshold falls. `cargo mutants` found the `>=` variant survives:
+/// no existing fixture lands exactly on the boundary.
+#[test]
+fn top_p_cutoff_is_strict_at_the_boundary() {
+    // Two equal logits -> probabilities 0.5 / 0.5. With top_p = 0.5 the
+    // running mass hits exactly 0.5 after the first token, which is NOT
+    // greater than top_p, so both tokens stay in the nucleus.
+    let logits = vec![0.0_f32, 0.0];
+    // A threshold past 0.5 can only be satisfied by the second token, so it is
+    // reachable only when the nucleus kept both.
+    let sampled = top_p_sample(&logits, 0.5, 0.75);
+    assert_eq!(
+        sampled, 1,
+        "with mass exactly == top_p the nucleus must keep both tokens; the \
+         strict `>` reaches the second one, while `>=` truncates to the first"
+    );
+}
+
+#[test]
+fn test_repeat_penalty_handles_the_last_index_and_ignores_out_of_range() {
+    // The last index must be penalised, not skipped.
+    let mut logits = vec![0.5, 0.5, 0.5];
+    apply_repeat_penalty(&mut logits, &[2], 2.0);
+    assert!(
+        logits[2] < 0.5,
+        "the final index must be penalised; got {logits:?}"
+    );
+    assert!((logits[0] - 0.5).abs() < 1e-6, "other positions untouched");
+    assert!((logits[1] - 0.5).abs() < 1e-6, "other positions untouched");
+
+    // An id past the end is ignored, not applied to a wrong slot.
+    let mut logits = vec![0.5, 0.5, 0.5];
+    apply_repeat_penalty(&mut logits, &[3, 99], 2.0);
+    assert_eq!(
+        logits,
+        vec![0.5, 0.5, 0.5],
+        "out-of-range ids must leave every logit untouched"
+    );
+
+    // A negative logit at the last index must move further from zero.
+    let mut logits = vec![0.0, -5.0];
+    apply_repeat_penalty(&mut logits, &[1], 2.0);
+    assert!(
+        logits[1] < -5.0,
+        "a penalised negative logit must grow more negative; got {logits:?}"
+    );
+}
+
 #[test]
 fn test_repeat_penalty_no_effect_at_one() {
     let mut logits = vec![0.5, 0.5];
