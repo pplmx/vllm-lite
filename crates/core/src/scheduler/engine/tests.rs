@@ -20,6 +20,8 @@ use vllm_traits::{BatchPhase, SampledToken};
 use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::SchedulerCudaGraphConfig;
 use crate::scheduler::engine::SchedulerEngine;
+use crate::scheduler::observer::{NoopSchedulerObserver, SchedulerObservers};
+use crate::scheduler::policy::PriorityPolicy;
 use crate::types::{Priority, Request, SamplingParams, SchedulerConfig, Sequence, Status};
 
 fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
@@ -1276,4 +1278,77 @@ fn prefix_cache_hit_rate_is_the_ratio_of_hits_to_requests() {
         (rate - 0.5).abs() < 1e-9,
         "2 hits of 4 requests is 0.5; got {rate}"
     );
+}
+
+/// `set_policy` must replace the policy, and `register_observer` must report
+/// the MAX_OBSERVERS limit rather than absorbing every registration.
+///
+/// `cargo mutants` emptied `set_policy` and replaced `register_observer` with
+/// `Ok(())`, both surviving. A silently-ignored policy change means a caller
+/// believes it reconfigured scheduling and did not; a registration that always
+/// reports success past the cap means observers are dropped with no error while
+/// the caller thinks they are installed.
+#[test]
+fn set_policy_and_register_observer_take_effect() {
+    let mut scheduler = SchedulerEngine::default();
+    let before = scheduler.policy.name();
+
+    scheduler.set_policy(Box::new(PriorityPolicy::default()));
+    let after = scheduler.policy.name();
+    assert_ne!(
+        before, after,
+        "set_policy must install a different policy (still {before})"
+    );
+
+    // Registration succeeds up to MAX_OBSERVERS and then reports an error.
+    let limit = crate::scheduler::observer::SchedulerObservers::MAX_OBSERVERS;
+    for i in 0..limit {
+        assert!(
+            scheduler
+                .register_observer(Box::new(NoopSchedulerObserver))
+                .is_ok(),
+            "observer {i} is below the cap and must register"
+        );
+    }
+    assert!(
+        scheduler
+            .register_observer(Box::new(NoopSchedulerObserver))
+            .is_err(),
+        "the {}-th registration exceeds the cap and must report an error",
+        limit + 1
+    );
+}
+
+/// `running()` must return the live set of running sequences.
+///
+/// `cargo mutants` replaced the whole accessor with `vec![]`. Callers use it to
+/// inspect in-flight work (diagnostics, the gRPC metrics path); an always-empty
+/// answer reports an idle scheduler while sequences are decoding.
+#[test]
+fn running_returns_the_live_sequences() {
+    let mut scheduler = SchedulerEngine::default();
+    assert!(
+        scheduler.running().is_empty(),
+        "a fresh scheduler has nothing running"
+    );
+
+    let seq = Sequence {
+        id: 77,
+        tokens: vec![5; 16],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: 16,
+        prompt_len: 16,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    scheduler.running.push(seq);
+
+    let live = scheduler.running();
+    assert_eq!(live.len(), 1, "the running sequence must be reported");
+    assert_eq!(live[0].id, 77);
 }
