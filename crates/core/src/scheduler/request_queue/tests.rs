@@ -323,3 +323,38 @@ fn test_priority_policy_tiebreak_is_fifo() {
     assert_eq!(queue.dequeue().unwrap().id, 2);
     assert_eq!(queue.dequeue().unwrap().id, 3);
 }
+
+/// `drain_by_phase` must compact the priority heap, not just delete the map
+/// entries.
+///
+/// `cleanup_priority_queue` rebuilds the heap keeping only ids still present in
+/// `sequences`. Replacing it with `()` survived: `dequeue` skips stale entries
+/// anyway, so correctness is preserved — but the heap then retains one dead
+/// entry per drained sequence, growing without bound for the life of the
+/// process. The heap is private, so this test reads it from the sibling module.
+#[test]
+fn drain_by_phase_compacts_the_priority_heap() {
+    let mut queue = RequestQueue::new();
+
+    let prefill_seq = make_sequence(1, Status::Prefilling);
+    let decode_seq = make_sequence(2, Status::Decoding);
+    let policy = FcfsPolicy;
+    let ctx = test_ctx();
+    queue.enqueue(prefill_seq, &policy, &ctx);
+    queue.enqueue(decode_seq, &policy, &ctx);
+
+    assert_eq!(queue.priority_queue.len(), 2, "setup: two heap entries");
+
+    // Drain the Decode phase, which removes one sequence and must also drop
+    // its heap entry.
+    let drained = queue.drain_by_phase(Phase::Decode);
+    assert_eq!(drained.len(), 1, "setup: one decode sequence drained");
+    assert_eq!(
+        queue.priority_queue.len(),
+        1,
+        "the drained sequence's heap entry must be discarded, not left as a \
+         stale slot; heap still holds {}",
+        queue.priority_queue.len()
+    );
+    assert_eq!(queue.len(), 1, "and the sequence map must agree");
+}
