@@ -214,6 +214,93 @@ fn test_chunked_prefill_config_calculation() {
     assert!(chunk <= 1024, "Should respect max chunk size");
 }
 
+/// The long-sequence chunk tiers must be exercised at their boundaries.
+///
+/// `calculate_chunk_size` caps the chunk at 512 above 8192 tokens and at 1024
+/// above 4096. The pre-existing test only used `seq_len` 32 and 1000, so BOTH
+/// tier guards were unvisited: `cargo mutants` flipped `>` to `>=`, `==` and
+/// `<` on those lines and every variant survived, meaning the caps that keep a
+/// single prefill chunk from OOMing a long prompt were never verified.
+/// Auto mode (`target_chunk_size == 0`) must size the chunk from the memory
+/// budget, not from the target.
+///
+/// Every existing test set a non-zero `target_chunk_size`, so the auto branch
+/// was never executed: `cargo mutants` replaced its `/` with `*` and nothing
+/// failed, even though the two differ by three orders of magnitude (a 100 KiB
+/// budget at 128 bytes/token is a 800-token chunk; multiplying gives 13
+/// million, which the clamp then pins to `max_chunk_size` for every input).
+#[test]
+fn test_auto_chunk_size_derives_from_the_memory_budget() {
+    let config = ChunkedPrefillConfig {
+        enabled: true,
+        target_chunk_size: 0, // auto
+        max_chunk_size: 4096,
+        min_chunk_size: 64,
+    };
+
+    // 103_424 bytes available - 1024 headroom = 102_400; / 128 = 800.
+    // The sequence is long enough that neither tier cap applies.
+    assert_eq!(
+        config.calculate_chunk_size(2000, 103_424),
+        800,
+        "auto mode must divide the memory budget by the per-token cost"
+    );
+
+    // A budget below `min_chunk_size` worth of tokens floors at the minimum.
+    assert_eq!(
+        config.calculate_chunk_size(2000, 1024),
+        64,
+        "auto mode must not go below min_chunk_size"
+    );
+
+    // A budget above the maximum clamps down to max_chunk_size.
+    assert_eq!(
+        config.calculate_chunk_size(2000, 10 * 1024 * 1024),
+        4096,
+        "auto mode must not exceed max_chunk_size"
+    );
+}
+
+#[test]
+fn test_chunk_size_tiers_respect_their_boundaries() {
+    let config = ChunkedPrefillConfig {
+        enabled: true,
+        // Deliberately above both caps so the tier, not the target, decides.
+        target_chunk_size: 4096,
+        max_chunk_size: 8192,
+        min_chunk_size: 64,
+    };
+
+    // At or below 4096 the tier caps do not apply: the target survives.
+    assert_eq!(
+        config.calculate_chunk_size(4096, 1_000_000),
+        4096,
+        "4096 is NOT above the first tier (guard is `> 4096`)"
+    );
+
+    // Just above 4096 -> capped at 1024.
+    assert_eq!(
+        config.calculate_chunk_size(4097, 1_000_000),
+        1024,
+        "4097 must take the 1024 cap"
+    );
+
+    // At 8192 the second tier has not applied yet (guard is `> 8192`), so the
+    // first tier's cap still governs.
+    assert_eq!(
+        config.calculate_chunk_size(8192, 1_000_000),
+        1024,
+        "8192 must still use the 1024 cap, not 512"
+    );
+
+    // Just above 8192 -> capped at 512.
+    assert_eq!(
+        config.calculate_chunk_size(8193, 1_000_000),
+        512,
+        "8193 must take the 512 cap"
+    );
+}
+
 #[test]
 fn test_chunked_prefill_populates_num_computed_tokens() {
     // H-13 (CORRECTNESS-FIX): previously `compose_chunked_prefill`

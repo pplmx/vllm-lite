@@ -216,3 +216,145 @@ impl BatchComposer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scheduler::batch_composer::validate::{
+        BatchCompositionConfig, ChunkedPrefillConfig,
+    };
+    use crate::types::{Priority, Sequence, Status};
+    use std::sync::Arc;
+
+    fn composer(max_token_budget: usize, chunk: usize) -> BatchComposer {
+        BatchComposer::with_packing_and_chunked(
+            BatchCompositionConfig {
+                max_batch_size: 8,
+                max_token_budget,
+                enable_similarity_grouping: false,
+            },
+            crate::types::SequencePackingConfig::default(),
+            ChunkedPrefillConfig {
+                enabled: chunk > 0,
+                target_chunk_size: chunk,
+                max_chunk_size: chunk.max(1),
+                min_chunk_size: 1,
+            },
+        )
+    }
+
+    fn sequenced(total: usize, computed: usize) -> Sequence {
+        Sequence {
+            id: 1,
+            tokens: (0..total as u32).collect(),
+            kv_blocks: Arc::new(vec![]),
+            num_computed_tokens: computed,
+            prompt_len: total,
+            status: Status::Prefilling,
+            max_tokens: 10,
+            sampling_params: SamplingParams::default(),
+            consecutive_decode_rounds: 0,
+            priority: Priority::default(),
+            degraded_draft: false,
+            draft_model_id: None,
+        }
+    }
+
+    fn chunk_len(action: &PrefillAction) -> usize {
+        match action {
+            PrefillAction::Process { token_count, .. } => *token_count,
+            PrefillAction::Skip => panic!("expected Process, got Skip"),
+            PrefillAction::Break => panic!("expected Process, got Break"),
+        }
+    }
+
+    /// A whole prompt that fits the budget must NOT be split, even when it is
+    /// longer than `target_chunk_size`; only a RESUMED prefill keeps
+    /// chunking. This is the `seq.num_computed_tokens > 0` half of the guard:
+    /// `cargo mutants` flipped the surrounding `>` comparisons and every
+    /// variant survived, because no test drove `classify_prefill_seq` with a
+    /// fresh whole prompt longer than the chunk cap.
+    #[test]
+    fn fresh_prompt_longer_than_chunk_is_not_split() {
+        let c = composer(1000, 8);
+        let len = chunk_len(&c.classify_prefill_seq(sequenced(40, 0), 0));
+        assert_eq!(
+            len, 40,
+            "a fresh 40-token prompt that fits the budget runs whole despite an 8-token chunk cap"
+        );
+    }
+
+    /// A resumed prefill still longer than one chunk keeps chunking.
+    #[test]
+    fn resumed_prefill_longer_than_chunk_is_split() {
+        let c = composer(1000, 8);
+        let len = chunk_len(&c.classify_prefill_seq(sequenced(40, 10), 0));
+        assert_eq!(
+            len, 8,
+            "a resumed prefill must continue in chunk-sized pieces"
+        );
+    }
+
+    /// A resumed prefill that now fits inside one chunk finishes in one round.
+    #[test]
+    fn resumed_prefill_within_one_chunk_is_not_split() {
+        let c = composer(1000, 8);
+        // 6 tokens remain, chunk cap is 8 -> the remainder is taken whole.
+        let len = chunk_len(&c.classify_prefill_seq(sequenced(16, 10), 0));
+        assert_eq!(len, 6, "a remainder under the cap must not be re-split");
+    }
+
+    /// Over-budget sequences are chunked to `budget_room`, capped by the
+    /// chunk size.
+    #[test]
+    fn over_budget_sequence_takes_budget_room_not_budget_plus_one() {
+        let c = composer(10, 8);
+        // 40 tokens to process, 10 of budget left, cap 8 -> the smaller wins.
+        let len = chunk_len(&c.classify_prefill_seq(sequenced(40, 0), 0));
+        assert_eq!(len, 8, "the chunk cap bounds the budget room");
+
+        // With only 5 tokens of budget left the budget, not the cap, binds.
+        let len = chunk_len(&c.classify_prefill_seq(sequenced(40, 0), 5));
+        assert_eq!(len, 5, "the remaining budget bounds the chunk");
+    }
+
+    /// A sequence that EXACTLY fills the remaining budget is not over-budget.
+    ///
+    /// The guard is `tokens_to_process > budget_room`; relaxing it to `>=`
+    /// makes an exact fit take the chunking branch, so a prompt that fits the
+    /// remaining budget is split instead of running whole.
+    #[test]
+    fn exact_budget_fit_is_not_chunked() {
+        // Chunk cap 4, but 10 tokens of room: an exact fit at 10 tokens.
+        // Correct: the else-branch returns all 10. Mutant (`>=`): the
+        // chunking branch returns `min(room, cap)` = 4 and splits the prompt.
+        let c = composer(1000, 4);
+        let len = chunk_len(&c.classify_prefill_seq(sequenced(10, 0), 990));
+        assert_eq!(
+            len, 10,
+            "an exact budget fit must run whole (10 tokens), not take the \
+             over-budget branch and split at the 4-token chunk cap"
+        );
+    }
+
+    /// An exhausted budget breaks the loop instead of admitting an empty
+    /// chunk.
+    #[test]
+    fn exhausted_budget_breaks() {
+        let c = composer(10, 8);
+        assert!(matches!(
+            c.classify_prefill_seq(sequenced(40, 0), 10),
+            PrefillAction::Break
+        ));
+    }
+
+    /// A fully-computed sequence is skipped.
+    #[test]
+    fn fully_computed_sequence_is_skipped() {
+        let c = composer(1000, 8);
+        assert!(matches!(
+            c.classify_prefill_seq(sequenced(10, 10), 0),
+            PrefillAction::Skip
+        ));
+    }
+}
