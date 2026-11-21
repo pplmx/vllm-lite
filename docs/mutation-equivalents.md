@@ -183,6 +183,13 @@ first governs the percentile RANK and is a genuine gap (killed by
 clamp and is equivalent. A verification run that trusts a stale column
 number will test the wrong one and report a false survivor.
 
+### `metrics/collector/sampler/runtime.rs:46` and `:49` — zero-count recording
+
+`record_batch_phase_tokens` guards with `if prefill > 0 { record_prefill_tokens(prefill) }`
+and the same for `decode`. Relaxing `>` to `>=` puts a `record_*_tokens(0)` call
+on the zero path, which adds zero to an `AtomicU64`. The counters, and therefore
+the throughputs derived from them, are unchanged.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

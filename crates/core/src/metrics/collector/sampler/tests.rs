@@ -229,3 +229,83 @@ fn test_record_batch_phase_tokens_splits_prefill_and_decode() {
     assert!(mixed_snap.prefill_throughput > 0.0);
     assert!(mixed_snap.decode_throughput > 0.0);
 }
+
+/// Every recorder must actually move the value its getter reads.
+///
+/// `cargo mutants` emptied `record_batch_size`, `record_scheduler_wait_time`,
+/// `record_prefix_cache_hit`, `record_prefix_cache_request`,
+/// `record_cuda_graph_miss`, `set_queue_depth` and `set_active_sequences`, and
+/// every one survived: the existing tests assert on OTHER recorders, or read a
+/// different collector type. A cleared recorder is invisible on `/metrics`
+/// until an operator notices a flat line.
+#[test]
+fn test_enhanced_collector_recorders_move_their_getters() {
+    let collector = EnhancedMetricsCollector::new();
+
+    // Gauges: set then read back.
+    collector.set_queue_depth(7);
+    assert_eq!(
+        collector.get_gauge("request_queue_depth"),
+        7,
+        "set_queue_depth must move request_queue_depth"
+    );
+    collector.set_active_sequences(3);
+    assert_eq!(
+        collector.get_gauge("active_sequences"),
+        3,
+        "set_active_sequences must move active_sequences"
+    );
+
+    // Counters: increment then read back.
+    collector.record_cuda_graph_miss();
+    collector.record_cuda_graph_miss();
+    assert_eq!(
+        collector.get_counter("cuda_graph_misses_total"),
+        2,
+        "record_cuda_graph_miss must increment cuda_graph_misses_total"
+    );
+
+    // Prefix-cache counters feed the hit rate on the snapshot.
+    // Three lookups and ONE hit: the counts differ from each other, so a
+    // getter returning a constant cannot match both.
+    collector.record_prefix_cache_request();
+    collector.record_prefix_cache_request();
+    collector.record_prefix_cache_request();
+    collector.record_prefix_cache_hit();
+    collector.record_prefix_cache_hit();
+    assert_eq!(
+        collector.prefix_cache_hits(),
+        2,
+        "prefix_cache_hits() must report the recorded hit, not a constant"
+    );
+    assert_eq!(
+        collector.prefix_cache_requests(),
+        3,
+        "prefix_cache_requests() must report the recorded lookups, not a constant"
+    );
+    let snapshot = collector.snapshot();
+    assert!(
+        (snapshot.prefix_cache_hit_rate - 200.0 / 3.0).abs() < 1e-9,
+        "2 hits of 3 requests is 66.7%; got {}",
+        snapshot.prefix_cache_hit_rate
+    );
+
+    // Batch size feeds avg_batch_size; the mean of [2, 8] is 5.0.
+    collector.record_batch_size(2);
+    collector.record_batch_size(8);
+    let snapshot = collector.snapshot();
+    assert!(
+        (snapshot.avg_batch_size - 5.0).abs() < 1e-9,
+        "mean batch size of [2, 8] must be 5.0; got {}",
+        snapshot.avg_batch_size
+    );
+
+    // Scheduler wait time feeds its own average.
+    collector.record_scheduler_wait_time(12.0);
+    let snapshot = collector.snapshot();
+    assert!(
+        (snapshot.avg_scheduler_wait_time_ms - 12.0).abs() < 1e-6,
+        "a single 12ms wait must report 12ms; got {}",
+        snapshot.avg_scheduler_wait_time_ms
+    );
+}
