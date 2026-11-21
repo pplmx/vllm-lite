@@ -20,7 +20,7 @@ use vllm_traits::{BatchPhase, SampledToken};
 use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::SchedulerCudaGraphConfig;
 use crate::scheduler::engine::SchedulerEngine;
-use crate::scheduler::observer::{NoopSchedulerObserver, SchedulerObservers};
+use crate::scheduler::observer::{NoopSchedulerObserver, SchedulerObserver, SchedulerObservers};
 use crate::scheduler::policy::PriorityPolicy;
 use crate::types::{Phase, Priority, Request, SamplingParams, SchedulerConfig, Sequence, Status};
 
@@ -1752,5 +1752,102 @@ fn build_batch_records_cuda_graph_hits_and_misses() {
         prefill_metrics.get_counter("cuda_graph_misses_total"),
         misses_before,
         "a Prefill round must not record a graph MISS"
+    );
+}
+
+/// A build that composes NOTHING must not emit a `BatchScheduled` event.
+///
+/// `if !batch.seq_ids.is_empty()` guards the observer dispatch. `cargo mutants`
+/// deleted the `!`, so an idle round would announce a batch of size 0 to every
+/// subscriber — dashboards built on this event would show spurious empty batches
+/// and any subscriber that allocates per event would churn once per idle round.
+#[test]
+fn empty_build_does_not_dispatch_a_batch_event() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Counts `BatchScheduled` callbacks and records the largest size seen.
+    struct CountingObserver {
+        calls: Arc<AtomicUsize>,
+        max_size: Arc<AtomicUsize>,
+    }
+    impl SchedulerObserver for CountingObserver {
+        fn on_request_arrived(&self, _seq_id: u64, _prompt_len: usize) {}
+        fn on_batch_scheduled(&self, _seq_ids: &[u64], batch_size: usize) {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            self.max_size.fetch_max(batch_size, Ordering::Relaxed);
+        }
+        fn on_decoding(&self, _seq_id: u64, _token: u32) {}
+        fn on_sequence_finished(&self, _seq_id: u64, _total_tokens: usize) {}
+        fn on_preemption(&self, _seq_id: u64, _reason: &str) {}
+        fn on_memory_pressure(&self, _available_blocks: usize) {}
+        fn on_distributed_prefix_matched(&self, _seq_id: u64, _matched_tokens: usize) {}
+    }
+
+    let config = SchedulerConfig {
+        // Keep the graph OFF so the only observer interaction is the dispatch.
+        cuda_graph: SchedulerCudaGraphConfig::default(),
+        ..Default::default()
+    };
+    let mut engine = create_test_engine(config, 1024);
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let max_size = Arc::new(AtomicUsize::new(0));
+    engine
+        .register_observer(Box::new(CountingObserver {
+            calls: Arc::clone(&calls),
+            max_size: Arc::clone(&max_size),
+        }))
+        .expect("observer registration must succeed");
+
+    // An idle engine composes nothing.
+    let batch = engine.build_batch();
+    assert!(batch.seq_ids.is_empty(), "setup: nothing to schedule");
+    assert_eq!(
+        calls.load(Ordering::Relaxed),
+        0,
+        "an empty batch must not be announced to observers"
+    );
+
+    // Control: a real batch DOES dispatch, so the assertion above cannot pass
+    // by the observer never being wired.
+    engine.add_request(Request::new(3, vec![8; 16], 10));
+    let batch = engine.build_batch();
+    assert!(!batch.seq_ids.is_empty(), "setup: a real batch");
+    assert_eq!(
+        calls.load(Ordering::Relaxed),
+        1,
+        "a non-empty batch must dispatch exactly one event"
+    );
+    assert_eq!(
+        max_size.load(Ordering::Relaxed),
+        batch.seq_ids.len(),
+        "the announced size must match the composed batch"
+    );
+}
+
+/// The scheduler wait time recorded during a build must be in MILLISECONDS.
+///
+/// `build_batch` converts the queue→admission delay with
+/// `wait.as_secs_f64() * 1000.0`. `cargo mutants` turned that `*` into `+` and
+/// `/`, both surviving: nothing read `avg_scheduler_wait_time_ms` back after a
+/// real delay. With `+` a 20 ms wait records as ~1000 ms and with `/` as
+/// ~0.00002 ms, so the published metric is wrong by three orders of magnitude in
+/// either direction.
+#[test]
+fn scheduler_wait_time_is_recorded_in_milliseconds() {
+    let mut engine = create_test_engine(SchedulerConfig::default(), 1024);
+    engine.add_request(Request::new(1, vec![5; 16], 10));
+
+    // Let the request sit in the queue so the delay is measurable and bounded.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+
+    let batch = engine.build_batch();
+    assert!(!batch.seq_ids.is_empty(), "setup: the request was admitted");
+
+    let recorded = engine.metrics.snapshot().avg_scheduler_wait_time_ms;
+    assert!(
+        (5.0..500.0).contains(&recorded),
+        "a ~20ms wait must record as tens of milliseconds; got {recorded}. \
+         A `+` mutant would give ~1000 and a `/` mutant ~0.00002."
     );
 }
