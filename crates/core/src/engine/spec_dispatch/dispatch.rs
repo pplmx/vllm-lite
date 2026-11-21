@@ -398,12 +398,18 @@ impl crate::engine::Engine {
             let match_starts_before_burst = trim.match_starts_before_burst;
             let kept = trim.kept;
             let stopped = kept.len() < tokens.len();
+            // `input_count` is how many positions the TARGET model actually
+            // computed KV for — the `input_len + drafts` verification span —
+            // NOT how many tokens were kept for the client. A stop that cut
+            // the burst still had its trailing positions computed, and the
+            // sequence is finalized immediately afterwards
+            // (`finalize_mid_burst_stops`), so the frontier it leaves behind
+            // is never read again. Capping this by `kept` would state the
+            // wrong thing about the KV cache for no behavioural gain.
             let input_count = if mid_chunk {
                 chunk_len
             } else {
-                // Accepted tokens after the cut have no kept successor, so
-                // they must not advance the computed frontier either.
-                chunk_len + accepted_counts[i].min(kept.len().saturating_sub(1))
+                chunk_len + accepted_counts[i]
             };
             fold_ids.push(*seq_id);
             fold_input_counts.push(input_count);

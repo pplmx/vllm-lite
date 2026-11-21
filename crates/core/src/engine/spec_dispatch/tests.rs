@@ -766,6 +766,54 @@ fn test_speculative_all_accepted_folds_every_token_into_sequence() {
     );
 }
 
+/// A sequence that transitions to `Decoding` on a speculative step must have
+/// its computed frontier advanced past the accepted drafts.
+///
+/// `update_speculative` advances `num_computed_tokens` by
+/// `input_len + accepted`, and that value is what the NEXT prefill composition
+/// resumes from (`compose/chunked.rs` starts at `seq.num_computed_tokens`).
+/// Decode batches get their frontier from `seq.tokens.len() - 1`
+/// (`compose/decode.rs`), so a wrong advance here is invisible to decode and
+/// only shows up as a re-fed / skipped region on a later prefill chunk.
+///
+/// The invariant pinned below is the one decode relies on: the instant the
+/// sequence is `Decoding`, its recorded frontier and its token list agree.
+#[test]
+fn test_speculative_prefill_step_advances_frontier_over_accepted_drafts() {
+    let target = FakeModel::new(42);
+    let draft = FakeModel::new(42);
+    let mut engine = Engine::new_boxed(Box::new(target), Some(Box::new(draft)));
+    engine.max_draft_tokens = 4;
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio_mpsc::channel(64);
+    let seq_id = engine.add_request(Request::new(1, vec![10, 20], 30), tx);
+
+    let emitted = engine.step().unwrap();
+    let emitted = emitted.iter().filter(|(id, _)| *id == seq_id).count();
+    assert_eq!(emitted, 5, "4 accepted drafts + bonus");
+
+    let seq = engine
+        .scheduler
+        .get_sequence(seq_id)
+        .expect("the sequence completed prefill and is generating");
+    assert_eq!(seq.status, crate::types::Status::Decoding);
+    assert_eq!(
+        seq.num_computed_tokens,
+        seq.tokens.len() - 1,
+        "a Decoding sequence's frontier must equal tokens.len() - 1 (what          compose/decode.rs feeds the model): num_computed_tokens={}          tokens.len()={} prompt_len={}",
+        seq.num_computed_tokens,
+        seq.tokens.len(),
+        seq.prompt_len
+    );
+    assert!(
+        seq.num_computed_tokens > seq.prompt_len,
+        "the frontier must move past the 2-token prompt by the 4 accepted          drafts: num_computed_tokens={} prompt_len={}",
+        seq.num_computed_tokens,
+        seq.prompt_len
+    );
+}
+
 /// Regression: a speculative prefill resumed after a partial prefix-cache
 /// hit must NOT let the rejected-draft rollback release the matched prefix
 /// blocks or rewind `num_computed_tokens`.
