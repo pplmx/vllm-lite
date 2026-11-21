@@ -624,3 +624,65 @@ fn speculative_stop_spanning_two_bursts_is_withheld() {
         "a spanning stop must report Stop, not Length"
     );
 }
+
+/// The model's own EOS token has to stop a speculative burst at the point it
+/// is generated, exactly as a configured `stop` does.
+///
+/// `finalize_stop_sequences` recognises EOS as a check on the LAST generated
+/// token, so a burst that puts EOS in the middle — the normal case when the
+/// drafts are accepted — hides it: the fold has already appended the tokens
+/// after it, and the client receives output the model never meant to
+/// continue past.
+#[test]
+fn speculative_mid_burst_eos_ends_the_sequence() {
+    use vllm_testing::ConsistentModel;
+
+    // `ConsistentModel` emits `last + 1`, so a prompt ending in 6 produces
+    // 7, 8, 9, ...  With `eos = 9` and 4 drafts per step the EOS lands in the
+    // middle of the first burst.
+    let mut engine = Engine::new_boxed(
+        Box::new(ConsistentModel::new(1000)),
+        Some(Box::new(ConsistentModel::new(1000))),
+    );
+    engine.max_draft_tokens = 4;
+    engine.enable_speculative();
+    engine.set_eos_token_id(Some(9));
+
+    let (tx, mut rx) = mpsc::channel(64);
+    let seq_id = engine.add_request(Request::new(1, vec![5, 6], 30), tx);
+    let (finish_tx, mut finish_rx) = tokio::sync::oneshot::channel();
+    engine.finish_reason_txs.insert(seq_id, finish_tx);
+
+    for _ in 0..4 {
+        if !engine.has_pending() {
+            break;
+        }
+        let _ = engine.step();
+    }
+
+    let mut streamed = Vec::new();
+    while let Ok(sampled) = rx.try_recv() {
+        streamed.push(sampled.token);
+    }
+    // The EOS token itself reaches the channel, exactly as on the regular
+    // path (`step_regular` sends every token and `finalize_stop_sequences`
+    // then matches the EOS suffix); the HTTP layer drops its TEXT via
+    // `should_skip_token_text`. What must not happen is tokens generated
+    // AFTER it.
+    assert_eq!(
+        streamed,
+        vec![7, 8, 9],
+        "generation must stop at the EOS token; got {streamed:?}"
+    );
+    assert!(
+        !engine.has_pending(),
+        "EOS must end the sequence, not let it run to max_tokens"
+    );
+    assert_eq!(
+        finish_rx
+            .try_recv()
+            .expect("the handler must learn why it ended"),
+        vllm_traits::FinishReason::Stop,
+        "an EOS token must be reported as Stop, not Length"
+    );
+}
