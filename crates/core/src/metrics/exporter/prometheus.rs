@@ -360,3 +360,57 @@ mod tests {
         );
     }
 }
+
+/// `port()` must report the configured port, and `export()` must return real
+/// content.
+///
+/// `cargo mutants` replaced `port()` with the constants 0 and 1, and `export()`
+/// with an empty string and with `"xyzzy"`, and every variant survived: the
+/// existing tests call neither, so the exporter's public surface was untested
+/// even though `export()` is the whole point of the type.
+#[tokio::test]
+async fn port_and_export_report_their_real_values() {
+    // A port that cannot be confused with the mutants' constants or a default.
+    let collector = Arc::new(EnhancedMetricsCollector::new());
+    collector.record_tokens(7);
+    let exporter = PrometheusExporter::new(Arc::clone(&collector), 9411);
+
+    assert_eq!(
+        exporter.port(),
+        9411,
+        "port() must report the configured port, not a constant"
+    );
+
+    let body = exporter.export().await.expect("export must succeed");
+    assert_ne!(body, "xyzzy", "export() must not return a placeholder");
+    // The collector's recorded counter must appear in the output.
+    assert!(
+        body.contains('7') && body.contains("tokens"),
+        "the exported text must carry the recorded token count; got:\n{body}"
+    );
+}
+
+/// The fixed-point gauges must be divided by 100000 on the way out.
+///
+/// `speculative_acceptance_rate` and `throughput_speedup_ratio` are stored as
+/// integers scaled by 100000. `export_to_string` converts them back with
+/// `as f64 / 100_000.0`. `cargo mutants` turned the second of those into `%`
+/// and `*`, which survived because only the acceptance-rate line had a value
+/// assertion. A speedup of 1.5 must render as 1.500, not 150000000.
+#[tokio::test]
+async fn throughput_speedup_is_scaled_on_export() {
+    let collector = Arc::new(EnhancedMetricsCollector::new());
+    collector.record_throughput_speedup(1.5);
+    let exporter = PrometheusExporter::new(collector, 9091);
+
+    let body = exporter.export().await.expect("export must succeed");
+
+    assert!(
+        body.contains("throughput_speedup_ratio 1.500"),
+        "a recorded speedup of 1.5 must render as 1.500; got:\n{body}"
+    );
+    assert!(
+        !body.contains("throughput_speedup_ratio 150000000"),
+        "the fixed-point value must not leak unscaled; got:\n{body}"
+    );
+}
