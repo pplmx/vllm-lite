@@ -162,6 +162,41 @@ fn test_top_p_mixed_nan_picks_finite_argmax() {
 // `log_softmax` / `renormalized_top_p_logprobs` emit NaN logprobs for the
 // finite entries (which breaks `SampledToken` JSON serialization).
 
+/// `log_softmax` must produce the actual log-probabilities, not just a
+/// correctly ordered vector.
+///
+/// The pre-existing test asserts only `out[1] > out[2]`, which any monotone
+/// transformation satisfies: `cargo mutants` flipped both the `x - max_val`
+/// subtraction and the final `x - log_sum_exp`, and turned the
+/// `max_val + ln(sum)` into `-` and `*`, with all six variants surviving.
+#[test]
+fn log_softmax_matches_the_reference_values() {
+    let out = log_softmax(&[0.0_f32, 0.0]);
+    let ln2 = std::f32::consts::LN_2;
+    assert!(
+        (out[0] + ln2).abs() < 1e-6 && (out[1] + ln2).abs() < 1e-6,
+        "log_softmax([0, 0]) must be -ln 2 everywhere; got {out:?}"
+    );
+
+    let out = log_softmax(&[1.0_f32, 0.0]);
+    let log_denom = (1.0_f32 + (-1.0_f32).exp()).ln();
+    assert!(
+        (out[0] - (-log_denom)).abs() < 1e-6,
+        "log p(x=1) must be -ln(1 + e^-1); got {out:?}"
+    );
+    assert!(
+        (out[1] - (-1.0 - log_denom)).abs() < 1e-6,
+        "log p(x=0) must be -1 - ln(1 + e^-1); got {out:?}"
+    );
+
+    let shifted = log_softmax(&[1001.0_f32, 1000.0]);
+    assert!(
+        (shifted[0] - out[0]).abs() < 1e-3 && (shifted[1] - out[1]).abs() < 1e-3,
+        "adding a constant to every logit must not change log-softmax; got \
+         {shifted:?} vs {out:?}"
+    );
+}
+
 #[test]
 fn test_log_softmax_mixed_nan_gives_finite_logprobs() {
     let out = log_softmax(&[f32::NAN, 1.0, 0.0]);
@@ -1536,4 +1571,70 @@ fn test_temperature_applied_once_not_twice() {
         (expected_p0 - buggy_p0).abs() > 0.05,
         "test design: gap between correct and buggy must be detectable"
     );
+}
+
+/// `top_p_sample` must sample in proportion to the nucleus-renormalized
+/// probabilities.
+///
+/// Sweeping `random_threshold` over `(0, 1)` makes the sampler's decisions
+/// deterministic, so the empirical token frequency IS the distribution. Any
+/// arithmetic slip — the `x - max_val` stabiliser, the `x / sum` normalisation,
+/// the `cumsum += p` accumulation, or the final `p /= total` renormalisation —
+/// moves those frequencies. `cargo mutants` found nine variants of exactly
+/// those lines survive the suite, because every existing test only checks that
+/// the sampled token is *among* the allowed set.
+#[test]
+fn top_p_sample_follows_the_renormalized_distribution() {
+    // logits [1, 0, -1] with top_p = 0.7 keep the two largest tokens; their
+    // renormalized probabilities are e/(e+1) and 1/(e+1).
+    let logits = vec![1.0_f32, 0.0, -1.0];
+    let denom = 1.0_f32.exp() + 1.0;
+    let expected = [1.0_f32.exp() / denom, 1.0 / denom];
+
+    const STEPS: usize = 1000;
+    let mut counts = [0usize; 3];
+    for step in 0..STEPS {
+        #[allow(clippy::cast_precision_loss)]
+        let threshold = (step as f32 + 0.5) / STEPS as f32;
+        let sampled = top_p_sample(&logits, 0.7, threshold);
+        counts[usize::try_from(sampled).expect("small token id")] += 1;
+    }
+
+    assert_eq!(counts[2], 0, "token 2 (logit -1.0) is outside the nucleus");
+    #[allow(clippy::cast_precision_loss)]
+    let total = STEPS as f32;
+    for (token, want) in expected.iter().enumerate() {
+        let got = counts[token] as f32 / total;
+        assert!(
+            (got - want).abs() < 0.03,
+            "token {token} must take {want:.3} of the draws; got {got:.3} \
+             (counts {counts:?})"
+        );
+    }
+}
+
+/// `top_p >= 1.0` alone must route to greedy.
+///
+/// The guard reads `top_p >= 1.0 || logits.is_empty()`. `cargo mutants`
+/// replaced the `||` with `&&`, which sends a `top_p = 1.0` request down the
+/// nucleus path instead of returning the argmax — so a request that asked for
+/// "no nucleus truncation" stops being greedy. The test asserts the argmax on
+/// every threshold, which the p-path would violate.
+#[test]
+fn top_p_at_or_above_one_always_returns_the_argmax() {
+    // logit 1 is the argmax; the other two are far enough below that the
+    // nucleus path can land on them for some thresholds.
+    let logits = vec![0.0_f32, 5.0, 0.0];
+    for step in 0..=100 {
+        #[allow(clippy::cast_precision_loss)]
+        let threshold = step as f32 / 100.0;
+        let sampled = top_p_sample(&logits, 1.0, threshold);
+        assert_eq!(
+            sampled, 1,
+            "top_p = 1.0 must be greedy for every threshold; got {sampled} at \
+             threshold {threshold}"
+        );
+    }
+    // The `||` also covers an empty vocabulary, which must not panic.
+    assert_eq!(top_p_sample(&[], 0.5, 0.5), 0);
 }
