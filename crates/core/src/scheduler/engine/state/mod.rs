@@ -243,6 +243,17 @@ impl SchedulerEngine {
         self.running.clone()
     }
 
+    /// Read-only view of the waiting queue.
+    ///
+    /// `get_sequence` only searches `running`, so a preempted (or freshly
+    /// admitted, not yet batched) sequence is not reachable through it. This
+    /// exposes the queue for tests that need to assert a sequence was requeued
+    /// with its state reset rather than dropped.
+    #[must_use]
+    pub const fn request_queue(&self) -> &RequestQueue {
+        &self.request_queue
+    }
+
     /// Look up a running sequence by id. Returns `Some(&Sequence)` if found,
     /// `None` if not in the running set. v18.0 — used by the per-seq draft
     /// dispatch to read `Sequence.degraded_draft` and `draft_model_id` without

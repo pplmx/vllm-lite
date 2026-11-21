@@ -187,6 +187,107 @@ fn test_scheduler_memory_preemption() {
     assert!(!batch.is_empty());
 }
 
+/// A preempted sequence must be requeued, never dropped.
+///
+/// `gpu_scheduler_preempts_under_memory_pressure` claims to cover this but
+/// asserts `waiting > 0 || !running.is_empty()` — true whenever anything was
+/// ever admitted, and `has_pending()` is literally that same disjunction, so
+/// the sibling assertion in `gpu_engine_e2e.rs` (`!has_pending() ||
+/// !running.is_empty()`) is a no-op as well. Both are behind the CUDA gate.
+///
+/// This drives the same situation on CPU and pins the real invariant: a
+/// sequence that WAS decoding and is squeezed out by memory pressure moves to
+/// the waiting queue (preemption releases its KV and resets the frontier), and
+/// stays locatable instead of disappearing from both collections.
+#[test]
+fn test_scheduler_memory_pressure_requeues_preempted_sequence() {
+    let config = SchedulerConfig {
+        max_num_seqs: 8,
+        max_num_batched_tokens: 128,
+        max_consecutive_decode: 2,
+        enable_pd_separation: false,
+        prefill_chunk_size: 64,
+        decode_preference_ratio: 0.5,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 8,
+        ..Default::default()
+    };
+    // One block is not enough for a decoding sequence plus a 40-token prefill.
+    let mut scheduler = create_test_engine(config, 1);
+
+    scheduler.add_request(Request::new(1, vec![1, 2], 20));
+    let _ = scheduler.build_batch();
+    scheduler.update(
+        &[1],
+        &[SampledToken {
+            token: 5,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[2],
+    );
+    assert_eq!(
+        scheduler
+            .get_sequence(1)
+            .map(|s| s.status)
+            .expect("seq 1 completed prefill"),
+        vllm_core::types::Status::Decoding,
+        "setup: seq 1 must be decoding before the pressure arrives"
+    );
+    // Isolation: a decoding sequence lives only in `running`. If it were also
+    // sitting in the waiting queue, a later requeue would mask a broken
+    // preemption path (verified: this assertion is what makes the mutation
+    // below detectable).
+    assert!(
+        scheduler.request_queue().get(1).is_none(),
+        "setup: a decoding sequence must not already be queued"
+    );
+
+    // A second request that cannot fit alongside it.
+    scheduler.add_request(Request::new(2, vec![9; 40], 20));
+    let _ = scheduler.build_batch();
+
+    assert_eq!(
+        scheduler.running_count() + scheduler.waiting_count(),
+        2,
+        "preemption must requeue, not drop, the squeezed-out sequence \
+         (running={}, waiting={})",
+        scheduler.running_count(),
+        scheduler.waiting_count()
+    );
+    assert!(
+        scheduler.waiting_count() > 0,
+        "the squeezed-out sequence must be waiting for KV, not silently gone"
+    );
+    // `get_sequence` only looks at `running`; a preempted sequence belongs to
+    // the waiting queue, which is exactly where it must be findable.
+    assert!(
+        scheduler.request_queue().get(1).is_some(),
+        "the preempted sequence must sit in the waiting queue with its state intact"
+    );
+    let preempted = scheduler
+        .request_queue()
+        .get(1)
+        .expect("preempted sequence is waiting");
+    assert_eq!(
+        preempted.kv_blocks.len(),
+        0,
+        "preemption releases the sequence's KV blocks"
+    );
+    assert_eq!(
+        preempted.num_computed_tokens, 0,
+        "preemption resets the computed frontier so the prompt is recomputed"
+    );
+    let (used, total) = scheduler.get_kv_cache_usage();
+    assert!(
+        used <= total,
+        "the scheduler must never allocate past its block budget (used={used}, total={total})"
+    );
+    assert_eq!(total, 1, "fixture must keep the tight block budget");
+}
+
 #[test]
 fn test_scheduler_concurrent_requests() {
     let config = SchedulerConfig::default();
