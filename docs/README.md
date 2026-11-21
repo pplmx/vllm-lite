@@ -21,6 +21,7 @@ docs/
 ├── reference/            # Human: stable reference docs (OpenAI compatibility, feature matrix, config keys)
 ├── tutorial/             # Human: onboarding path
 ├── perf/                 # Human: profiling notes + distilled baselines
+├── mutation-equivalents.md # Human: mutation-testing equivalences and why
 ├── technical-due-diligence/ # Human: maintainer-oriented technical assessment
 ├── superpowers/          # Tool: Superpowers specs + plans (do not relocate)
 ```

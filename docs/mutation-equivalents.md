@@ -1,0 +1,85 @@
+# Mutation equivalents
+
+`cargo mutants` reports a mutant as MISSED when no test fails after the edit.
+That is *usually* untested code, but not always: some edits are **equivalent** —
+the mutated program and the original have identical observable behaviour, so no
+test can ever distinguish them. Chasing those with contrived tests wastes
+effort and leaves misleading "coverage" behind.
+
+This file records every equivalence this repository has established, with the
+evidence. `.cargo/mutants.toml` excludes them from the nightly scan so the
+score reflects real gaps.
+
+Two rules for adding an entry:
+
+1. **Measure, do not reason.** A candidate is only equivalent after you have
+   either constructed a fixture that fails to separate the variants, or shown
+   the reachable input set excludes the differing case. Guessing that a branch
+   is unreachable is how a real gap gets suppressed.
+2. **Never exclude a survivor you have not tried to kill.** "Hard to trigger"
+   is not "equivalent".
+
+Note that a reported MISSED is not proof of a gap either — `cargo mutants` has
+mis-attributed several verdicts in this tree. `scripts/verify_missed_mutants.py`
+re-applies a recorded span edit by hand so the two cases can be told apart.
+
+## Registered equivalents
+
+### `spec_dispatch/dispatch.rs:527` — `stop_len > matched` → `>=`
+
+`trim_burst_at_stop` returns `keep = matched.saturating_sub(stop_len)` together
+with `match_starts_before_burst = stop_len > matched`. At `stop_len == matched`
+both variants differ only in that flag, and `keep == 0`: the entire burst is
+dropped, so `pending_stream` never holds a token for this sequence and the flag
+has nothing to suppress. Measured both variants on a stop that begins at the
+burst's first token (`stop: [7,8]`, model emitting `7,8,9,…`): the client stream
+is `[]` either way.
+
+### `spec_dispatch/dispatch.rs:164` — `total_draft > 0` → `>=`
+
+The guard is redundant. `record_speculative_acceptance` opens with its own
+`if total > 0` and only then divides, so calling it with `total == 0` records
+nothing. With `usize`, `>= 0` is always true, which makes the mutant equivalent
+to deleting the outer guard entirely.
+
+### `spec_dispatch/dispatch.rs:565` — `kv_block_ids[i].len() < blocks_needed` → `<=`
+
+The body calls `ensure_blocks_for_tokens(seq, blocks_needed)`, whose growth loop
+is `while kv_blocks.len() < min_blocks`. On the equality case the loop body
+never runs, so the call is a no-op.
+
+### `spec_dispatch/dispatch.rs:227` — `elapsed > 0.0` → `>=`
+
+`elapsed` is `start.elapsed().as_millis() as f64`. The two variants differ only
+at exactly `0`, where both skip the sample. (The `<` and `==` variants of this
+same line are **not** equivalent — they drop every sample, and a slow-backend
+test now kills them.)
+
+### `engine/graph_step.rs:280` — `elapsed > 0.0` → `>=`
+
+Same reasoning as `dispatch.rs:227`. Again `<` and `==` are genuinely wrong and
+are covered by `cuda_graph_step_records_latency_for_a_slow_step`.
+
+### `spec_dispatch/verify.rs:179` — `offset + vocab_size > logits.len()` → `>=`
+
+The verifier walks a `input + drafts` window, so the largest offset is
+`(input_len - 1 + drafts - 1) * vocab`; adding one more vocabulary block stays
+at or below `logits.len()`. Instrumented the guard on the prefill fixture: the
+`end` values observed max out at `logits_len - vocab`, so the comparison never
+reaches equality and both variants agree.
+
+### `batch_composer/compose/prefill.rs:168` — `tokens_to_process > chunk_cap` → `>=`
+
+At `tokens_to_process == chunk_cap` the second branch computes
+`tokens_to_process.min(chunk_cap)` and the fall-through returns
+`tokens_to_process`; both are `chunk_cap`. `resumed_prefill_exactly_one_chunk_is_not_re_split`
+pins the behaviour anyway, but no fixture can separate the variants.
+
+### Unobservable rather than equivalent
+
+`RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be
+distinguished from a no-op by any fixture: `dequeue` already skips stale heap
+entries in its `while let`, and the heap's internal length is not exposed. The
+memory it would reclaim is real, so this is a genuine (if minor) leak — just not
+one the current interface can observe. It is **not** excluded, so it stays
+visible as a known limitation.

@@ -1,0 +1,40 @@
+# cargo-mutants configuration.
+#
+# `exclude_re` entries are mutations this tree has ALREADY classified as
+# equivalent: the mutated code and the original produce identical observable
+# behaviour, so no test can distinguish them and reporting them nightly is pure
+# noise. Each entry names where its justification lives. Do NOT add one without
+# that evidence — excluding a real gap silently lowers the score.
+#
+# Full reasoning per entry: docs/mutation-equivalents.md.
+# Line numbers are deliberately part of each pattern so an accidental
+# reclassification after a refactor fails loudly (no match) instead of silently
+# widening the exclusion.
+
+exclude_re = [
+  # `keep = matched - stop_len`, so equality yields keep == 0: the whole burst
+  # is dropped and nothing survives to be held back, making the flag moot.
+  'dispatch\.rs:527:57: replace > with >=',
+
+  # The outer `total_draft > 0` duplicates the callee's own `if total > 0`
+  # guard in `record_speculative_acceptance`.
+  'dispatch\.rs:164:24: replace > with >=',
+
+  # `ensure_blocks_for_tokens` no-ops when the count already matches, so calling
+  # it on equality changes nothing.
+  'dispatch\.rs:565:44: replace < with <=',
+
+  # Only reachable at `elapsed == 0`, where both variants skip the sample.
+  'graph_step\.rs:280:20: replace > with >=',
+
+  # The verifier's bounds guard cannot trigger: measured `end` maxes out at
+  # `logits_len - vocab`, so `>` and `>=` agree everywhere.
+  'verify\.rs:179:40: replace > with >=',
+
+  # `min(cap, cap) == cap`: the exactly-one-chunk case returns the same count
+  # through either branch.
+  'prefill\.rs:168:37: replace > with >=',
+
+  # `if elapsed > 0.0` on the non-graph step path: same reason as graph_step's.
+  'dispatch\.rs:227:20: replace > with >=',
+]
