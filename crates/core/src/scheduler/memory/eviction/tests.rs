@@ -257,3 +257,86 @@ fn test_touch_blocks_invalidates_victim_cache() {
         "post-touch call must recompute, not reuse the stale cache"
     );
 }
+
+/// `select_victims` must skip Finished and Waiting sequences entirely.
+///
+/// The filter is `if seq.status == Status::Finished || seq.status ==
+/// Status::Waiting { continue; }`. `cargo mutants` turned that `||` into `&&`,
+/// which can never be true (a sequence holds one status), so NOTHING is
+/// skipped — finished sequences then compete to become eviction victims, and a
+/// block still owned by a live sequence can be chosen for reclaim because a
+/// dead one co-owns it at a lower priority.
+#[test]
+fn test_select_victims_skips_finished_and_waiting_sequences() {
+    let mut policy = EvictionPolicy::new();
+    policy.record_blocks(&[1, 2, 3]);
+
+    // Only excluded sequences own these blocks.
+    let finished = create_test_sequence(1, vec![1], Status::Finished);
+    let waiting = create_test_sequence(2, vec![2], Status::Waiting);
+    let victims = policy.select_victims(&[finished, waiting], 3);
+    assert!(
+        victims.is_empty(),
+        "blocks owned solely by finished/waiting sequences must not be chosen; \
+         got {victims:?}"
+    );
+
+    // Control: the SAME block owned by a running sequence IS eligible, so the
+    // assertion above cannot pass by the policy simply never returning
+    // anything.
+    let decoding = create_test_sequence(3, vec![3], Status::Decoding);
+    let victims = policy.select_victims(&[decoding], 3);
+    assert_eq!(
+        victims,
+        vec![3],
+        "a decoding sequence's block must be eligible for eviction"
+    );
+}
+
+/// Touching a block must REORDER the LRU list, not reduce it to that block.
+///
+/// `record_blocks` / `release_blocks` / `touch_blocks` all re-insert a block at
+/// the front after `block_access_order.retain(|&b| b != block)`. `cargo mutants`
+/// flipped that `!=` to `==`, which keeps ONLY the touched block and discards
+/// every other entry. The existing test asserts only that the front is the
+/// touched block, which the broken version also satisfies — so the whole LRU
+/// list could collapse to one entry unnoticed.
+#[test]
+fn test_touch_blocks_preserves_the_other_entries() {
+    let mut policy = EvictionPolicy::new();
+    policy.record_blocks(&[1, 2, 3]);
+    // After recording, the most recent is at the front.
+    assert_eq!(
+        policy
+            .block_access_order
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![3, 2, 1],
+        "setup: record order must put the newest first"
+    );
+
+    policy.touch_blocks(&[1]);
+
+    assert_eq!(
+        policy
+            .block_access_order
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![1, 3, 2],
+        "a touch must move block 1 to the front and keep 3 and 2 in LRU order"
+    );
+
+    // Re-recording an existing block must also move it, not prune the list.
+    policy.record_blocks(&[2]);
+    assert_eq!(
+        policy
+            .block_access_order
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![2, 1, 3],
+        "re-recording must move block 2 to the front and keep the rest"
+    );
+}
