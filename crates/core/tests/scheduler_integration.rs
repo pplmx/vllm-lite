@@ -222,8 +222,17 @@ fn test_scheduler_concurrent_requests() {
         }
     }
 
-    // Should have processed some requests
-    assert!(engine.running_count() > 0 || engine.waiting_count() > 0 || !engine.has_pending());
+    // Every request must still be accounted for: 10 were admitted and none
+    // of them can have completed (the loop never runs `update`, so nothing
+    // crosses `max_tokens`). A scheduler that silently dropped one would
+    // leave the total below 10.
+    assert_eq!(
+        engine.running_count() + engine.waiting_count(),
+        10,
+        "all 10 admitted requests must remain tracked (running={}, waiting={})",
+        engine.running_count(),
+        engine.waiting_count()
+    );
 }
 
 #[test]

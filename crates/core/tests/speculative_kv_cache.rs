@@ -157,11 +157,26 @@ fn test_speculative_kv_reuse_accepted_prefix() {
     let result = engine.step();
     assert!(result.is_ok());
 
-    // After speculative step, engine should update with the verified output tokens.
-    // Check that the engine state is consistent (either pending or finished)
-    assert!(
-        engine.has_pending() || !engine.has_pending(),
-        "Engine state should be valid after speculative step"
+    // What this test can actually pin with the `IncrementModel` fixture: the
+    // verified tokens are emitted AND recorded on the sequence, exactly once.
+    // That is the invariant an accepted (KV-reusing) draft would ride on.
+    // (The assertion here used to read `has_pending() || !has_pending()` —
+    // true in every possible state, so it could never fail.)
+    let outputs = result.unwrap();
+    assert_eq!(
+        outputs.iter().filter(|(seq_id, _)| *seq_id == 1).count(),
+        outputs.len(),
+        "the step must emit only for the single running sequence; got {outputs:?}"
+    );
+    let seq = engine
+        .scheduler
+        .get_sequence(1)
+        .expect("the sequence is still generating (max_tokens = 5, 4 tokens so far)");
+    assert_eq!(
+        seq.tokens.len(),
+        seq.prompt_len + 2,
+        "seq.tokens must hold the prompt plus the tokens of both steps (prompt=3,          one prefill step + one decode step); got {:?}",
+        seq.tokens
     );
 }
 
