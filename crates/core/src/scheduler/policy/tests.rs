@@ -47,6 +47,33 @@ mod policy_tests {
         assert_eq!(policy.name(), "FCFS");
     }
 
+    /// Every policy's `name()` must report its own identity.
+    ///
+    /// `cargo mutants` replaced `PriorityPolicy::name` and `SjfPolicy::name`
+    /// with `""` and `"xyzzy"` and nothing failed: only `FcfsPolicy` had a name
+    /// assertion. The name is what logs and metrics label a policy with, so a
+    /// wrong string silently mis-attributes every scheduling decision in
+    /// production telemetry.
+    #[test]
+    fn every_policy_reports_a_distinct_name() {
+        assert_eq!(PriorityPolicy::default().name(), "Priority");
+        assert_eq!(SjfPolicy::default().name(), "SJF");
+        assert_eq!(FcfsPolicy::new().name(), "FCFS");
+
+        // Distinct, so a log line cannot be read as another policy.
+        let names = [
+            PriorityPolicy::default().name(),
+            SjfPolicy::default().name(),
+            FcfsPolicy::new().name(),
+        ];
+        for (i, left) in names.iter().enumerate() {
+            assert!(!left.is_empty(), "policy names must not be empty");
+            for right in &names[i + 1..] {
+                assert_ne!(left, right, "policy names must be distinct");
+            }
+        }
+    }
+
     #[test]
     fn scheduling_policy_default_arc_is_fcfs() {
         let policy: Arc<dyn SchedulingPolicy> = <dyn SchedulingPolicy>::default_arc();

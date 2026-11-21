@@ -84,6 +84,42 @@ mod tests {
         }
     }
 
+    /// The remaining-work term must be a PRODUCT, not a sum.
+    ///
+    /// The score is `pw * user_priority + rw * remaining_tokens`. `cargo
+    /// mutants` replaced the `*` with `+` and the existing test still passed:
+    /// with the default weights both orderings agree on that fixture. The
+    /// weights below make them disagree — a long low-priority sequence must
+    /// beat a short high-priority one under the real formula, and lose to it
+    /// once `rw * remaining` becomes `rw + remaining`.
+    #[test]
+    fn test_sjf_remaining_work_is_weighted_not_merely_added() {
+        // pw = 10, rw = 0.5 -> product score: A = 0*10 + 0.5*100 = 50,
+        // B = 9*10 + 0.5*2 = 91, so A (the long, low-priority one) wins.
+        // Summed score: A = 0 + (0.5 + 100) = 100.5, B = 90 + 2.5 = 92.5,
+        // which flips the order to B.
+        let policy = SjfPolicy::new(10.0, 0.5);
+        let ctx = SchedulingContext {
+            current_time: std::time::Instant::now(),
+            queue_length: 2,
+            running_count: 0,
+            memory_pressure: 0.0,
+        };
+        let long_low_priority = make_sequence(1, 10, 100);
+        let mut short_high_priority = make_sequence(2, 10, 2);
+        short_high_priority.priority = Priority(9);
+
+        let long_score = policy.compute_priority(&long_low_priority, &ctx);
+        let short_score = policy.compute_priority(&short_high_priority, &ctx);
+
+        assert!(
+            long_score < short_score,
+            "the remaining-work term must scale with the token count (product), \
+             not merely offset the priority term (sum): got long={long_score:?} \
+             short={short_score:?}"
+        );
+    }
+
     #[test]
     fn test_sjf_prefers_shorter_jobs() {
         let policy = SjfPolicy::default();

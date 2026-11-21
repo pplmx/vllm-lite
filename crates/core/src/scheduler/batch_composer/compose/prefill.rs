@@ -295,6 +295,25 @@ mod tests {
         );
     }
 
+    /// A resumed prefill whose remainder EQUALS the chunk cap is taken whole.
+    ///
+    /// Boundary coverage for `tokens_to_process > chunk_cap && num_computed_tokens
+    /// > 0`: at exactly one chunk the remainder must not be re-split.
+    ///
+    /// NOT a mutation kill, and deliberately so: relaxing that `>` to `>=` makes
+    /// the exactly-one-chunk case take the `min(chunk_cap)` branch, which
+    /// returns the same count — `min(cap, cap) == cap`. The mutant is therefore
+    /// equivalent at this boundary and no fixture can separate the two; the
+    /// test still pins the behaviour so a future rewrite cannot silently start
+    /// splitting an exact chunk.
+    #[test]
+    fn resumed_prefill_exactly_one_chunk_is_not_re_split() {
+        let c = composer(1000, 8);
+        // 8 tokens remain (exactly the cap) with a large budget room.
+        let len = chunk_len(&c.classify_prefill_seq(sequenced(18, 10), 0));
+        assert_eq!(len, 8, "an exactly-one-chunk remainder must be taken whole");
+    }
+
     /// A resumed prefill that now fits inside one chunk finishes in one round.
     #[test]
     fn resumed_prefill_within_one_chunk_is_not_split() {
