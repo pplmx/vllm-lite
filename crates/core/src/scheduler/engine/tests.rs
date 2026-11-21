@@ -1161,3 +1161,119 @@ fn sequence_id_counter_skips_taken_ids_and_advances() {
         "every request must be queued exactly once"
     );
 }
+
+/// The bookkeeping accessors must report the collections they name.
+///
+/// `cargo mutants` replaced `stop_ended_len`, `pending_stream_len`,
+/// `finished_sequences` and `get_sequence_mut` with constants / `vec![]` /
+/// `None`, and emptied `clear_finished`. A stale constant here silently breaks
+/// the leak assertions these accessors exist for: `stop_ended` and
+/// `pending_stream` are keyed by MONOTONIC ids, so a leftover entry is never
+/// reused and leaks for the life of the process.
+#[test]
+fn bookkeeping_accessors_report_their_collections() {
+    let mut scheduler = SchedulerEngine::default();
+
+    // Both side tables start empty and report their own sizes.
+    assert_eq!(scheduler.stop_ended_len(), 0);
+    assert_eq!(scheduler.pending_stream_len(), 0);
+    scheduler.stop_ended.insert(4);
+    scheduler.stop_ended.insert(9);
+    scheduler
+        .pending_stream
+        .insert(7, Vec::<vllm_traits::SampledToken>::new());
+    assert_eq!(
+        scheduler.stop_ended_len(),
+        2,
+        "stop_ended_len must count the entries, not a constant"
+    );
+    assert_eq!(
+        scheduler.pending_stream_len(),
+        1,
+        "pending_stream_len must count the entries, not a constant"
+    );
+
+    // `finished_sequences` snapshots the current step's finalizations and
+    // `clear_finished` empties it at the end of that step.
+    let mut seq = Sequence {
+        id: 42,
+        tokens: vec![1, 2],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: 2,
+        prompt_len: 2,
+        status: Status::Finished,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    scheduler.finished.push(seq.clone());
+    assert_eq!(
+        scheduler.finished_sequences().len(),
+        1,
+        "finished_sequences must return the current step's finalizations"
+    );
+    assert_eq!(scheduler.finished_sequences()[0].id, 42);
+
+    scheduler.clear_finished();
+    assert!(
+        scheduler.finished_sequences().is_empty(),
+        "clear_finished must empty the list, not leave it populated"
+    );
+
+    // `get_sequence_mut` must MUTATE the running sequence, not hand back None.
+    scheduler.running.push(Sequence {
+        status: Status::Decoding,
+        ..seq.clone()
+    });
+    let found = scheduler
+        .get_sequence_mut(42)
+        .expect("the running sequence must be found");
+    found.degraded_draft = true;
+    assert!(
+        scheduler.running[0].degraded_draft,
+        "get_sequence_mut must return a live mutable borrow"
+    );
+    assert!(
+        scheduler.get_sequence_mut(999).is_none(),
+        "an unknown id must report None, not a placeholder"
+    );
+
+    // Silence the unused-mut warning if the clone above is ever simplified.
+    seq.id = 0;
+    let _ = seq;
+}
+
+/// `prefix_cache_hit_rate` must be hits/requests, and 0.0 when there are none.
+///
+/// `cargo mutants` replaced it with the constant 1.0, turned the division into
+/// `%` and into `*`, and every variant survived — no test compared the rate
+/// against a value, so an operator watching the prefix-cache efficiency gauge
+/// could have been reading a fabricated number.
+#[test]
+fn prefix_cache_hit_rate_is_the_ratio_of_hits_to_requests() {
+    let scheduler = SchedulerEngine::default();
+
+    // No requests yet: the documented answer is 0.0, not a division by zero.
+    assert!(
+        scheduler.prefix_cache_hit_rate().abs() < f64::EPSILON,
+        "a zero request count must report 0.0; got {}",
+        scheduler.prefix_cache_hit_rate()
+    );
+
+    // 2 hits out of 4 lookups is exactly 0.5, and the counts differ so a
+    // constant (1.0) or a product (8.0) cannot match.
+    for _ in 0..4 {
+        scheduler.metrics.record_prefix_cache_request();
+    }
+    scheduler.metrics.record_prefix_cache_hit();
+    scheduler.metrics.record_prefix_cache_hit();
+
+    let rate = scheduler.prefix_cache_hit_rate();
+    assert!(
+        (rate - 0.5).abs() < 1e-9,
+        "2 hits of 4 requests is 0.5; got {rate}"
+    );
+}

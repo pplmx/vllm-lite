@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import signal
 import subprocess
 import sys
@@ -85,6 +86,35 @@ def check_span_is_current(text: str, record: dict) -> None:
             f"{record['name']}: span covers {actual!r} but the mutant targets "
             f"{expected!r} - regenerate the mutant list from the current file"
         )
+
+
+def run_test_command(command: str, timeout: float) -> subprocess.CompletedProcess:
+    """Run `command` in its own process group, killing the WHOLE group on timeout.
+
+    `subprocess.run(..., timeout=...)` only terminates the direct child (the
+    shell). The `cargo test` it spawned survives as an orphan and keeps running
+    for as long as the session lives — four such processes were found after a
+    single round of scans. Starting the child in a new session and killing that
+    group on timeout keeps the process table clean.
+    """
+    proc = subprocess.Popen(
+        command,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            proc.kill()
+        proc.communicate()
+        raise
+    return subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
 
 
 def apply_span_edit(text: str, span: dict, replacement: str) -> str:
@@ -197,13 +227,7 @@ def main() -> int:
             try:
                 path.write_text(apply_span_edit(original, record["span"], record["replacement"]))
                 try:
-                    completed = subprocess.run(
-                        args.test_cmd,
-                        shell=True,
-                        capture_output=True,
-                        text=True,
-                        timeout=args.timeout,
-                    )
+                    completed = run_test_command(args.test_cmd, args.timeout)
                 except subprocess.TimeoutExpired:
                     print(f"TIMEOUT after {args.timeout}s: {record['name']}")
                     survived.append(record["name"])
