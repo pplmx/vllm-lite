@@ -776,3 +776,44 @@ fn manager_execute_preemption_selects_and_releases() {
         "a Prefilling sequence must never be preempted"
     );
 }
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn set_distributed_kv_wires_the_cache_after_construction() {
+    // `set_distributed_kv` is the post-construction setter. Replacing it with
+    // `()` survived because every existing test uses the builder form
+    // `with_distributed_kv`.
+    let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 4)));
+    let mut manager = MemoryManager::new(SchedulerConfig::default(), 10);
+
+    // Before wiring, allocation must not touch the cache.
+    let _ = manager.allocate(1).expect("allocate");
+    assert_eq!(cache.stats().updates, 0, "no cache is wired yet");
+
+    manager.set_distributed_kv(Arc::clone(&cache));
+
+    let _ = manager.allocate(2).expect("allocate");
+    assert_eq!(
+        cache.stats().updates,
+        2,
+        "after set_distributed_kv every allocation must register in the cache"
+    );
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn set_block_hasher_replaces_the_hash_function() {
+    // The default hasher is `IdentityHasher`; `set_block_hasher` must swap it.
+    // Replacing the setter with `()` survived because only the builder form
+    // `with_block_hasher` was exercised.
+    let mut manager = MemoryManager::new(SchedulerConfig::default(), 4);
+    let before = manager.hasher().name().to_string();
+
+    manager.set_block_hasher(Arc::new(vllm_traits::IdentityHasher));
+
+    let after = manager.hasher().name().to_string();
+    assert_ne!(
+        before, after,
+        "set_block_hasher must actually install a different hasher (was {before})"
+    );
+}

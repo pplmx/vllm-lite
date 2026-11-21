@@ -61,26 +61,32 @@ def main() -> int:
                 print(f"MISSING    {pattern}  (no source file named {basename})")
                 problems += 1
                 continue
-            source = matches[0]
-            completed = subprocess.run(
-                [
-                    "cargo",
-                    "mutants",
-                    "--package",
-                    "vllm-core",
-                    "--file",
-                    str(source),
-                    "--list",
-                    "--json",
-                    # `--no-config`: without it the exclusions under test are
-                    # already applied, so every pattern would look STALE.
-                    "--no-config",
-                    *FEATURES.get(basename, []),
-                ],
-                capture_output=True,
-                text=True,
-            )
-            listed[basename] = json.loads(completed.stdout) if completed.stdout.strip() else []
+            # A bare basename such as `mod.rs` matches MANY files across the
+            # tree, so every candidate must be listed — picking only the first
+            # made the exclusion for a nested module look STALE.
+            records: list[dict] = []
+            for source in matches:
+                completed = subprocess.run(
+                    [
+                        "cargo",
+                        "mutants",
+                        "--package",
+                        "vllm-core",
+                        "--file",
+                        str(source),
+                        "--list",
+                        "--json",
+                        # `--no-config`: without it the exclusions under test are
+                        # already applied, so every pattern would look STALE.
+                        "--no-config",
+                        *FEATURES.get(basename, []),
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                if completed.stdout.strip():
+                    records.extend(json.loads(completed.stdout))
+            listed[basename] = records
 
         regex = re.compile(pattern)
         hits = [record["name"] for record in listed[basename] if regex.search(record["name"])]
