@@ -127,6 +127,141 @@ fn test_prefill_respects_token_budget() {
     assert!(total_tokens <= 5, "Should respect token budget");
 }
 
+/// A chunk that EXACTLY fills the remaining token budget must be admitted.
+///
+/// The guard is `total_tokens + tokens_to_process > max_token_budget`;
+/// relaxing it to `>=` drops a chunk that fits perfectly, so the batch comes
+/// back short (or empty when it is the only sequence) and the sequence waits
+/// another round for no reason. `cargo mutants` found the `>=` variant
+/// survives: no existing test drives the budget to an exact fit.
+#[test]
+fn test_chunked_prefill_admits_a_chunk_that_exactly_fills_the_budget() {
+    let chunk_config = ChunkedPrefillConfig {
+        enabled: true,
+        target_chunk_size: 10,
+        max_chunk_size: 20,
+        min_chunk_size: 5,
+    };
+    let budget_config = BatchCompositionConfig {
+        max_batch_size: 8,
+        max_token_budget: 10, // exactly one 10-token chunk
+        enable_similarity_grouping: false,
+    };
+    let composer = BatchComposer::with_chunked_prefill(budget_config, chunk_config);
+
+    let seq = make_sequence(1, (0..50u32).collect(), Status::Waiting);
+    let batch = composer.compose_with_chunking(vec![seq], Phase::Prefill, 10000);
+
+    assert_eq!(
+        batch.seq_ids,
+        vec![1],
+        "a chunk filling the budget exactly must still be admitted"
+    );
+    assert_eq!(
+        batch.input_tokens[0].len(),
+        10,
+        "the whole chunk must be taken, not dropped"
+    );
+}
+
+/// A chunk that would overflow the budget must stop the loop.
+/// `total_tokens` must ACCUMULATE across sequences in a chunked batch.
+///
+/// The loop adds each admitted chunk to `total_tokens` before testing the next
+/// sequence against `max_token_budget`. `cargo mutants` replaced `+=` with
+/// `*=`, which pins the accumulator at 0 (0 times anything is 0) so the budget
+/// is never seen as consumed: every sequence in the batch is admitted no matter
+/// how far past the budget that goes. A single-sequence fixture cannot show
+/// this (the accumulator is never read again), so the test uses two.
+/// `BatchComposer::with_packing` must KEEP the configuration it is given.
+///
+/// Replacing the body with `Self::default()` survived the suite: the default
+/// budget is 4096, and every existing test keeps well under that, so a dropped
+/// config is indistinguishable from a kept one. The difference only shows with
+/// a budget TIGHTER than the default — here 8 tokens, which must reject a
+/// 10-token prompt that the default would happily admit.
+#[test]
+fn test_with_packing_preserves_a_tight_budget() {
+    let composer = BatchComposer::with_packing(
+        BatchCompositionConfig {
+            max_batch_size: 1,
+            max_token_budget: 4096,
+            enable_similarity_grouping: false,
+        },
+        crate::types::SequencePackingConfig::default(),
+    );
+
+    let first = make_sequence(1, vec![1, 2, 3], Status::Waiting);
+    let second = make_sequence(2, vec![4, 5, 6], Status::Waiting);
+    let batch = composer.compose(vec![first, second], Phase::Prefill);
+
+    assert_eq!(
+        batch.seq_ids.len(),
+        1,
+        "max_batch_size = 1 must cap the batch at one sequence; falling back \
+         to the default 256 would admit both (got {:?})",
+        batch.seq_ids
+    );
+}
+
+#[test]
+fn test_chunked_prefill_accumulates_total_tokens_across_sequences() {
+    let chunk_config = ChunkedPrefillConfig {
+        enabled: true,
+        target_chunk_size: 10,
+        max_chunk_size: 20,
+        min_chunk_size: 5,
+    };
+    let budget_config = BatchCompositionConfig {
+        max_batch_size: 8,
+        max_token_budget: 10, // room for exactly one 10-token chunk
+        enable_similarity_grouping: false,
+    };
+    let composer = BatchComposer::with_chunked_prefill(budget_config, chunk_config);
+
+    let first = make_sequence(1, (0..50u32).collect(), Status::Waiting);
+    let second = make_sequence(2, (100..150u32).collect(), Status::Waiting);
+    let batch = composer.compose_with_chunking(vec![first, second], Phase::Prefill, 10000);
+
+    assert_eq!(
+        batch.seq_ids,
+        vec![1],
+        "the second sequence must be rejected once the first chunk consumed \
+         the whole budget; got {:?}",
+        batch.seq_ids
+    );
+    assert_eq!(
+        batch.input_tokens.len(),
+        1,
+        "exactly one chunk may be admitted"
+    );
+}
+
+#[test]
+fn test_chunked_prefill_rejects_a_chunk_that_overflows_the_budget() {
+    let chunk_config = ChunkedPrefillConfig {
+        enabled: true,
+        target_chunk_size: 10,
+        max_chunk_size: 20,
+        min_chunk_size: 5,
+    };
+    let budget_config = BatchCompositionConfig {
+        max_batch_size: 8,
+        max_token_budget: 9, // one token short
+        enable_similarity_grouping: false,
+    };
+    let composer = BatchComposer::with_chunked_prefill(budget_config, chunk_config);
+
+    let seq = make_sequence(1, (0..50u32).collect(), Status::Waiting);
+    let batch = composer.compose_with_chunking(vec![seq], Phase::Prefill, 10000);
+
+    assert!(
+        batch.seq_ids.is_empty(),
+        "a 10-token chunk cannot fit a 9-token budget; got {:?}",
+        batch.seq_ids
+    );
+}
+
 #[test]
 fn test_chunked_prefill_splits_long_sequence() {
     let chunk_config = ChunkedPrefillConfig {
