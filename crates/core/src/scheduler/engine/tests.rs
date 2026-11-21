@@ -1418,3 +1418,64 @@ fn schedule_returns_none_only_when_there_is_no_work() {
         "after the queue drains, schedule must report no work"
     );
 }
+
+/// `preallocate_kv_blocks` must give each sequence enough blocks for its tokens
+/// and stop cleanly when the pool runs out.
+///
+/// `cargo mutants` turned `tokens.len().div_ceil(BLOCK_SIZE)` and the index
+/// arithmetic into `+` / `-` / `/`. The block table feeds the model's prefill
+/// write; if it is short, `write_prefill_kv` falls back to block 0 and corrupts
+/// the cache, so the count must be exact rather than merely non-zero.
+#[test]
+fn preallocate_kv_blocks_sizes_tables_and_stops_at_oom() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut scheduler = SchedulerEngine::default();
+
+    // Two prompt blocks plus one token of a third -> 3 blocks needed.
+    let tokens = vec![1; block_size * 2 + 1];
+    let mut seq = Sequence {
+        id: 1,
+        tokens: tokens.clone(),
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: 0,
+        prompt_len: tokens.len(),
+        status: Status::Prefilling,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    scheduler.preallocate_kv_blocks(std::slice::from_mut(&mut seq));
+
+    assert_eq!(
+        seq.kv_blocks.len(),
+        3,
+        "a prompt spanning 2 blocks plus 1 token needs exactly 3 blocks"
+    );
+    // The blocks must be distinct real allocations, not repeated placeholders.
+    let unique: std::collections::HashSet<_> = seq.kv_blocks.iter().copied().collect();
+    assert_eq!(
+        unique.len(),
+        seq.kv_blocks.len(),
+        "each needed block must be a distinct allocation; got {:?}",
+        seq.kv_blocks
+    );
+
+    // Exhausting the pool must stop without panicking and without over-filling.
+    let mut small = SchedulerEngine::new(SchedulerConfig::default(), 1, scheduler.metrics.clone());
+    let mut big = Sequence {
+        id: 2,
+        tokens: vec![1; block_size * 4],
+        ..seq.clone()
+    };
+    big.kv_blocks = Arc::new(vec![]);
+    small.preallocate_kv_blocks(std::slice::from_mut(&mut big));
+    assert!(
+        big.kv_blocks.len() <= 1,
+        "a one-block pool cannot supply more than one block; got {}",
+        big.kv_blocks.len()
+    );
+}
