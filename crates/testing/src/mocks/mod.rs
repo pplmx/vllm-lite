@@ -572,6 +572,69 @@ impl ModelBackend for ConsistentModel {
     }
 }
 
+/// A model whose forward pass always fails.
+///
+/// Every other fixture in this module succeeds, so no test could drive the
+/// engine's error path: `Engine::error_count` only advances inside
+/// `Engine::run`'s `catch_unwind` arm, and `is_healthy()` turning false at
+/// the documented threshold had no coverage at all (`cargo mutants`:
+/// replacing `is_healthy` with `true` survived the whole suite, because
+/// every existing assertion checks it is true).
+#[derive(Debug, Clone)]
+pub struct FailingModel;
+
+impl ModelBackend for FailingModel {
+    fn forward(
+        &mut self,
+        _seq_ids: &[SeqId],
+        _input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
+    ) -> Result<BatchOutput> {
+        Err(vllm_traits::ModelError::new(
+            "failing model: forward always fails",
+        ))
+    }
+
+    fn forward_logits(
+        &mut self,
+        _seq_ids: &[SeqId],
+        _input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
+    ) -> Result<Vec<Vec<f32>>> {
+        Err(vllm_traits::ModelError::new(
+            "failing model: forward_logits always fails",
+        ))
+    }
+
+    fn embed(
+        &mut self,
+        _input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+    ) -> Result<Vec<Vec<f32>>> {
+        Err(vllm_traits::ModelError::new(
+            "failing model: embed always fails",
+        ))
+    }
+
+    fn vocab_size(&self) -> usize {
+        1024
+    }
+
+    fn num_layers(&self) -> usize {
+        1
+    }
+
+    fn num_heads(&self) -> usize {
+        1
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

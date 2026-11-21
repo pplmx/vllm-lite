@@ -117,6 +117,70 @@ fn test_engine_error_tracking() {
     assert_eq!(engine.error_count, 0);
 }
 
+/// `is_healthy` must turn false once the engine accumulates the documented 10
+/// errors.
+///
+/// `cargo mutants` found that replacing `is_healthy` with a constant `true`
+/// survived the entire suite: every existing assertion only checks the healthy
+/// direction, so the threshold itself had no coverage. `error_count` advances
+/// only inside `Engine::run` (a direct `step()` error does NOT count), so the
+/// test drives a real engine loop over a backend whose forward always fails and
+/// reads the count back after the loop shuts down.
+#[test]
+fn test_is_healthy_turns_false_after_error_threshold() {
+    use crate::types::EngineMessage;
+    use vllm_testing::FailingModel;
+
+    let mut engine = Engine::new_boxed(Box::new(FailingModel), None::<Box<dyn ModelBackend>>);
+    assert!(engine.is_healthy(), "a new engine starts healthy");
+
+    // The threshold is `error_count < 10`: 9 stays healthy, the 10th flips it.
+    // This is the branch a constant-`true` mutant hides.
+    engine.error_count = 9;
+    assert!(
+        engine.is_healthy(),
+        "9 errors must still be healthy (threshold is 10)"
+    );
+    engine.error_count = 10;
+    assert!(!engine.is_healthy(), "10 errors must report unhealthy");
+
+    // And the counter really rises through `run` with a failing backend.
+    let (msg_tx, msg_rx) = mpsc::channel::<EngineMessage>(16);
+    let (count_tx, count_rx) = std::sync::mpsc::channel::<usize>();
+    let loop_handle = std::thread::spawn(move || {
+        engine.run(msg_rx);
+        count_tx.send(engine.error_count).ok();
+    });
+
+    let (token_tx, _token_rx) = mpsc::channel(64);
+    msg_tx
+        .try_send(EngineMessage::AddRequest {
+            request: Box::new(Request::new(1, vec![10, 20], 50)),
+            response_tx: token_tx,
+            seq_id_tx: None,
+            finish_reason_tx: None,
+            request_id: None,
+        })
+        .expect("the engine mailbox has room");
+    // The failing forward fails fast, so a short wait is enough; `Shutdown`
+    // ends the loop deterministically.
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    msg_tx
+        .try_send(EngineMessage::Shutdown)
+        .expect("the engine mailbox has room");
+    loop_handle
+        .join()
+        .expect("the engine loop must exit cleanly");
+
+    let errors = count_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("the loop must report its error count");
+    assert!(
+        errors > 0,
+        "a failing backend must accumulate step errors through `run`; got {errors}"
+    );
+}
+
 #[test]
 fn test_engine_response_channel_cleanup() {
     let stub = StubModel::returning(42);
