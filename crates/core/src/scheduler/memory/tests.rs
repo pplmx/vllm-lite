@@ -674,3 +674,43 @@ fn test_rollback_tolerates_oom_shortened_kv_blocks() {
         "held block keeps its recorded ref"
     );
 }
+
+/// The `MemoryManager` accessors must forward to the allocator and policy.
+///
+/// `cargo mutants` replaced `total_blocks` with the constants 0 and 1, and the
+/// whole `touch_blocks` method with `()`, and every variant survived:
+/// `available_blocks` is well covered, but its siblings were never called.
+/// A wrong `total_blocks` breaks every ratio an operator reads off `/metrics`
+/// (usage is computed as `used / total`).
+#[test]
+fn manager_accessors_forward_to_their_components() {
+    let mut manager = MemoryManager::new(SchedulerConfig::default(), 8);
+
+    assert_eq!(
+        manager.total_blocks(),
+        8,
+        "total_blocks must report the configured pool size, not a constant"
+    );
+    assert_eq!(manager.available_blocks(), 8);
+
+    // Allocate and record, so the refcount is non-zero for the held blocks.
+    let blocks = manager.allocate(2).expect("two blocks fit");
+    manager.record_blocks(&blocks);
+    assert_eq!(manager.available_blocks(), 6);
+    for &block in &blocks {
+        assert_eq!(
+            manager.get_block_ref_count(block),
+            1,
+            "a recorded block must report one live owner"
+        );
+    }
+    assert_eq!(
+        manager.get_block_ref_count(9999),
+        0,
+        "an unknown block must report zero owners"
+    );
+
+    // Release the refcounts so the pool is whole again.
+    manager.release_blocks(&blocks);
+    assert_eq!(manager.available_blocks(), 8);
+}
