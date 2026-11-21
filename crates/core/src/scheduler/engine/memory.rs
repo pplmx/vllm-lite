@@ -1,13 +1,19 @@
 //! Memory and preemption-related methods for `SchedulerEngine`.
 //!
 //! This sub-module owns everything that touches block allocation,
-//! pressure reporting, and KV cache rollback:
+//! pressure reporting, and cancellation:
 //! - `execute_preemption`: re-queue running sequences when block
 //!   demand exceeds supply.
 //! - `get_memory_pressure`: ratio of allocated blocks to total.
-//! - `memory_rollback`: undo speculative-decoding block growth.
 //! - `cancel_request`: drop a request from queue or running set,
 //!   releasing any blocks it held.
+//!
+//! There is deliberately no rollback entry point here. Rejected-draft KV
+//! is unused capacity beyond `num_computed_tokens` (the verification span is
+//! pre-allocated), so the speculative step never frees it; the old
+//! `memory_rollback` rewound the frontier against the PRE-step count and could
+//! release a block holding real prefix KV on a resumed prefill or a
+//! boundary-crossing decode. It was removed once the last caller went away.
 //! - `get_kv_cache_usage`: snapshot of (used, total) block counts.
 //! - `prefix_cache`: expose the underlying `RadixTree` so callers
 //!   can inspect or prime prefix state.
@@ -181,22 +187,6 @@ impl SchedulerEngine {
         }
         let available = self.memory.available_blocks() as f32;
         1.0 - (available / total as f32)
-    }
-
-    /// Rollback KV cache for rejected draft tokens (Plan 17.1-D).
-    ///
-    /// **Superseded for the speculative step:** the verifier's
-    /// block table is pre-allocated for the full verification span, so
-    /// rejected-draft KV is unused capacity beyond `num_computed_tokens`
-    /// rather than blocks that must be freed. Calling this from the
-    /// speculative step rewinds `num_computed_tokens` against the pre-step
-    /// count and can release blocks holding real prefix KV (resumed prefill
-    /// / boundary-crossing decode). Kept as public API for tests and
-    /// non-speculative callers.
-    pub fn memory_rollback(&mut self, seq_id: SeqId, num_tokens: usize) {
-        if let Some(seq) = self.running.iter_mut().find(|s| s.id == seq_id) {
-            self.memory.rollback(seq, num_tokens);
-        }
     }
 
     /// Grow a running sequence's KV block table to hold at least

@@ -48,6 +48,59 @@ fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> Schedule
 /// blocks, so inverting the guard leaves them allocated. (Inverting only the
 /// QUEUED branch is a no-op for this fixture — a queued request owns no blocks
 /// yet — which is exactly why both mutants have to be considered separately.)
+/// `ensure_blocks_for_tokens` must allocate only what the target block count
+/// still needs.
+///
+/// The growth loop is `while kv_blocks.len() < min_blocks`. `cargo mutants`
+/// relaxed it to `<=` and the whole suite still passed: the sequence then gets
+/// ONE block more than asked for on every call, because the loop runs once more
+/// after the target is reached. That is invisible to correctness (extra blocks
+/// are simply unused capacity) but leaks KV capacity on every speculative step,
+/// and the function's return value is documented as "the number of blocks the
+/// sequence holds afterwards".
+#[test]
+fn test_ensure_blocks_for_tokens_allocates_only_the_shortfall() {
+    use crate::scheduler::SchedulerEngine;
+    use crate::types::{Request, SchedulerConfig};
+    use std::sync::Arc;
+
+    let mut scheduler = SchedulerEngine::new(
+        SchedulerConfig::default(),
+        64,
+        Arc::new(crate::metrics::EnhancedMetricsCollector::new()),
+    );
+    // 32 prompt tokens at BLOCK_SIZE = 16 -> two blocks after batching.
+    scheduler.add_request(Request::new(1, vec![1; 32], 10));
+    let _ = scheduler.build_batch();
+    let have = scheduler
+        .get_sequence(1)
+        .map(|s| s.kv_blocks.len())
+        .expect("the batched sequence is running");
+    assert_eq!(have, 2, "setup: a 32-token prompt covers two blocks");
+
+    // Asking for exactly what it already holds must be a no-op.
+    assert_eq!(
+        scheduler.ensure_blocks_for_tokens(1, have),
+        have,
+        "an exact-fit request must not grow the table"
+    );
+    let (used, _) = scheduler.get_kv_cache_usage();
+    assert_eq!(used, have as u64, "no extra block may be allocated");
+
+    // Asking for one more must allocate exactly one, not two.
+    assert_eq!(
+        scheduler.ensure_blocks_for_tokens(1, have + 1),
+        have + 1,
+        "one short block must allocate exactly one"
+    );
+    let (used, _) = scheduler.get_kv_cache_usage();
+    assert_eq!(
+        used,
+        (have + 1) as u64,
+        "the growth loop must stop as soon as the target is reached"
+    );
+}
+
 #[test]
 fn test_cancel_request_releases_kv_blocks() {
     use crate::scheduler::SchedulerEngine;
