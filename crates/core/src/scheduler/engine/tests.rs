@@ -22,7 +22,7 @@ use crate::scheduler::SchedulerCudaGraphConfig;
 use crate::scheduler::engine::SchedulerEngine;
 use crate::scheduler::observer::{NoopSchedulerObserver, SchedulerObservers};
 use crate::scheduler::policy::PriorityPolicy;
-use crate::types::{Priority, Request, SamplingParams, SchedulerConfig, Sequence, Status};
+use crate::types::{Phase, Priority, Request, SamplingParams, SchedulerConfig, Sequence, Status};
 
 fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
     let metrics = Arc::new(EnhancedMetricsCollector::new());
@@ -1539,5 +1539,64 @@ fn admit_decode_sequences_grows_or_defers() {
     assert!(
         original.kv_blocks.len() >= 1,
         "the running table itself must be grown, not just the clone"
+    );
+}
+
+/// `filter_fully_allocated_prefills` must admit only fully-allocated prefills
+/// and requeue the rest, and must pass everything through outside Prefill.
+///
+/// `cargo mutants` flipped the phase guard (`!=` to `==`) and relaxed the
+/// `kv_blocks.len() < blocks_needed` comparison. Admitting a short-table
+/// prefill is the corruption path this function exists to prevent: the forward
+/// pass writes KV into a table that does not cover the prompt.
+#[test]
+fn filter_fully_allocated_prefills_requeues_short_tables() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 1024);
+
+    let make = |id: u64, kv: Vec<usize>| Sequence {
+        id,
+        tokens: vec![1; block_size * 2],
+        kv_blocks: Arc::new(kv),
+        num_computed_tokens: 0,
+        prompt_len: block_size * 2,
+        status: Status::Prefilling,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    // Outside Prefill the filter is a pass-through, short tables and all.
+    let short = make(1, vec![]);
+    let passed = engine.filter_fully_allocated_prefills(vec![short], Phase::Decode);
+    assert_eq!(
+        passed.len(),
+        1,
+        "outside Prefill the filter must not drop or requeue anything"
+    );
+
+    // In Prefill: one sequence with the full 2 blocks, one with none.
+    let full = make(2, vec![900, 901]);
+    let incomplete = make(3, vec![]);
+    let before = engine.waiting_count();
+    let admitted = engine.filter_fully_allocated_prefills(vec![full, incomplete], Phase::Prefill);
+
+    assert_eq!(
+        admitted.len(),
+        1,
+        "only the fully allocated prefill may be admitted; got {:?}",
+        admitted.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        admitted[0].id, 2,
+        "the complete prefill must be the one kept"
+    );
+    assert_eq!(
+        engine.waiting_count(),
+        before + 1,
+        "the short-table prefill must return to the waiting queue"
     );
 }
