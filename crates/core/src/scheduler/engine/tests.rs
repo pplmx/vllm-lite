@@ -2014,3 +2014,178 @@ fn prefill_round_does_not_admit_decode_sequences() {
         batch.seq_ids
     );
 }
+
+/// `update` must grow the KV table when a new token crosses a block boundary.
+///
+/// `push_token_and_allocate` grows with
+/// `while seq.kv_blocks.len() < blocks_needed`. `cargo mutants` relaxed that
+/// condition three ways. A loop that stops early (or never runs) leaves the
+/// table short of the tokens it must cover, so the next forward's KV write falls
+/// back to block 0 and corrupts a live block.
+#[test]
+fn update_grows_the_kv_table_across_a_block_boundary() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 64);
+
+    // Exactly one full block of tokens, and a table holding that one block.
+    let mut seq = Sequence {
+        id: 1,
+        tokens: vec![1; block_size],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size,
+        prompt_len: block_size,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut seq));
+    assert_eq!(
+        seq.kv_blocks.len(),
+        1,
+        "setup: one block for one block of tokens"
+    );
+    engine.running.push(seq);
+
+    // One more token pushes the count to block_size + 1, which needs 2 blocks.
+    let sampled = vllm_traits::SampledToken {
+        token: 42,
+        logprob: 0.0,
+        top_logprobs: vec![],
+    };
+    engine.update(&[1], &[sampled], &[0]);
+
+    let updated = engine.running.iter().find(|s| s.id == 1).expect("seq 1");
+    assert_eq!(
+        updated.tokens.len(),
+        block_size + 1,
+        "setup: the new token must be appended"
+    );
+    assert_eq!(
+        updated.kv_blocks.len(),
+        2,
+        "a token past the block boundary must grow the table to 2 blocks; got {}",
+        updated.kv_blocks.len()
+    );
+    // The two blocks must be distinct real allocations.
+    assert_ne!(
+        updated.kv_blocks[0], updated.kv_blocks[1],
+        "the grown table must not reuse the same block twice"
+    );
+}
+
+/// `update` must park a partially-computed prefill instead of leaving it stuck.
+///
+/// At the end of `update`, `requeue_partial_prefills` parks sequences that are
+/// still `Prefilling` with `num_computed_tokens < prompt_len` — a chunked
+/// prefill resumes next round via `forward_prefill_continue`. `cargo mutants`
+/// relaxed that predicate's conjunction to `||` and its comparison to `<=`, and
+/// with either change a COMPLETE prefill is parked too, throwing away the whole
+/// prompt's prefill work.
+#[test]
+fn update_parks_a_partial_prefill_and_keeps_its_progress() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 1024);
+
+    // A prefill that has computed only half its prompt.
+    let mut seq = Sequence {
+        id: 1,
+        tokens: vec![1; block_size * 2],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size,
+        prompt_len: block_size * 2,
+        status: Status::Prefilling,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut seq));
+    engine.running.push(seq);
+
+    let sampled = vllm_traits::SampledToken {
+        token: 7,
+        logprob: 0.0,
+        top_logprobs: vec![],
+    };
+    // Advance by only one block, leaving the prompt still incomplete, so the
+    // sequence never reaches `Decoding` this round.
+    let before = engine.waiting_count();
+    engine.update(&[1], &[sampled], &[8]);
+
+    assert!(
+        !engine.running.iter().any(|s| s.id == 1),
+        "the partial prefill must leave running; running = {:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        engine.waiting_count(),
+        before + 1,
+        "it must be parked in the waiting queue, not dropped"
+    );
+    let parked = engine
+        .request_queue
+        .get(1)
+        .expect("the partial prefill is queued for the next chunk");
+    assert_eq!(
+        parked.num_computed_tokens,
+        block_size + 8,
+        "a parked chunk must keep its computed progress"
+    );
+    assert_eq!(parked.status, Status::Waiting);
+}
+
+/// A `Decoding` sequence must never be parked as a partial prefill, however few
+/// tokens it has computed.
+///
+/// The predicate is `status == Prefilling && num_computed < prompt_len`.
+/// Relaxing `&&` to `||` parks any `Decoding` sequence whose
+/// `num_computed < prompt_len` — which is every decoder mid-prompt-boundary,
+/// including one that is legitimately decoding ahead of its prompt length.
+/// This is the case the partial-prefill test alone cannot catch.
+#[test]
+fn decoding_sequences_are_never_parked_as_partial_prefills() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 1024);
+
+    let mut seq = Sequence {
+        id: 1,
+        tokens: vec![1; block_size],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size / 2, // < prompt_len
+        prompt_len: block_size,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut seq));
+    engine.running.push(seq);
+
+    let sampled = vllm_traits::SampledToken {
+        token: 3,
+        logprob: 0.0,
+        top_logprobs: vec![],
+    };
+    let before = engine.waiting_count();
+    engine.update(&[1], &[sampled], &[1]);
+
+    assert!(
+        engine.running.iter().any(|s| s.id == 1),
+        "a Decoding sequence must stay in running; running = {:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        engine.waiting_count(),
+        before,
+        "nothing may be requeued from a decode round"
+    );
+}
