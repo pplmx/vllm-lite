@@ -714,3 +714,65 @@ fn manager_accessors_forward_to_their_components() {
     manager.release_blocks(&blocks);
     assert_eq!(manager.available_blocks(), 8);
 }
+
+/// `MemoryManager::execute_preemption` must pick Decoding sequences only, in
+/// descending decode-round order, release their blocks, and remove them.
+///
+/// `cargo mutants` replaced the whole function with `vec![]`, inverted the
+/// `Status::Decoding` filter and both loop bounds, and flipped the
+/// `blocks_freed >= blocks_needed` early exit — every variant survived, because
+/// only the ENGINE-level `execute_preemption` had a test.
+#[test]
+fn manager_execute_preemption_selects_and_releases() {
+    let mut manager = MemoryManager::new(SchedulerConfig::default(), 16);
+
+    // Three sequences holding 2 blocks each, with different decode ages.
+    let a = manager.allocate(2).expect("fits");
+    let b = manager.allocate(2).expect("fits");
+    let c = manager.allocate(2).expect("fits");
+    manager.record_blocks(&a);
+    manager.record_blocks(&b);
+    manager.record_blocks(&c);
+
+    let mut seq_a = make_sequence(1, a.clone(), Status::Decoding);
+    seq_a.consecutive_decode_rounds = 9;
+    let mut seq_b = make_sequence(2, b.clone(), Status::Decoding);
+    seq_b.consecutive_decode_rounds = 3;
+    // A prefill sequence must never be chosen, however many blocks it holds.
+    let seq_c = make_sequence(3, c.clone(), Status::Prefilling);
+
+    let mut running = vec![seq_a, seq_b, seq_c];
+    let available_before = manager.available_blocks();
+
+    // Ask for exactly one sequence's worth: only the oldest decoder goes.
+    let preempted = manager.execute_preemption(&mut running, 2);
+
+    assert_eq!(
+        preempted.len(),
+        1,
+        "one 2-block sequence satisfies a 2-block demand; got {}",
+        preempted.len()
+    );
+    assert_eq!(
+        preempted[0].id, 1,
+        "the sequence with the MOST decode rounds must be chosen first"
+    );
+    assert_eq!(
+        running.len(),
+        2,
+        "the preempted sequence must leave `running`"
+    );
+    assert_eq!(
+        manager.available_blocks(),
+        available_before + 2,
+        "the preempted sequence's blocks must return to the pool"
+    );
+    assert!(
+        running.iter().all(|s| s.id != 1),
+        "the preempted sequence must be removed, not merely reported"
+    );
+    assert!(
+        running.iter().any(|s| s.id == 3),
+        "a Prefilling sequence must never be preempted"
+    );
+}
