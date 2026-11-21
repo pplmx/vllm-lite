@@ -349,7 +349,10 @@ mutants MODULE:
     cargo mutants \
         --package vllm-core \
         "$FILE_ARGS" \
-        --timeout 30 \
+        # 60s, not 30s: `--timeout` bounds a mutant's whole build+test cycle,
+        # and under parallel jobs the build contention pushes that past 30s,
+        # yielding bogus TIMEOUTs that read as undetected mutants.
+        --timeout 60 \
         --jobs $(($(nproc) > 8 ? 8 : $(nproc))) \
         --output .mutants-out/ \
         --baseline skip \

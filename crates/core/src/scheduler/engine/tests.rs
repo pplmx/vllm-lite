@@ -35,6 +35,53 @@ fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> Schedule
 /// nothing checked the production increment. `cargo mutants` replacing
 /// `+= 1` with `*= 1` (which pins it at 0 forever, so a sequence is never
 /// considered long-running) survived the whole suite.
+/// Cancelling a request must release the KV blocks it holds.
+///
+/// `cancel_request` has two branches — one for a still-queued request, one for
+/// a sequence already moved into `running` — and each guards its release with
+/// `if !seq.kv_blocks.is_empty()`. `cargo mutants` deleted that `!` in both and
+/// the whole suite still passed, because the existing cancel tests assert only
+/// the `bool` return value and response-channel cleanup, never the allocator
+/// effect.
+///
+/// The RUNNING branch is what this test pins: a batched sequence holds real
+/// blocks, so inverting the guard leaves them allocated. (Inverting only the
+/// QUEUED branch is a no-op for this fixture — a queued request owns no blocks
+/// yet — which is exactly why both mutants have to be considered separately.)
+#[test]
+fn test_cancel_request_releases_kv_blocks() {
+    use crate::scheduler::SchedulerEngine;
+    use crate::types::{Request, SchedulerConfig};
+    use std::sync::Arc;
+
+    let mut scheduler = SchedulerEngine::new(
+        SchedulerConfig::default(),
+        64,
+        Arc::new(crate::metrics::EnhancedMetricsCollector::new()),
+    );
+    scheduler.add_request(Request::new(1, vec![1; 64], 10));
+
+    // Batch it so the prompt's KV blocks are allocated.
+    let batch = scheduler.build_batch();
+    assert_eq!(batch.seq_ids, vec![1], "the request must be batched");
+    let owned = scheduler
+        .get_sequence(1)
+        .map(|s| s.kv_blocks.len())
+        .expect("the batched sequence is running");
+    assert!(owned > 0, "setup: batching must allocate KV blocks");
+
+    let (allocated, total) = scheduler.get_kv_cache_usage();
+    assert!(allocated > 0, "setup: blocks must be counted as used");
+
+    assert!(scheduler.cancel_request(1), "cancellation must succeed");
+    let (after, _) = scheduler.get_kv_cache_usage();
+    assert_eq!(
+        after, 0,
+        "cancelling must return every block the sequence held to the \
+         allocator (held {allocated} of {total}, {after} still used)"
+    );
+}
+
 #[test]
 fn test_push_token_advances_consecutive_decode_rounds() {
     use crate::scheduler::SchedulerEngine;

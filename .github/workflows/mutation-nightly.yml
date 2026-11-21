@@ -155,10 +155,17 @@ jobs:
             FILE_ARG="$TARGET"
           fi
           echo "scanning: $FILE_ARG"
+          # `--timeout` bounds ONE mutant's whole build+test cycle, not a
+          # single test. Measured on this repo: the core suite alone runs in
+          # ~8s, but under `--jobs 8` the build contention pushes a mutant's
+          # cycle well past 30s, and cargo-mutants then reports TIMEOUT --
+          # which the score check counts as UNDETECTED. A 30s cap produced 12
+          # bogus timeouts on `engine/spec_dispatch/verify.rs`; 60s cleared
+          # every one of them (the two survivors left are genuine).
           cargo mutants \
             --package vllm-core \
             --file "$FILE_ARG" \
-            --timeout 30 \
+            --timeout 60 \
             --jobs $(($(nproc) > 4 ? 4 : $(nproc))) \
             --output .mutants-out/ \
             --shuffle
