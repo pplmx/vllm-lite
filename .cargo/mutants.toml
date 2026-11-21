@@ -50,4 +50,13 @@ exclude_re = [
   # Callers only enter with `additional > available` and a whole-table
   # `blocks_needed`, so exact equality is unreachable from the production path.
   'memory\.rs:62:57: replace < with <=',
+
+  # `total` is a sum of `probs[..cutoff]`, and `probs[0]` is
+  # `exp(max - max) / sum = 1/sum > 0` whenever `max_val` is finite, so the
+  # `total == 0` case the `>=` variant reaches never occurs.
+  'sampling\.rs:178:31: replace > with >= in renormalized_top_p_logprobs',
+
+  # At `p_norm == 0` the `>` branch yields `-inf` from the else arm and the
+  # `>=` branch yields `0.0_f32.ln() == -inf`; identical.
+  'sampling\.rs:179:35: replace > with >= in renormalized_top_p_logprobs',
 ]

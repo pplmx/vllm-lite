@@ -72,10 +72,14 @@ def check_span_is_current(text: str, record: dict) -> None:
         return
     expected = removed[0].strip()
     actual = span_text(text, record["span"]).strip()
-    # The span may cover a single operator while the diff quotes the whole line,
-    # and `fn_value` mutants quote the signature instead of the body. What must
-    # hold in every case is that the span's text still appears in the line the
-    # mutant claims to edit.
+    # Two shapes reach here. An expression mutant covers one expression, and the
+    # diff quotes the line containing it, so the span's text must appear inside
+    # that line. A `fn_value` mutant covers the whole function BODY, and the diff
+    # quotes only the body's first line — no containment holds. Distinguish by
+    # the span shape rather than by the text, which may be anything.
+    span_is_multiline = record["span"]["start"]["line"] != record["span"]["end"]["line"]
+    if span_is_multiline:
+        return
     if actual and actual not in expected:
         raise StaleSpanError(
             f"{record['name']}: span covers {actual!r} but the mutant targets "

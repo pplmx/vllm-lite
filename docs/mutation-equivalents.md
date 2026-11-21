@@ -105,6 +105,25 @@ equality, which the production call path does not produce. Recorded from earlier
 instrumentation; this one has also shown up as a tool TIMEOUT, so it is excluded
 on evidence gathered by hand rather than by the scanner.
 
+### `sampling.rs:178` / `:179` — the `>=` relaxations
+
+`renormalized_top_p_logprobs` guards its normalisation with
+`if total > 0.0 { p / total } else { 0.0 }` and then `if p_norm > 0.0`.
+Neither `>=` variant is reachable in a different state:
+
+- `total` is the sum of `probs[..cutoff]`, and `cutoff >= 1` always, so
+  `total >= probs[0] = exp(max - max) / sum = 1/sum > 0`. The `total == 0`
+  branch the `>=` variant would newly take cannot occur while `max_val` is
+  finite (which the earlier guard already enforces).
+- At `p_norm == 0`, `>` sends control to the else arm (`-inf`) and `>=` takes
+  `0.0_f32.ln()`, which is also `-inf`.
+
+The `-` -> `+` variant on the same stabiliser is NOT equivalent, and the reason
+is worth recording: arithmetically a constant shift cancels in the softmax, but
+with `f32` the term `exp(v + max_val)` overflows to `inf` once `max_val` passes
+about 88, the sum becomes `inf`, and every probability collapses to `NaN`.
+`renormalized_top_p_logprobs_stays_finite_for_large_logits` pins that.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

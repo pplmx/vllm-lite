@@ -1797,3 +1797,114 @@ fn penalties_apply_when_there_is_history() {
         after.token
     );
 }
+
+/// `renormalized_top_p_logprobs` must emit the renormalized nucleus log-probs.
+///
+/// The only pre-existing test asserts `out.len()`, that one entry is `-inf`, and
+/// that the survivors are ordered — all satisfied by many wrong formulas. This
+/// pins the values: with logits `[1, 0, -1]` and `top_p = 0.9` the nucleus is
+/// the first two tokens, renormalized to `e/(e+1)` and `1/(e+1)`.
+#[test]
+fn renormalized_top_p_logprobs_matches_the_reference_values() {
+    // `max_val = 2.0` matters: with `max_val = 1.0` a `v / max_val` slip is
+    // invisible (dividing by 1 changes nothing), which is exactly how that
+    // mutant survived the earlier fixture.
+    let out = renormalized_top_p_logprobs(&[2.0_f32, 1.0, 0.0], 0.9);
+
+    let e = 1.0_f32.exp();
+    let share0 = e / (e + 1.0);
+    let share1 = 1.0 / (e + 1.0);
+
+    assert_eq!(out.len(), 3);
+    assert!(
+        (out[0] - share0.ln()).abs() < 1e-5,
+        "token 0 must be ln(e/(e+1)); got {} want {}",
+        out[0],
+        share0.ln()
+    );
+    assert!(
+        (out[1] - share1.ln()).abs() < 1e-5,
+        "token 1 must be ln(1/(e+1)); got {} want {}",
+        out[1],
+        share1.ln()
+    );
+    assert_eq!(
+        out[2],
+        f32::NEG_INFINITY,
+        "token 2 falls outside the nucleus and must be -inf"
+    );
+
+    // The nucleus must sum to 1 in probability space.
+    let mass: f32 = out.iter().filter(|v| v.is_finite()).map(|v| v.exp()).sum();
+    assert!(
+        (mass - 1.0).abs() < 1e-5,
+        "the nucleus must be renormalized to total probability 1; got {mass}"
+    );
+
+    // `top_p = 1.0` keeps everything, so the result equals plain log-softmax.
+    let full = renormalized_top_p_logprobs(&[2.0_f32, 1.0, 0.0], 1.0);
+    let log_soft = log_softmax(&[2.0_f32, 1.0, 0.0]);
+    for (token, (a, b)) in full.iter().zip(log_soft.iter()).enumerate() {
+        assert!(
+            (a - b).abs() < 1e-5,
+            "top_p = 1.0 must not change the distribution at token {token}; got {a} vs {b}"
+        );
+    }
+}
+
+/// `renormalized_top_p_logprobs` must stay finite for large logits.
+///
+/// The stabiliser subtracts `max_val` before `exp`. Changing that `-` to `+`
+/// is arithmetically a constant shift — softmax cancels it — so small logits
+/// look identical. It is NOT equivalent: with `f32`, `exp(v + max_val)`
+/// overflows to `inf` once `max_val` passes roughly 88, the sum becomes `inf`,
+/// and every probability collapses to `NaN`, which then poisons the logprobs
+/// and the `SampleToken` JSON. This is the whole reason the stabiliser exists.
+#[test]
+fn renormalized_top_p_logprobs_stays_finite_for_large_logits() {
+    // 50 is far below the f32 exp limit for `v - max` but far above it for
+    // `v + max` (exp(99) overflows).
+    let out = renormalized_top_p_logprobs(&[50.0_f32, 49.0], 1.0);
+
+    let e = 1.0_f32.exp();
+    let expected0 = (1.0 / (1.0 + 1.0 / e)).ln();
+    let expected1 = ((1.0 / e) / (1.0 + 1.0 / e)).ln();
+    assert!(
+        out[0].is_finite() && (out[0] - expected0).abs() < 1e-5,
+        "large logits must stay finite; got {} want {expected0}",
+        out[0]
+    );
+    assert!(
+        out[1].is_finite() && (out[1] - expected1).abs() < 1e-5,
+        "large logits must stay finite; got {} want {expected1}",
+        out[1]
+    );
+    assert!(
+        out.iter().all(|v| !v.is_nan()),
+        "no entry may become NaN; got {out:?}"
+    );
+}
+
+/// The nucleus cutoff must use a STRICT comparison.
+///
+/// `cumsum > top_p` stops once the mass EXCEEDS `top_p`. Relaxing it to `>=`
+/// also stops when the mass equals `top_p` exactly, dropping the token that
+/// completes the nucleus. With two equal logits the running mass is exactly
+/// 0.5, so `top_p = 0.5` separates the two: the strict form keeps both tokens,
+/// the relaxed form keeps only the first.
+#[test]
+fn renormalized_top_p_cutoff_is_strict_at_the_boundary() {
+    let out = renormalized_top_p_logprobs(&[0.0_f32, 0.0], 0.5);
+
+    assert_eq!(out.len(), 2);
+    assert!(
+        out[0].is_finite() && out[1].is_finite(),
+        "mass exactly == top_p must keep BOTH tokens; a strict `>` does, while \
+         `>=` truncates to the first and leaves the second at -inf (got {out:?})"
+    );
+    let ln2 = std::f32::consts::LN_2;
+    assert!(
+        (out[0] + ln2).abs() < 1e-5 && (out[1] + ln2).abs() < 1e-5,
+        "both tokens carry half the mass, so both are -ln 2; got {out:?}"
+    );
+}
