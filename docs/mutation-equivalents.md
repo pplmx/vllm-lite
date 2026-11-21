@@ -170,6 +170,19 @@ history test and is covered by
   positive timeout the two forms differ only in a sub-nanosecond window after
   the deadline.
 
+### `metrics/lock_free.rs:239:89` — the percentile saturation bound
+
+The helper ends `... .min(xs.len() - 1)`. The index it caps is
+`floor(p * (n - 1))`, which for `p` in `0..=1` never exceeds `n - 1`, so the
+`min` never binds and both `n - 1` and `n + 1` return the index unchanged.
+
+Note the column: this line contains TWO minus signs — column 50 inside
+`(p * (xs.len() as f64 - 1.0))` and column 89 inside `min(xs.len() - 1)`. The
+first governs the percentile RANK and is a genuine gap (killed by
+`test_snapshot_percentiles_match_the_index_formula`); the second is the
+clamp and is equivalent. A verification run that trusts a stale column
+number will test the wrong one and report a false survivor.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

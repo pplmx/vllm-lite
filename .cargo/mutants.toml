@@ -96,4 +96,10 @@ exclude_re = [
   # immediately after `Instant::now()`, so with `timeout = 0` both arms are
   # false. Every positive timeout exhausts identically.
   'leader_election\.rs:109:31: replace < with <=',
+
+  # The saturation bound `min(xs.len() - 1)` in the percentile helper. The
+  # index is `floor(p * (n - 1))`, which is at most `n - 1` for every `p` in
+  # 0..=1, so both `min(n - 1)` and `min(n + 1)` return the index unchanged.
+  'lock_free\.rs:239:89: replace - with \+',
+  'lock_free\.rs:239:89: replace - with /',
 ]

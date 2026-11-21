@@ -236,3 +236,44 @@ fn test_snapshot_is_non_destructive() {
         "second snapshot must preserve batch samples"
     );
 }
+
+/// `avg_batch_size` must be the mean of the window, and the hit rate a
+/// percentage of requests.
+///
+/// Both are quotients in `snapshot()`. The existing suite records KV usage and
+/// one cache hit (so the rate is trivially 100%) but never checks a MEAN, so
+/// `cargo mutants` could turn the divide into a multiply or a modulo
+/// unnoticed.
+#[test]
+fn test_snapshot_averages_match_the_recorded_samples() {
+    let collector = MetricsCollector::new();
+
+    // Mean of [2, 4, 6] is 4.0; the last sample is the "current" batch.
+    for size in [2, 4, 6] {
+        collector.record_batch_size(size);
+    }
+    let snapshot = collector.snapshot();
+    assert!(
+        (snapshot.avg_batch_size - 4.0).abs() < 1e-9,
+        "mean of [2, 4, 6] must be 4.0; got {}",
+        snapshot.avg_batch_size
+    );
+    assert_eq!(
+        snapshot.current_batch_size, 6,
+        "current batch size must be the most recent sample"
+    );
+
+    // Three hits out of four requests is 75%, not 100% and not 3.
+    for _ in 0..4 {
+        collector.record_prefix_cache_request();
+    }
+    for _ in 0..3 {
+        collector.record_prefix_cache_hit();
+    }
+    let snapshot = collector.snapshot();
+    assert!(
+        (snapshot.prefix_cache_hit_rate - 75.0).abs() < 1e-9,
+        "3 hits of 4 requests is 75%; got {}",
+        snapshot.prefix_cache_hit_rate
+    );
+}
