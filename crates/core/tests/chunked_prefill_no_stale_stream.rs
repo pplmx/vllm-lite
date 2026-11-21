@@ -228,3 +228,105 @@ fn cuda_graph_step_never_streams_stale_midchunk_predictions() {
          first token + 7 decodes) and suppress every stale mid-chunk prediction\n  got {received:?}"
     );
 }
+
+/// The CUDA-graph step path must record its per-step metrics.
+///
+/// `record_batch_metrics` books the token count, the prefill/decode phase
+/// split, the batch size and the step latency. `cargo mutants` replaced the
+/// whole function with `()` and every test still passed — the graph path's
+/// metrics were entirely unverified, so an engine running graphs would have
+/// reported zero throughput and zero batch size to `/metrics` while serving
+/// normally. This pins the token count and the batch size, which are the two
+/// observable regardless of how fast the step runs.
+#[test]
+#[cfg(feature = "cuda-graph")]
+fn cuda_graph_step_records_batch_metrics() {
+    use vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig;
+    use vllm_testing::FakeModel;
+
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    let mut engine = Engine::with_config(FakeModel::new(1000), None, config, 4, 1024);
+    engine
+        .capture_cuda_graphs()
+        .expect("capturing the configured batch sizes must succeed");
+
+    let before = engine.scheduler.metrics.snapshot();
+    assert_eq!(
+        before.tokens_total, 0,
+        "setup: a fresh engine has no tokens"
+    );
+
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![5, 6], 4), tx);
+    for _ in 0..6 {
+        if !engine.has_pending() {
+            break;
+        }
+        engine.step_with_graph().expect("graph step must succeed");
+    }
+
+    let after = engine.scheduler.metrics.snapshot();
+    assert_eq!(
+        after.tokens_total, 4,
+        "the graph path must count every emitted token (max_tokens = 4)"
+    );
+    assert_eq!(
+        after.avg_batch_size, 1.0,
+        "the graph path must record the batch size it ran"
+    );
+}
+
+/// Without the `cuda-graph` feature, `step_with_graph` must still run the
+/// regular step.
+///
+/// The fallback definition warns and delegates to `step()`. `cargo mutants`
+/// replaced its body with `Ok(vec![])` and nothing failed: the only two tests
+/// that call `step_with_graph` are both `#[cfg(feature = "cuda-graph")]`, so
+/// the plain build's copy was never executed. A caller that always routed
+/// through `step_with_graph` would then get an empty result forever while the
+/// engine silently stopped producing tokens.
+#[test]
+fn fallback_step_with_graph_runs_the_regular_step() {
+    use vllm_testing::FakeModel;
+
+    let mut engine = Engine::with_config(
+        FakeModel::new(1000),
+        None,
+        SchedulerConfig::default(),
+        0,
+        64,
+    );
+    assert!(
+        !engine.cuda_graph_enabled(),
+        "fixture must take the non-graph fallback"
+    );
+
+    let (tx, mut rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![5, 6], 4), tx);
+
+    let mut rounds = 0;
+    while engine.has_pending() && rounds < 10 {
+        let produced = engine
+            .step_with_graph()
+            .expect("the fallback must propagate a successful step");
+        assert_eq!(
+            produced.len(),
+            1,
+            "each fallback step must report the token it generated"
+        );
+        rounds += 1;
+    }
+
+    assert!(!engine.has_pending(), "the request must have completed");
+    assert_eq!(
+        drain_tokens(&mut rx).len(),
+        4,
+        "the fallback must stream every generated token (max_tokens = 4)"
+    );
+}
