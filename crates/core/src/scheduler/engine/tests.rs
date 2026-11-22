@@ -2593,3 +2593,26 @@ fn ensure_blocks_for_tokens_grows_to_the_requested_minimum() {
     // Unknown sequence reports 0.
     assert_eq!(engine.ensure_blocks_for_tokens(9999, 5), 0);
 }
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn set_distributed_kv_on_the_engine_reaches_the_memory_manager() {
+    use vllm_dist::{CacheConfig, DistributedKVCache, NodeId};
+
+    let mut engine = create_test_engine(SchedulerConfig::default(), 8);
+    let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 4)));
+
+    // Nothing is wired yet, so allocation must not touch the cache.
+    let _ = engine.memory_mut().allocate(1);
+    assert_eq!(cache.stats().updates, 0, "no cache wired yet");
+
+    engine.set_distributed_kv(Arc::clone(&cache));
+    let _ = engine.memory_mut().allocate(2);
+
+    assert_eq!(
+        cache.stats().updates,
+        2,
+        "set_distributed_kv must reach the MemoryManager so later allocations \
+         register in the cache"
+    );
+}
