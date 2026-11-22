@@ -1318,3 +1318,72 @@ fn a_completed_step_records_its_latency() {
         snapshot.avg_latency_ms
     );
 }
+
+/// `chain_cursors_mut` must expose the engine's OWN cursor map, so a write
+/// through it is visible to the next block-hash computation.
+///
+/// `cargo mutants` replaced it with `Box::leak(Box::new(HashMap::new()))` and
+/// with one-entry maps — a fresh detached map every call. Seeding a cursor
+/// would then be silently discarded, and `record_block_tokens` would chain from
+/// parent hash 0 instead of the real predecessor: every block hash after the
+/// first becomes wrong, so the distributed prefix cache can never hit.
+#[cfg(feature = "multi-node")]
+#[test]
+fn chain_cursors_mut_exposes_the_engines_own_map() {
+    let mut engine = Engine::new(StubModel::returning(1), None);
+
+    engine.scheduler.chain_cursors_mut().insert(7, 4242);
+
+    // A second borrow must observe the write: a leaked detached map would not.
+    assert_eq!(
+        engine.scheduler.chain_cursors_mut().get(&7).copied(),
+        Some(4242),
+        "a cursor written through the accessor must be readable through it"
+    );
+    assert_eq!(
+        engine.scheduler.chain_cursors_mut().len(),
+        1,
+        "the accessor must not inject extra placeholder entries"
+    );
+
+    // Overwriting through the same accessor replaces, not appends.
+    engine.scheduler.chain_cursors_mut().insert(7, 99);
+    assert_eq!(
+        engine.scheduler.chain_cursors_mut().get(&7).copied(),
+        Some(99)
+    );
+}
+
+/// `set_block_data_source` must install the source on the memory manager so the
+/// engine-level accessor reports it.
+///
+/// `cargo mutants` replaced the forwarder with `()`: the gRPC `TransferKVBlock`
+/// path would then resolve to `None` and fall back to the placeholder data
+/// source, silently serving empty K/V bytes for real transfers.
+#[cfg(feature = "multi-node")]
+#[test]
+fn set_block_data_source_reaches_the_memory_manager() {
+    use vllm_dist::BlockDataSource;
+
+    #[derive(Debug)]
+    struct StubSource;
+    #[async_trait::async_trait]
+    impl BlockDataSource for StubSource {
+        async fn fetch_block(&self, _block_id: u64) -> Result<Vec<u8>, vllm_dist::FetchError> {
+            Err(vllm_dist::FetchError::NotFound(_block_id))
+        }
+    }
+
+    let mut engine = Engine::new(StubModel::returning(1), None);
+    assert!(
+        engine.scheduler.memory_mut().block_data_source().is_none(),
+        "setup: nothing is wired yet"
+    );
+
+    engine.scheduler.set_block_data_source(Arc::new(StubSource));
+
+    assert!(
+        engine.scheduler.memory_mut().block_data_source().is_some(),
+        "set_block_data_source must reach the MemoryManager"
+    );
+}
