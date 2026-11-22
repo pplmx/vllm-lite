@@ -79,4 +79,50 @@ mod policy_tests {
         let policy: Arc<dyn SchedulingPolicy> = <dyn SchedulingPolicy>::default_arc();
         assert_eq!(policy.name(), "FCFS");
     }
+    /// `PriorityPolicy` must age a sequence by
+    /// `(seq_id - 1) * priority_aging_factor`, subtracted from its base
+    /// priority.
+    ///
+    /// `cargo mutants` turned that `*` into `+` and `/`, both surviving: the
+    /// existing tests only assert `name()`, so the aging formula itself was never
+    /// checked. Aging is what keeps a low-priority sequence from starving — with
+    /// `+` the bonus becomes 100.1 for any factor, and with `/` it collapses
+    /// toward zero for any factor below 1.
+    #[test]
+    fn test_priority_policy_ages_by_the_configured_factor() {
+        let ctx = SchedulingContext {
+            current_time: Instant::now(),
+            queue_length: 0,
+            running_count: 0,
+            memory_pressure: 0.0,
+        };
+
+        // aging_factor 0.1, seq id 101 -> wait_factor 100 -> bonus 10.
+        let policy = PriorityPolicy::new(0.1, 10);
+        let mut seq = make_sequence(101);
+        seq.priority = Priority(50);
+        assert_eq!(
+            policy.compute_priority(&seq, &ctx),
+            PriorityScore(40),
+            "50 - (100 * 0.1) must be 40"
+        );
+
+        // A larger factor ages faster: 1.0 * 100 = 100 > 50, so the score
+        // saturates at 0 rather than wrapping.
+        let aggressive = PriorityPolicy::new(1.0, 10);
+        assert_eq!(
+            aggressive.compute_priority(&seq, &ctx),
+            PriorityScore(0),
+            "an aging bonus above the base priority must saturate at 0"
+        );
+
+        // The first sequence never ages: wait_factor is id-1 == 0.
+        let mut senior = make_sequence(1);
+        senior.priority = Priority(7);
+        assert_eq!(
+            policy.compute_priority(&senior, &ctx),
+            PriorityScore(7),
+            "seq id 1 has no wait and must keep its base priority exactly"
+        );
+    }
 }
