@@ -1229,3 +1229,58 @@ fn mid_chunk_prefill_does_not_emit_a_prediction() {
         "the client channel must receive the real tokens"
     );
 }
+
+/// A multi-token stop sequence must HOLD BACK `stop_len - 1` trailing tokens
+/// while releasing everything before them.
+///
+/// `send_and_collect_results` releases with `while pending.len() > hold`. `cargo
+/// mutants` relaxed that to `==` and `<`: with either, tokens are held that
+/// should have been released (delaying ordinary output) or released that could
+/// still complete a stop (leaking the stop's prefix to the client). The bound is
+/// what keeps ordinary output flowing while a stop match is still possible.
+#[test]
+fn multi_token_stop_hold_releases_all_but_the_lookahead_window() {
+    // A 3-token stop needs 2 tokens held back as lookahead.
+    let stops = vllm_traits::SamplingParams::builder()
+        .with_stop_token_sequences(vec![vec![90, 91, 92]])
+        .build();
+    assert_eq!(
+        Engine::new(StubModel::returning(1), None).stop_hold_back(Some(&stops)),
+        2,
+        "setup: a 3-token stop reserves a 2-token window"
+    );
+
+    let config = SchedulerConfig {
+        max_num_batched_tokens: 4096,
+        ..Default::default()
+    };
+    let mut engine = Engine::with_config(StubModel::returning(7), None, config, 8, 1024);
+    let (tx, mut rx) = mpsc::channel(64);
+
+    let mut req = Request::new(1, vec![10], 6);
+    req.sampling_params = stops;
+    engine.add_request(req, tx);
+
+    for _ in 0..20 {
+        let _ = engine.step();
+        if !engine.has_pending() {
+            break;
+        }
+    }
+    assert!(!engine.has_pending(), "the request must complete");
+
+    // Every token the model produced is 7, which never matches [90,91,92], so
+    // the lookahead must have been released at the end rather than swallowed.
+    let mut received = Vec::new();
+    while let Ok(tok) = rx.try_recv() {
+        received.push(tok.token);
+    }
+    assert!(
+        !received.is_empty(),
+        "ordinary output must reach the client despite the lookahead window"
+    );
+    assert!(
+        received.iter().all(|&t| t == 7),
+        "only real model tokens may reach the client; got {received:?}"
+    );
+}
