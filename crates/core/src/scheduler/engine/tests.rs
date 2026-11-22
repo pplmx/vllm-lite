@@ -2278,3 +2278,195 @@ fn update_speculative_folds_only_non_prefill_sequences() {
         "the folded token must be the one emitted"
     );
 }
+
+/// `update` must advance the frontier for `Prefilling`/`Waiting` sequences and
+/// promote to `Decoding` once the prompt is covered — but leave `Decoding`
+/// alone.
+///
+/// The guard is `status == Waiting || status == Prefilling`.
+/// `cargo mutants` flipped that `==` to `!=`, which advances the DECODERS and
+/// skips every prefill: a decoder's `num_computed_tokens` would be incremented
+/// again on top of the frontier `push_token_and_allocate` already moved, and a
+/// prefill would never reach `Decoding`, stalling the request forever.
+#[test]
+fn update_advances_prefills_and_leaves_decoders_alone() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 1024);
+
+    let make = |id: u64, status: Status, computed: usize, prompt: usize| Sequence {
+        id,
+        tokens: vec![1; prompt],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: computed,
+        prompt_len: prompt,
+        status,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    // Seq 1: a prefill that this round's input COMPLETES the prompt.
+    // Seq 2: a decoder whose frontier must not move again.
+    engine
+        .running
+        .push(make(1, Status::Prefilling, block_size, block_size));
+    engine
+        .running
+        .push(make(2, Status::Decoding, block_size, block_size));
+    let mut all = std::mem::take(&mut engine.running);
+    engine.preallocate_kv_blocks(&mut all);
+    engine.running = all;
+
+    let decoder_before = engine.running[1].num_computed_tokens;
+
+    let sampled = vllm_traits::SampledToken {
+        token: 5,
+        logprob: 0.0,
+        top_logprobs: vec![],
+    };
+    engine.update(&[1, 2], &[sampled.clone(), sampled], &[block_size, 4]);
+
+    let seq1 = engine
+        .running
+        .iter()
+        .chain(engine.finished.iter())
+        .find(|s| s.id == 1)
+        .expect("seq 1 exists");
+    assert_eq!(
+        seq1.num_computed_tokens,
+        block_size + block_size,
+        "a Prefilling sequence must advance by the input count"
+    );
+    assert_ne!(
+        seq1.status,
+        Status::Prefilling,
+        "covering the prompt must promote the sequence out of Prefilling"
+    );
+
+    let seq2 = engine
+        .running
+        .iter()
+        .chain(engine.finished.iter())
+        .find(|s| s.id == 2)
+        .expect("seq 2 exists");
+    assert_eq!(
+        seq2.num_computed_tokens, decoder_before,
+        "a Decoding sequence's frontier must NOT be advanced by input_count"
+    );
+}
+
+/// `finish_sequence` must move a running sequence to `finished`, mark it
+/// `Finished`, and return its KV blocks to the pool.
+///
+/// `cargo mutants` replaced the whole method with `()`, which survived — no test
+/// aborted a sequence this way. A no-op leaves the sequence in `running` where
+/// it is re-included in every subsequent batch, burning compute on tokens the
+/// client will never see and pinning its KV blocks until `max_tokens` is
+/// reached naturally.
+#[test]
+fn finish_sequence_moves_and_releases() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 32);
+
+    let mut seq = Sequence {
+        id: 9,
+        tokens: vec![1; block_size * 2],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size * 2,
+        prompt_len: block_size * 2,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut seq));
+    assert_eq!(seq.kv_blocks.len(), 2, "setup: two blocks held");
+    engine.running.push(seq);
+    let available_before = engine.memory.available_blocks();
+
+    engine.finish_sequence(9);
+
+    assert!(
+        !engine.running.iter().any(|s| s.id == 9),
+        "the sequence must leave running; running = {:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    let finished = engine
+        .finished
+        .iter()
+        .find(|s| s.id == 9)
+        .expect("the sequence must land in finished");
+    assert_eq!(finished.status, Status::Finished);
+    assert_eq!(
+        engine.memory.available_blocks(),
+        available_before + 2,
+        "its two blocks must return to the pool"
+    );
+
+    // An unknown id must be a no-op, not a panic.
+    engine.finish_sequence(9999);
+}
+
+/// A `Finished` sequence must be moved to `finished` and have its blocks
+/// released, while a still-running one is untouched.
+///
+/// `finalize_finished_sequences` filters `running` by
+/// `status == Status::Finished`; `cargo mutants` flipped that to `!=`, which
+/// moves every RUNNING sequence into `finished` and releases blocks it still
+/// needs — silent live-state destruction. Reached through the public `update`
+/// by letting one sequence hit `max_tokens`.
+#[test]
+fn finalize_moves_only_finished_sequences() {
+    let mut engine = create_test_engine(SchedulerConfig::default(), 64);
+
+    let make = |id: u64, tokens: usize, max_tokens: usize| Sequence {
+        id,
+        tokens: vec![1; tokens],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: vllm_traits::BLOCK_SIZE,
+        prompt_len: vllm_traits::BLOCK_SIZE,
+        status: Status::Decoding,
+        max_tokens,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    // Seq 1 already emitted its max_tokens (1) so it finishes this round.
+    // Seq 2 has a long budget and must keep running.
+    engine.running.push(make(1, vllm_traits::BLOCK_SIZE + 1, 1));
+    engine.running.push(make(2, vllm_traits::BLOCK_SIZE, 50));
+    let mut all = std::mem::take(&mut engine.running);
+    engine.preallocate_kv_blocks(&mut all);
+    engine.running = all;
+
+    let sampled = vllm_traits::SampledToken {
+        token: 6,
+        logprob: 0.0,
+        top_logprobs: vec![],
+    };
+    engine.update(&[1, 2], &[sampled.clone(), sampled], &[1, 1]);
+
+    assert!(
+        engine.finished.iter().any(|s| s.id == 1),
+        "the completed sequence must be finalized; finished = {:?}",
+        engine.finished.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert!(
+        engine.running.iter().any(|s| s.id == 2),
+        "a sequence still under its budget must remain running; running = {:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert!(
+        !engine.finished.iter().any(|s| s.id == 2),
+        "an unfinished sequence must NEVER be moved to finished"
+    );
+}
