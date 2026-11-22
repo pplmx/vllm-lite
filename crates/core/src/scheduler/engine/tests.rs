@@ -2616,3 +2616,64 @@ fn set_distributed_kv_on_the_engine_reaches_the_memory_manager() {
          register in the cache"
     );
 }
+
+/// Phase-1 preemption must preempt a running decoder that OWNS a victim block.
+///
+/// `execute_preemption` selects victims block-wise, then preempts every
+/// `Decoding`/`Prefilling` sequence owning one, WHOLE. `cargo mutants` flipped
+/// that status test to `!=`, which matches neither status, so the victim set
+/// frees nothing and phase 2 then falls back to a different rule — losing the
+/// block-level targeting entirely. A probe confirmed this fixture reaches phase 1
+/// with a NON-EMPTY victim set, which earlier attempts never did.
+#[test]
+fn phase1_preempts_the_decoder_that_owns_a_victim_block() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let make = |id: u64| Sequence {
+        id,
+        tokens: vec![1; block_size * 2],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size * 2,
+        prompt_len: block_size * 2,
+        status: Status::Decoding,
+        max_tokens: 50,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    // Pool of 4: two decoders hold 2 blocks each, leaving none free.
+    let mut engine = create_test_engine(SchedulerConfig::default(), 4);
+    for id in [1u64, 2] {
+        let mut one = [make(id)];
+        engine.preallocate_kv_blocks(&mut one);
+        engine.running.push(one[0].clone());
+    }
+    assert_eq!(engine.memory.available_blocks(), 0, "setup: pool exhausted");
+    assert!(
+        !engine.memory.select_victims(&engine.running, 1).is_empty(),
+        "setup: the fixture must reach phase 1 with a victim"
+    );
+
+    // A 1-block request forces preemption of exactly one 2-block decoder.
+    engine.add_request(Request::new(9, vec![2; block_size], 10));
+    let batch = engine.build_batch();
+
+    assert!(
+        batch.seq_ids.contains(&9),
+        "the new request must be admitted; batched={:?}",
+        batch.seq_ids
+    );
+    assert_eq!(
+        engine.running.iter().filter(|s| s.id != 9).count(),
+        1,
+        "exactly ONE decoder must be preempted; running={:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        engine.waiting_count(),
+        1,
+        "the preempted decoder must be re-queued, not dropped"
+    );
+}
