@@ -1070,3 +1070,48 @@ fn test_eos_stop_disabled_when_eos_unset() {
     );
     assert_eq!(engine.scheduler.running_count(), 1);
 }
+
+/// `stop_hold_back` must reserve `longest_stop - 1` trailing tokens, and 0 when
+/// there is nothing to look ahead for.
+///
+/// `cargo mutants` replaced the whole function with the constants 0 and 1. The
+/// count decides how many generated tokens are WITHHELD from the client: too few
+/// and a multi-token stop sequence leaks its prefix before the match is
+/// recognised; too many and ordinary output is delayed for no reason.
+#[test]
+fn stop_hold_back_reserves_the_longest_stop_minus_one() {
+    let engine = Engine::new(StubModel::returning(1), None);
+
+    // No params / no stops: nothing to hold back.
+    assert_eq!(
+        engine.stop_hold_back(None),
+        0,
+        "a sequence without params must hold nothing back"
+    );
+    let plain = vllm_traits::SamplingParams::default();
+    assert_eq!(
+        engine.stop_hold_back(Some(&plain)),
+        0,
+        "a sequence without stop sequences must hold nothing back"
+    );
+
+    // A single-token stop needs no lookahead.
+    let single = vllm_traits::SamplingParams::builder()
+        .with_stop_token_sequences(vec![vec![9]])
+        .build();
+    assert_eq!(
+        engine.stop_hold_back(Some(&single)),
+        0,
+        "a one-token stop is recognised on the token itself"
+    );
+
+    // The LONGEST stop governs, not the first or the shortest.
+    let mixed = vllm_traits::SamplingParams::builder()
+        .with_stop_token_sequences(vec![vec![1], vec![1, 2, 3, 4], vec![1, 2]])
+        .build();
+    assert_eq!(
+        engine.stop_hold_back(Some(&mixed)),
+        3,
+        "the longest stop (4 tokens) requires reserving 3"
+    );
+}
