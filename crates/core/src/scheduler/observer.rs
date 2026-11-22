@@ -217,4 +217,175 @@ mod tests {
         observer.on_preemption(1, "memory");
         observer.on_memory_pressure(512);
     }
+    /// Counts every callback it receives, so `dispatch` can be checked
+    /// event-by-event.
+    #[derive(Default)]
+    struct Counting {
+        arrived: std::sync::atomic::AtomicUsize,
+        scheduled: std::sync::atomic::AtomicUsize,
+        decoding: std::sync::atomic::AtomicUsize,
+        finished: std::sync::atomic::AtomicUsize,
+        preemption: std::sync::atomic::AtomicUsize,
+        pressure: std::sync::atomic::AtomicUsize,
+        distributed: std::sync::atomic::AtomicUsize,
+    }
+    impl SchedulerObserver for Counting {
+        fn on_request_arrived(&self, _seq_id: SeqId, _prompt_len: usize) {
+            self.arrived
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        fn on_batch_scheduled(&self, _seq_ids: &[SeqId], _batch_size: usize) {
+            self.scheduled
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        fn on_decoding(&self, _seq_id: SeqId, _token: TokenId) {
+            self.decoding
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        fn on_sequence_finished(&self, _seq_id: SeqId, _total_tokens: usize) {
+            self.finished
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        fn on_preemption(&self, _seq_id: SeqId, _reason: &str) {
+            self.preemption
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        fn on_memory_pressure(&self, _available_blocks: usize) {
+            self.pressure
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        fn on_distributed_prefix_matched(&self, _seq_id: SeqId, _matched_tokens: usize) {
+            self.distributed
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// `dispatch` must route EVERY event variant to its matching callback.
+    ///
+    /// `cargo mutants` emptied both `dispatch` and `notify_one`, and relaxed
+    /// `register`'s capacity check. With either emptied, a registered observer
+    /// silently receives nothing — the metrics and tracing built on these events
+    /// would go dark with no error anywhere.
+    #[test]
+    fn dispatch_routes_every_event_to_its_callback() {
+        use std::sync::atomic::Ordering;
+
+        /// Wraps an `Arc` counter so the registry can own it by `Box` while the
+        /// test keeps a handle to read the counts.
+        struct Shared(Arc<Counting>);
+        impl SchedulerObserver for Shared {
+            fn on_request_arrived(&self, s: SeqId, p: usize) {
+                self.0.on_request_arrived(s, p);
+            }
+            fn on_batch_scheduled(&self, ids: &[SeqId], n: usize) {
+                self.0.on_batch_scheduled(ids, n);
+            }
+            fn on_decoding(&self, s: SeqId, t: TokenId) {
+                self.0.on_decoding(s, t);
+            }
+            fn on_sequence_finished(&self, s: SeqId, n: usize) {
+                self.0.on_sequence_finished(s, n);
+            }
+            fn on_preemption(&self, s: SeqId, r: &str) {
+                self.0.on_preemption(s, r);
+            }
+            fn on_memory_pressure(&self, n: usize) {
+                self.0.on_memory_pressure(n);
+            }
+            fn on_distributed_prefix_matched(&self, s: SeqId, n: usize) {
+                self.0.on_distributed_prefix_matched(s, n);
+            }
+        }
+
+        let registry = SchedulerObservers::default();
+        let counter = Arc::new(Counting::default());
+        // A second observer, so "first only" implementations are caught too.
+        let second = Arc::new(Counting::default());
+        registry
+            .register(Box::new(Shared(Arc::clone(&counter))))
+            .expect("first observer registers");
+        registry
+            .register(Box::new(Shared(Arc::clone(&second))))
+            .expect("second observer registers");
+
+        registry.dispatch(&ObserverEvent::RequestArrived {
+            seq_id: 1,
+            prompt_len: 8,
+        });
+        registry.dispatch(&ObserverEvent::BatchScheduled {
+            seq_ids: vec![1],
+            batch_size: 1,
+        });
+        registry.dispatch(&ObserverEvent::Decoding {
+            seq_id: 1,
+            token: 5,
+        });
+        registry.dispatch(&ObserverEvent::SequenceFinished {
+            seq_id: 1,
+            total_tokens: 9,
+        });
+        registry.dispatch(&ObserverEvent::Preemption {
+            seq_id: 1,
+            reason: "memory".to_string(),
+        });
+        registry.dispatch(&ObserverEvent::MemoryPressure {
+            available_blocks: 3,
+        });
+        registry.dispatch(&ObserverEvent::DistributedPrefixMatched {
+            seq_id: 1,
+            matched_tokens: 4,
+        });
+
+        for c in [&counter, &second] {
+            assert_eq!(c.arrived.load(Ordering::Relaxed), 1, "RequestArrived");
+            assert_eq!(c.scheduled.load(Ordering::Relaxed), 1, "BatchScheduled");
+            assert_eq!(c.decoding.load(Ordering::Relaxed), 1, "Decoding");
+            assert_eq!(c.finished.load(Ordering::Relaxed), 1, "SequenceFinished");
+            assert_eq!(c.preemption.load(Ordering::Relaxed), 1, "Preemption");
+            assert_eq!(c.pressure.load(Ordering::Relaxed), 1, "MemoryPressure");
+            assert_eq!(
+                c.distributed.load(Ordering::Relaxed),
+                1,
+                "DistributedPrefixMatched"
+            );
+        }
+    }
+
+    /// `register` must report the capacity limit instead of silently dropping.
+    ///
+    /// `cargo mutants` replaced `register` with `Ok(())` and relaxed its
+    /// `>= MAX_OBSERVERS` check, so callers would believe every observer was
+    /// installed while the registry quietly discarded the extras.
+    #[test]
+    fn register_reports_the_capacity_limit() {
+        let registry = SchedulerObservers::default();
+        let limit = SchedulerObservers::MAX_OBSERVERS;
+
+        for i in 0..limit {
+            assert!(
+                registry.register(Box::new(NoopSchedulerObserver)).is_ok(),
+                "observer {i} is below the cap and must register"
+            );
+        }
+        assert!(
+            registry.register(Box::new(NoopSchedulerObserver)).is_err(),
+            "the {}-th registration exceeds the cap and must report an error",
+            limit + 1
+        );
+    }
+    /// `SchedulerObservers`' `Debug` must describe the registry, not render
+    /// nothing.
+    ///
+    /// `cargo mutants` replaced `fmt` with `Ok(Default::default())`, which
+    /// succeeds while writing NOTHING — the struct would print as an empty string
+    /// exactly when someone is diagnosing which observers are installed.
+    #[test]
+    fn debug_output_describes_the_registry() {
+        let registry = SchedulerObservers::default();
+        let rendering = format!("{registry:?}");
+        assert!(
+            rendering.contains("SchedulerObservers"),
+            "the struct name must appear; got {rendering:?}"
+        );
+    }
 }
