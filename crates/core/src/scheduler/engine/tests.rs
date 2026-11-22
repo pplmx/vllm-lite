@@ -2470,3 +2470,126 @@ fn finalize_moves_only_finished_sequences() {
         "an unfinished sequence must NEVER be moved to finished"
     );
 }
+
+/// `cancel_request` must release a QUEUED sequence's blocks too.
+///
+/// The queue branch has its own `if !seq.kv_blocks.is_empty()` guard
+/// (`memory.rs:251`). `cargo mutants` deleted that `!`, which INVERTS the guard:
+/// blocks are released only when the table is empty, so a queued sequence
+/// holding real blocks leaks every one of them. The existing
+/// `test_cancel_request_releases_kv_blocks` covers the RUNNING branch, where the
+/// other copy of the guard lives — which is why the mutation survived.
+#[test]
+fn cancel_request_releases_blocks_of_a_queued_sequence() {
+    use crate::scheduler::policy::FcfsPolicy;
+    use crate::scheduler::policy::trait_def::SchedulingContext;
+
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 32);
+    let block_size_tokens = vec![1; block_size * 2];
+
+    // Allocate first, then park the sequence in the QUEUE while still holding
+    // its blocks — the state a re-queued advanced prefill actually has.
+    let mut seq = Sequence {
+        id: 7,
+        tokens: block_size_tokens,
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: 0,
+        prompt_len: block_size * 2,
+        status: Status::Waiting,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut seq));
+    assert_eq!(seq.kv_blocks.len(), 2, "setup: two blocks held");
+    let ctx = SchedulingContext {
+        current_time: std::time::Instant::now(),
+        queue_length: 0,
+        running_count: 0,
+        memory_pressure: 0.0,
+    };
+    engine.request_queue.enqueue(seq, &FcfsPolicy, &ctx);
+    let available_before = engine.memory.available_blocks();
+    assert!(engine.request_queue.get(7).is_some(), "setup: queued");
+
+    assert!(
+        engine.cancel_request(7),
+        "cancelling a queued request works"
+    );
+
+    assert!(
+        engine.request_queue.get(7).is_none(),
+        "the cancelled sequence must leave the queue"
+    );
+    assert_eq!(
+        engine.memory.available_blocks(),
+        available_before + 2,
+        "its two blocks must return to the pool, not leak"
+    );
+}
+
+/// `ensure_blocks_for_tokens` must grow a running sequence's table to at least
+/// `min_blocks`, and report the count it actually holds.
+///
+/// The speculative step reserves the whole verification span BEFORE the target
+/// writes draft KV; without the extra blocks the write's
+/// `block_ids.get(block_idx).unwrap_or(0)` fallback puts the overflow into
+/// block 0 and corrupts the prompt's first-block KV. `cargo mutants` relaxed the
+/// `while len < min_blocks` condition three ways, and a short table is exactly
+/// what this function exists to prevent.
+#[test]
+fn ensure_blocks_for_tokens_grows_to_the_requested_minimum() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 64);
+
+    let mut seq = Sequence {
+        id: 4,
+        tokens: vec![1; block_size],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: 0,
+        prompt_len: block_size,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut seq));
+    assert_eq!(seq.kv_blocks.len(), 1, "setup: one block");
+    engine.running.push(seq);
+
+    let held = engine.ensure_blocks_for_tokens(4, 5);
+
+    assert_eq!(held, 5, "the reported count must be the grown table size");
+    let after = engine.running.iter().find(|s| s.id == 4).expect("seq 4");
+    assert_eq!(
+        after.kv_blocks.len(),
+        5,
+        "the table must hold at least min_blocks; got {}",
+        after.kv_blocks.len()
+    );
+    let unique: std::collections::HashSet<_> = after.kv_blocks.iter().copied().collect();
+    assert_eq!(
+        unique.len(),
+        5,
+        "all five blocks must be distinct allocations, not repeats"
+    );
+
+    // Already large enough: no further allocation.
+    let available_before = engine.memory.available_blocks();
+    assert_eq!(engine.ensure_blocks_for_tokens(4, 3), 5);
+    assert_eq!(
+        engine.memory.available_blocks(),
+        available_before,
+        "asking for FEWER blocks than held must allocate nothing"
+    );
+
+    // Unknown sequence reports 0.
+    assert_eq!(engine.ensure_blocks_for_tokens(9999, 5), 0);
+}
