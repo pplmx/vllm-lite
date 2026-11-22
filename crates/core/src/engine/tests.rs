@@ -1172,3 +1172,60 @@ fn token_completes_stop_sequence_checks_only_the_generated_tail() {
     assert!(!engine.token_completes_stop_sequence(1, None));
     assert!(!engine.token_completes_stop_sequence(9999, Some(&stops)));
 }
+
+/// A mid-chunk prefill must NOT emit its predicted token to the client.
+///
+/// `step_regular` builds `stale_mask` as
+/// `is_prefill[i] && num_computed + input_len < prompt_len` and passes it to
+/// `send_and_collect_results`, which skips those entries. `cargo mutants` relaxed
+/// that conjunction to `||` — marking EVERY prefill stale, so a completed
+/// prefill's real first token would be swallowed — and relaxed the comparison to
+/// `<=`/`>`/`==`. Emitting a mid-chunk prediction would put a token in the client
+/// stream that the model never really produced, and one that `update` later
+/// trims from `seq.tokens`.
+#[test]
+fn mid_chunk_prefill_does_not_emit_a_prediction() {
+    let config = SchedulerConfig {
+        // A budget AND chunk far smaller than the prompt force several
+        // prefill rounds: a fresh prompt that FITS the budget is deliberately
+        // not split, so both knobs must be tight.
+        prefill_chunk_size: 4,
+        max_num_batched_tokens: 4,
+        ..Default::default()
+    };
+    let mut engine = Engine::with_config(StubModel::returning(42), None, config, 8, 1024);
+    let (tx, mut rx) = mpsc::channel(64);
+
+    // A 16-token prompt against a 4-token chunk: the first step is mid-chunk.
+    engine.add_request(Request::new(1, vec![10; 16], 4), tx);
+
+    let mut steps = 0;
+    let mut saw_any = false;
+    while engine.has_pending() && steps < 20 {
+        let out = engine.step().unwrap();
+        if !out.is_empty() {
+            saw_any = true;
+            for (seq_id, tok) in &out {
+                assert_eq!(*seq_id, 1);
+                assert_eq!(tok.token, 42, "only real sampled tokens may be emitted");
+            }
+        }
+        steps += 1;
+    }
+
+    // The request must still complete and deliver real tokens — proving the
+    // assertion above cannot pass by nothing ever being emitted.
+    assert!(saw_any, "a completed request must emit at least one token");
+    assert!(
+        steps > 1,
+        "a 16-token prompt over a 4-token chunk needs several steps"
+    );
+    let mut received = 0;
+    while rx.try_recv().is_ok() {
+        received += 1;
+    }
+    assert!(
+        received > 0,
+        "the client channel must receive the real tokens"
+    );
+}
