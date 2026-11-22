@@ -20,7 +20,7 @@ use vllm_traits::{BatchPhase, SampledToken};
 use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::SchedulerCudaGraphConfig;
 use crate::scheduler::engine::SchedulerEngine;
-use crate::scheduler::observer::{NoopSchedulerObserver, SchedulerObserver, SchedulerObservers};
+use crate::scheduler::observer::{NoopSchedulerObserver, SchedulerObserver};
 use crate::scheduler::policy::PriorityPolicy;
 use crate::types::{Phase, Priority, Request, SamplingParams, SchedulerConfig, Sequence, Status};
 
@@ -1004,7 +1004,7 @@ fn requeue_stuck_prefills_rescues_orphans_and_keeps_decoders() {
 
     // One healthy decoder and two orphans, injected directly: `update()` would
     // normally have promoted them, which is exactly why they are orphans.
-    let mut make_seq = |id: u64, status: Status| Sequence {
+    let make_seq = |id: u64, status: Status| Sequence {
         id,
         tokens: vec![7; 32],
         kv_blocks: Arc::new(vec![]),
@@ -2724,7 +2724,6 @@ fn phase2_continues_from_the_blocks_phase1_freed() {
 
     // Phase 1 can offer A's 4 blocks; the demand of 6 must be completed by
     // phase 2, which should stop after ONE sequence rather than draining all.
-    let free_before = engine.memory.available_blocks();
     engine.execute_preemption(6);
 
     let still_running = engine.running.len();

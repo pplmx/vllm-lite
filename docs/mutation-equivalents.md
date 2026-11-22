@@ -210,6 +210,20 @@ by `sequence_id_counter_skips_taken_ids_and_advances`.
 recording or cloning anything. The following `len() >= needed` check admits the
 sequence in both versions.
 
+### `scheduler/phase_scheduler.rs:36` — `PhaseSwitchPolicy::builder` -> `Default::default()`
+
+`PhaseSwitchPolicyBuilder` derives `Default`, and its only field is
+`inner: PhaseSwitchPolicy`, whose own `Default` is the written `impl Default`
+(the documented 10 / 5 / 2). The real `builder()` returns
+`PhaseSwitchPolicyBuilder::default()` verbatim, so the mutant is the same
+expression: no fixture can separate them, whatever it asserts about the built
+policy.
+
+The other builder mutants in this file are NOT equivalent and are killed:
+`build` replaced by `Default::default()` ignores every `with_*` override, and
+the three `with_*` setters replaced by `Default::default()` drop their
+respective field.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

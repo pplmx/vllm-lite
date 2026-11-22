@@ -238,4 +238,207 @@ mod tests {
         let phase = scheduler.select_phase(&state);
         assert_eq!(phase, Phase::Decode);
     }
+    /// `should_switch_to_prefill` must fire at the EXACT documented thresholds.
+    ///
+    /// Three guards decide the switch: `consecutive_decode_rounds >=
+    /// max_consecutive_decode`, `prefill_queue_len >= prefill_priority_threshold`
+    /// and `decode_queue_len < min_decode_batch_size`. `cargo mutants` relaxed the
+    /// first `>=` to `<` and the last `<` to `<=`. With the first inverted, the
+    /// scheduler switches to prefill only while it has NOT yet hit the limit — the
+    /// opposite of starvation avoidance; with the last relaxed, a decode queue of
+    /// exactly `min_decode_batch_size` also forces a switch, even though that is
+    /// the acceptable batch.
+    ///
+    /// The counter lives on `self`, not on `state`, and `select_phase` bumps it
+    /// on every Decode round while resetting it on every Prefill round, so the
+    /// fixture drives the real transition rather than poking private state.
+    #[test]
+    fn switch_to_prefill_fires_at_the_exact_thresholds() {
+        let policy = PhaseSwitchPolicy {
+            max_consecutive_decode: 3,
+            prefill_priority_threshold: 5,
+            min_decode_batch_size: 2,
+        };
+
+        let state = |rounds: u32, prefill: usize, decode: usize| SchedulerState {
+            waiting_count: 0,
+            running_count: 0,
+            prefill_queue_len: prefill,
+            decode_queue_len: decode,
+            available_memory: 0,
+            consecutive_decode_rounds: rounds,
+        };
+
+        // An empty prefill queue can NEVER switch, however long the decode run.
+        for rounds in [0, 1, 2, 3, 4, 99] {
+            let scheduler = PhaseScheduler::new(policy.clone());
+            assert!(
+                !scheduler.should_switch_to_prefill(&state(rounds, 0, 99)),
+                "rounds={rounds}: with an empty prefill queue nothing may switch"
+            );
+        }
+
+        // Consecutive-rounds guard, driven through real `select_phase` calls.
+        // Every round here keeps the OTHER two guards off: one queued prefill is
+        // below the priority threshold of 5, and a decode queue of 2 equals the
+        // acceptable minimum. An EMPTY prefill queue enters Decode and bumps the
+        // counter to 1 without any guard firing. From then on the phase stays
+        // Decode until the guard fires, and the counter is checked BEFORE it is
+        // incremented, so three accumulated decode rounds are still served and
+        // the FOURTH round is the one that switches.
+        let mut scheduler = PhaseScheduler::new(policy.clone());
+        assert_eq!(
+            scheduler.select_phase(&state(0, 0, 2)),
+            Phase::Decode,
+            "setup: an empty prefill queue completes Prefill and bumps the counter to 1"
+        );
+        for round in 2..=3u32 {
+            assert_eq!(
+                scheduler.select_phase(&state(0, 1, 2)),
+                Phase::Decode,
+                "round {round} is below max_consecutive_decode = 3"
+            );
+        }
+        assert_eq!(
+            scheduler.select_phase(&state(0, 1, 2)),
+            Phase::Prefill,
+            "the round after 3 accumulated decode rounds MEETS the limit and must switch"
+        );
+        // The switch reset the counter, but the prefill queue is still non-empty,
+        // so this Prefill phase holds until something drains it — the reset is
+        // what lets the run resume once it does.
+        assert_eq!(
+            scheduler.select_phase(&state(0, 1, 2)),
+            Phase::Prefill,
+            "a non-empty prefill queue keeps the phase in Prefill"
+        );
+        assert_eq!(
+            scheduler.select_phase(&state(0, 0, 2)),
+            Phase::Decode,
+            "once the prefill queue drains the phase resumes Decode"
+        );
+        for round in 2..=3u32 {
+            assert_eq!(
+                scheduler.select_phase(&state(0, 1, 2)),
+                Phase::Decode,
+                "after the reset, round {round} is again below the limit"
+            );
+        }
+
+        // Prefill-priority guard: 4 queued is below, 5 meets; the decode batch is
+        // kept healthy so only this guard can fire.
+        let scheduler = PhaseScheduler::new(policy.clone());
+        assert!(
+            !scheduler.should_switch_to_prefill(&state(0, 4, 2)),
+            "4 queued prefills is below the priority threshold of 5"
+        );
+        let scheduler = PhaseScheduler::new(policy.clone());
+        assert!(
+            scheduler.should_switch_to_prefill(&state(0, 5, 2)),
+            "5 queued prefills meets the priority threshold"
+        );
+
+        // Decode-batch guard: 1 is below the minimum, 2 is acceptable.
+        let scheduler = PhaseScheduler::new(policy.clone());
+        assert!(
+            scheduler.should_switch_to_prefill(&state(0, 1, 1)),
+            "a decode queue of 1 is below min_decode_batch_size = 2"
+        );
+        let scheduler = PhaseScheduler::new(policy);
+        assert!(
+            !scheduler.should_switch_to_prefill(&state(0, 1, 2)),
+            "a decode queue of exactly 2 is acceptable and must NOT switch"
+        );
+    }
+
+    /// `reset` must put the scheduler back at its initial state, including the
+    /// decode-round counter.
+    ///
+    /// Replacing `reset` with `()` survives everything else: the phase would stay
+    /// wherever it was and the accumulated decode rounds would keep counting. The
+    /// scheduler is reset between requests, so a stale counter makes the first
+    /// request after the reset switch to prefill several rounds early and a stale
+    /// phase hands the next request the previous one's phase.
+    #[test]
+    fn reset_restores_prefill_phase_and_clears_the_decode_run() {
+        let mut scheduler = PhaseScheduler::new(PhaseSwitchPolicy {
+            max_consecutive_decode: 2,
+            prefill_priority_threshold: 100,
+            min_decode_batch_size: 1,
+        });
+
+        // Drive it into Decode with one round accumulated.
+        assert_eq!(
+            scheduler.select_phase(&SchedulerState {
+                waiting_count: 0,
+                running_count: 0,
+                prefill_queue_len: 0,
+                decode_queue_len: 5,
+                available_memory: 0,
+                consecutive_decode_rounds: 0,
+            }),
+            Phase::Decode
+        );
+        assert_eq!(scheduler.current_phase(), Phase::Decode);
+
+        scheduler.reset();
+        assert_eq!(
+            scheduler.current_phase(),
+            Phase::Prefill,
+            "reset must return to the initial Prefill phase"
+        );
+
+        // The counter is cleared: one queued prefill (below the priority
+        // threshold) is not enough to switch, so the next round completes the
+        // Prefill phase and enters Decode — it does not immediately switch back.
+        assert_eq!(
+            scheduler.select_phase(&SchedulerState {
+                waiting_count: 0,
+                running_count: 0,
+                prefill_queue_len: 1,
+                decode_queue_len: 5,
+                available_memory: 0,
+                consecutive_decode_rounds: 0,
+            }),
+            Phase::Prefill,
+            "the cleared counter means the prefill phase is entered fresh"
+        );
+        assert_eq!(
+            scheduler.select_phase(&SchedulerState {
+                waiting_count: 0,
+                running_count: 0,
+                prefill_queue_len: 0,
+                decode_queue_len: 5,
+                available_memory: 0,
+                consecutive_decode_rounds: 0,
+            }),
+            Phase::Decode
+        );
+    }
+
+    /// `PhaseSwitchPolicy::builder()` must hand back a builder seeded with the
+    /// documented defaults.
+    ///
+    /// This is the API every config path uses; a builder starting from anything
+    /// else would silently ignore the defaults documented on the struct.
+    #[test]
+    fn policy_builder_starts_from_the_documented_defaults() {
+        let built = PhaseSwitchPolicy::builder().build();
+        let default = PhaseSwitchPolicy::default();
+        assert_eq!(built.max_consecutive_decode, default.max_consecutive_decode);
+        assert_eq!(
+            built.prefill_priority_threshold,
+            default.prefill_priority_threshold
+        );
+        assert_eq!(built.min_decode_batch_size, default.min_decode_batch_size);
+        assert_eq!(
+            (
+                built.max_consecutive_decode,
+                built.prefill_priority_threshold
+            ),
+            (10, 5),
+            "the documented defaults"
+        );
+        assert_eq!(built.min_decode_batch_size, 2);
+    }
 }

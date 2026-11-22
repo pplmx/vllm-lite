@@ -113,6 +113,11 @@ exclude_re = [
   # current length is a no-op too, so `<=` performs the same work.
   'mod\.rs:550:25: replace < with <= in MemoryManager::rollback',
 
+  # `PhaseSwitchPolicyBuilder` derives `Default` over a single `inner` field
+  # whose own `Default` is the documented one, and `builder()` already returns
+  # `PhaseSwitchPolicyBuilder::default()` verbatim.
+  'phase_scheduler\.rs:36:9: replace PhaseSwitchPolicy::builder -> PhaseSwitchPolicyBuilder with Default::default()',
+
   # `touch_blocks` forwards to `EvictionPolicy::touch_blocks`, whose LRU effect
   # is already pinned at the policy level; the forwarder itself has no
   # independent observable behaviour.
