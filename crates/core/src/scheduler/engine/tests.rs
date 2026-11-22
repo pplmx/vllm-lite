@@ -2677,3 +2677,61 @@ fn phase1_preempts_the_decoder_that_owns_a_victim_block() {
         "the preempted decoder must be re-queued, not dropped"
     );
 }
+
+/// Phase 2 must continue from the blocks phase 1 ALREADY freed.
+///
+/// `blocks_freed` is accumulated across both phases. `cargo mutants` turned the
+/// phase-2 `blocks_freed += block_count` into `*=` and `-=`: with `*=` the total
+/// stays 0, so the `blocks_freed >= blocks_needed` guard never fires and phase 2
+/// preempts EVERY decodable sequence rather than stopping at the demand —
+/// over-evicting sequences that could have kept running.
+///
+/// The fixture makes phase 1 free SOME blocks but not enough: block A holds 4
+/// eligible blocks and block B holds 2 whose refcount is 2 (ineligible), against
+/// a 6-block demand.
+#[test]
+fn phase2_continues_from_the_blocks_phase1_freed() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let make = |id: u64, blocks: usize| Sequence {
+        id,
+        tokens: vec![1; block_size * blocks],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size * blocks,
+        prompt_len: block_size * blocks,
+        status: Status::Decoding,
+        max_tokens: 50,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    // Pool of 12 so a second, healthy decoder can also exist.
+    let mut engine = create_test_engine(SchedulerConfig::default(), 12);
+    let mut a = [make(1, 4)];
+    engine.preallocate_kv_blocks(&mut a);
+    let mut b = [make(2, 2)];
+    engine.preallocate_kv_blocks(&mut b);
+    // B's blocks get an EXTRA reference, making them ineligible for phase 1.
+    engine.memory.record_blocks(b[0].kv_blocks.as_ref());
+    // A third, plain decoder that must NOT be preempted if phase 2 stops early.
+    let mut c = [make(3, 2)];
+    engine.preallocate_kv_blocks(&mut c);
+    for s in [&a[0], &b[0], &c[0]] {
+        engine.running.push(s.clone());
+    }
+
+    // Phase 1 can offer A's 4 blocks; the demand of 6 must be completed by
+    // phase 2, which should stop after ONE sequence rather than draining all.
+    let free_before = engine.memory.available_blocks();
+    engine.execute_preemption(6);
+
+    let still_running = engine.running.len();
+    assert!(
+        still_running >= 1,
+        "phase 2 must STOP once the demand is met, not evict every decoder; \
+         running={:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+}
