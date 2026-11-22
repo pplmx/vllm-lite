@@ -467,3 +467,60 @@ impl crate::engine::Engine {
             .record_prefix_cache_nodes(self.scheduler.prefix_cache().len());
     }
 }
+
+#[cfg(test)]
+mod logits_tests {
+    use super::extract_per_seq_logits;
+
+    /// `extract_per_seq_logits` must keep exactly the LAST `vocab_size` values
+    /// of each sequence's logits — the next-token position.
+    ///
+    /// `cargo mutants` replaced the whole function with fixed vectors. The
+    /// slicing decides which logits reach the sampler: keeping a PREFIX instead
+    /// of a suffix samples from the first prompt position, and keeping fewer than
+    /// `vocab_size` makes the sampler see a truncated distribution.
+    #[test]
+    fn extract_per_seq_logits_keeps_the_last_vocab_window_per_sequence() {
+        // Decode shape: one row of 4 logits -> the whole row.
+        let decode = vec![vec![0.1, 0.2, 0.3, 0.4]];
+        assert_eq!(
+            extract_per_seq_logits(&decode, 4),
+            vec![vec![0.1, 0.2, 0.3, 0.4]],
+            "a decode row of exactly vocab_size must be returned unchanged"
+        );
+
+        // Prefill shape: 3 positions x 4 vocab -> only the LAST position.
+        let prefill = vec![vec![
+            1.0, 1.1, 1.2, 1.3, // position 0
+            2.0, 2.1, 2.2, 2.3, // position 1
+            3.0, 3.1, 3.2, 3.3, // position 2 (the "next" token)
+        ]];
+        assert_eq!(
+            extract_per_seq_logits(&prefill, 4),
+            vec![vec![3.0, 3.1, 3.2, 3.3]],
+            "a prefill must yield the LAST position's logits, not the first"
+        );
+
+        // Several sequences are handled independently.
+        let two = vec![
+            vec![1.0, 1.1, 1.2, 1.3, 9.0, 9.1, 9.2, 9.3],
+            vec![5.0, 5.1, 5.2, 5.3],
+        ];
+        assert_eq!(
+            extract_per_seq_logits(&two, 4),
+            vec![vec![9.0, 9.1, 9.2, 9.3], vec![5.0, 5.1, 5.2, 5.3]],
+            "each sequence keeps its own tail"
+        );
+
+        // Fewer logits than vocab_size: the whole row is kept (saturating_sub).
+        let short = vec![vec![7.0, 7.1]];
+        assert_eq!(
+            extract_per_seq_logits(&short, 4),
+            vec![vec![7.0, 7.1]],
+            "a row shorter than vocab_size must be returned whole, not empty"
+        );
+
+        // An empty input yields an empty output.
+        assert!(extract_per_seq_logits(&[], 4).is_empty());
+    }
+}

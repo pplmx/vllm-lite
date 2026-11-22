@@ -1115,3 +1115,60 @@ fn stop_hold_back_reserves_the_longest_stop_minus_one() {
         "the longest stop (4 tokens) requires reserving 3"
     );
 }
+
+/// `token_completes_stop_sequence` must report a match ONLY when the generated
+/// tail really ends with a configured stop.
+///
+/// `cargo mutants` replaced the whole function with `true`, which would finalize
+/// EVERY sequence with `FinishReason::Stop` on its first token — truncating every
+/// response. The function also ignores the PROMPT: only tokens after `prompt_len`
+/// count, so a prompt containing the stop pair must not trip it.
+#[test]
+fn token_completes_stop_sequence_checks_only_the_generated_tail() {
+    let stops = vllm_traits::SamplingParams::builder()
+        .with_stop_token_sequences(vec![vec![77, 78]])
+        .build();
+    let no_stops = vllm_traits::SamplingParams::default();
+
+    let mut engine = Engine::new(StubModel::returning(1), None);
+    // A prompt that itself ENDS with the stop pair.
+    let mut req = Request::new(1, vec![77, 78], 10);
+    req.sampling_params = stops.clone();
+    engine.add_request(req, mpsc::channel(8).0);
+    let _ = engine.scheduler.build_batch();
+
+    // Prompt-only: no match, because the generated tail is empty.
+    assert!(
+        !engine.token_completes_stop_sequence(1, Some(&stops)),
+        "a stop pair inside the PROMPT must not complete the sequence"
+    );
+
+    // Append the stop pair to the generated tail: now it matches.
+    engine
+        .scheduler
+        .get_sequence_mut(1)
+        .expect("seq 1 is running")
+        .tokens
+        .extend([5, 77, 78]);
+    assert!(
+        engine.token_completes_stop_sequence(1, Some(&stops)),
+        "a generated tail ending with the stop pair must complete the sequence"
+    );
+
+    // A non-matching tail stays false.
+    engine
+        .scheduler
+        .get_sequence_mut(1)
+        .expect("seq 1 is running")
+        .tokens
+        .push(6);
+    assert!(
+        !engine.token_completes_stop_sequence(1, Some(&stops)),
+        "a tail without the stop pair must not complete"
+    );
+
+    // No stops / no params / unknown id: never a match.
+    assert!(!engine.token_completes_stop_sequence(1, Some(&no_stops)));
+    assert!(!engine.token_completes_stop_sequence(1, None));
+    assert!(!engine.token_completes_stop_sequence(9999, Some(&stops)));
+}
