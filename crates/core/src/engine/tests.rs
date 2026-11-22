@@ -1284,3 +1284,37 @@ fn multi_token_stop_hold_releases_all_but_the_lookahead_window() {
         "only real model tokens may reach the client; got {received:?}"
     );
 }
+
+/// A completed step must record its latency, so the p50/p90/p99 gauges are not
+/// stuck at zero.
+///
+/// `finalize_and_record` guards with `if elapsed > 0.0 { record_latency }`.
+/// `cargo mutants` relaxed that to `==`, `<` and `>=`: with `<` a real elapsed
+/// time records NOTHING (the branch becomes unreachable), and with `>=` the
+/// zero-elapsed case would also record. A step always takes some time, so the
+/// latency window must receive a sample.
+#[test]
+fn a_completed_step_records_its_latency() {
+    let mut engine = Engine::new(StubModel::returning(42), None);
+
+    // No samples before any step runs.
+    assert!(
+        engine.scheduler.metrics.snapshot().p50_latency_ms.abs() < f64::EPSILON,
+        "setup: no latency has been recorded yet"
+    );
+
+    let (tx, _rx) = mpsc::channel(8);
+    engine.add_request(Request::new(1, vec![10, 20], 2), tx);
+    let _ = engine.step().expect("the step must succeed");
+
+    let snapshot = engine.scheduler.metrics.snapshot();
+    assert!(
+        snapshot.p50_latency_ms >= 0.0,
+        "the median latency must be a real sample"
+    );
+    assert!(
+        snapshot.avg_latency_ms > 0.0,
+        "a completed step must have recorded a positive latency; got {}",
+        snapshot.avg_latency_ms
+    );
+}
