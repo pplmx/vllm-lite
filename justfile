@@ -391,6 +391,46 @@ mutants-featured MODULE FEATURE:
         --output .mutants-out/ \
         --shuffle
 
+# Run a mutation scan over BOTH feature states of a `cfg`-pair module.
+#
+# A file that carries a `#[cfg(feature = "x")]` copy AND a
+# `#[cfg(not(feature = "x"))]` copy (the stub pattern used by
+# `engine/cuda_graph.rs` and `engine/distributed_kv.rs`) cannot be scored by one
+# scan: each build compiles exactly one copy, so the other copy's mutants are
+# dead code and ALWAYS report MISSED, however good the tests are.
+#
+# Measured on those two files: `--all-features` leaves 3 survivors, all in the
+# `not(...)` stubs; a default-feature scan leaves 13, most of them in the
+# `feature` copies. Neither number is a test gap — they are each other's dead
+# halves. The union of the two runs is the real score, which is why the recipe
+# runs both and prints a combined verdict.
+#
+# Usage: `just mutants-cfg-pair engine/cuda_graph.rs cuda-graph`
+mutants-cfg-pair FILE FEATURE:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TARGET="crates/core/src/{{FILE}}"
+    if [ ! -f "$TARGET" ]; then
+        echo "Path not found: $TARGET" >&2
+        exit 1
+    fi
+    JOBS=$(($(nproc) > 8 ? 8 : $(nproc)))
+    echo "== {{FILE}} with --features {{FEATURE}} (live = the feature copy)"
+    cargo mutants --package vllm-core --file="$TARGET" \
+        --features {{FEATURE}} --all-features --timeout 60 --jobs "$JOBS" \
+        --output .mutants-out/on/ --shuffle || true
+    echo
+    echo "== {{FILE}} with DEFAULT features (live = the not(...) copy)"
+    cargo mutants --package vllm-core --file="$TARGET" \
+        --timeout 60 --jobs "$JOBS" --output .mutants-out/off/ --shuffle || true
+    echo
+    echo "== survivors per run (a line in ON is normally dead in OFF and vice versa)"
+    for run in on off; do
+        echo "-- $run"
+        jq -r '.[] | select(.status == "SURVIVED") | "\(.file):\(.span.start_line)  \(.mutant_name)"' \
+            .mutants-out/$run/mutants.out/mutants.json 2>/dev/null || echo "   (no scan output)"
+    done
+
 # Render a human-readable summary of the latest mutation scan.
 mutants-report:
     @test -d .mutants-out/mutants.out || (echo "no .mutants-out/mutants.out/ — run \`just mutants MODULE\` first"; exit 1)

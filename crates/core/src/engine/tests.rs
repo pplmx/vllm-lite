@@ -1728,3 +1728,45 @@ fn distributed_kv_enabled_stub_is_false() {
         "the non-multi-node stub must report false"
     );
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Non-feature stubs. `cuda_graph.rs` / `distributed_kv.rs` carry a
+// `#[cfg(feature = ...)]` copy and a `#[cfg(not(feature = ...))]` copy;
+// only one is ever compiled. These tests cover the DEFAULT build, which
+// is what an embedder without the feature links.
+// ──────────────────────────────────────────────────────────────────────
+
+/// The `cuda-graph` stub must keep warning that the feature is off.
+///
+/// The stub's body is `tracing::warn!(...); Ok(())`, so `cargo mutants`'
+/// `-> Ok(())` variant removes the ONLY signal an operator gets that a
+/// deployment asked for CUDA graphs and the binary was built without them.
+/// The warn is the observable, so this uses the trace-capture harness.
+#[test]
+#[cfg(not(feature = "cuda-graph"))]
+fn cuda_graph_stub_warns_that_the_feature_is_off() {
+    let mut engine = Engine::new(StubModel::returning(42), None);
+
+    let capture = crate::scheduler::trace_capture::capture(|| {
+        engine.capture_cuda_graphs().expect("the stub never fails");
+    });
+    assert!(
+        capture.contains("CUDA Graph support not enabled"),
+        "the stub must warn; got {:?}",
+        capture.messages()
+    );
+
+    // And it must report disabled, so the run loop takes the regular step.
+    assert!(!engine.cuda_graph_enabled());
+}
+
+/// The `multi-node` stub must report no distributed cache and no wrapper.
+#[test]
+#[cfg(not(feature = "multi-node"))]
+fn distributed_kv_stub_reports_absent() {
+    let engine = Engine::new(StubModel::returning(42), None);
+    assert!(
+        !engine.distributed_kv_enabled(),
+        "the non-multi-node stub must report false, not a constant true"
+    );
+}

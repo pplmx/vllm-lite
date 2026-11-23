@@ -171,6 +171,31 @@ The `Mutants` total moves between scans because adding a `#[cfg(test)]` helper,
 registering an equivalence or deleting dead code changes the count; compare the
 `Missed` column across runs, not the totals.
 
+### `cfg` pairs need two scans, not one
+
+A file that carries both copies of a feature-gated method — the stub pattern in
+`engine/cuda_graph.rs` and `engine/distributed_kv.rs` — cannot be scored by a
+single scan. Each build compiles exactly ONE copy, so every mutant in the other
+copy is dead code and reports MISSED no matter how thorough the tests are.
+
+Measured on those two files:
+
+| Build            | Live copy                        |                           Survivors |
+| ---------------- | -------------------------------- | ----------------------------------: |
+| `--all-features` | the `feature = "..."` bodies     |         3 (all in `not(...)` stubs) |
+| default          | the `not(feature = "...")` stubs | 13 (11 in copies that are not live) |
+
+Neither number is a test gap; they are each other's dead halves. The union is
+the real score, and both halves ARE killable when scanned in the configuration
+that compiles them: the `cuda-graph` copy through
+`EngineBuilder::with_cuda_graph_executor`, the stubs through a trace-capture
+assertion on their `tracing::warn!`.
+
+The rule this produces: **register an exclusion only for a mutant that is dead
+in EVERY configuration you scan.** A survivor that is live in some build is a
+test gap, not an equivalence. `just mutants-cfg-pair FILE FEATURE` runs both and
+prints the survivors side by side.
+
 ### Timeouts are a class, not gaps
 
 The 12 TIMEOUT verdicts in the latest scan are `+=` -> `*=` / `-=` loop-counter
