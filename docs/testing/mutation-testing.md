@@ -155,11 +155,14 @@ scan started.
 | `error/**`           |      12 |      1 |       0 |       0 |       11 |
 | `routing/**`         |      29 |     29 | 12 -> 0 |       0 |        0 |
 | `tracing_init.rs`    |       7 |      4 |  4 -> 0 |       0 |        3 |
+| `traits/**`          |      77 |     59 | 40 -> 0 |       0 |       18 |
 
 \* one is a registered equivalence, the other was fixed after that scan ran.
 
 `Missed` shows `before -> after`: every module listed has been re-scanned since
 its survivors were closed by tests, and the `after` column is 0 for all of them.
+`traits/**` needed a scope fix too — the first scan passed `--lib`, which does
+not run `crates/traits/tests/*` where `Batch`'s helpers are actually tested.
 `metrics/**` and `speculative/**` needed three and two full scans respectively —
 the first scan of each used a test scope that missed the module's own tests, so
 its survivor list mixed real gaps with artefacts of the filter.
