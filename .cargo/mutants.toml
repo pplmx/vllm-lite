@@ -132,6 +132,11 @@ exclude_re = [
   # `SpeculationConfigBuilder::default()` verbatim.
   'config\.rs:49:9: replace SpeculationConfig::builder -> SpeculationConfigBuilder with Default::default()',
 
+  # `builder()` returns `SamplingParamsBuilder::default()` verbatim, and the
+  # builder derives `Default` over the one `SamplingParams` field whose own
+  # `Default` is the documented impl, so the replacement is the same expression.
+  'sampling\.rs:264:9: replace SamplingParams::builder -> SamplingParamsBuilder with Default::default()',
+
   # `gauge_scales` has exactly one reader, in the `(Gauge, Atomic)` arm, and
   # computes its scale with `unwrap_or(1.0)`. Widening the filter adds keys
   # nobody reads; on every key that IS read the two filters agree.

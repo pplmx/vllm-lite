@@ -30,6 +30,14 @@ FEATURES = {
 }
 
 
+def package_for(source: Path) -> str:
+    """Map a source path under `crates/<dir>/` to that crate's package name."""
+    parts = source.parts
+    if len(parts) >= 2 and parts[0] == "crates":
+        return f"vllm-{parts[1]}"
+    return "vllm-core"
+
+
 def file_for(pattern: str) -> str | None:
     """Recover the source file a pattern targets from its `<basename>.rs:` prefix."""
     match = re.match(r"([\w\\]+?\.rs):", pattern)
@@ -66,12 +74,16 @@ def main() -> int:
             # made the exclusion for a nested module look STALE.
             records: list[dict] = []
             for source in matches:
+                # The package comes from the source file's own crate: a
+                # hard-coded `vllm-core` made every `crates/traits` (and
+                # `crates/model`, `crates/server`) pattern look STALE.
+                package = package_for(source)
                 completed = subprocess.run(
                     [
                         "cargo",
                         "mutants",
                         "--package",
-                        "vllm-core",
+                        package,
                         "--file",
                         str(source),
                         "--list",

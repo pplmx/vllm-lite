@@ -182,3 +182,84 @@ fn test_model_error_display() {
     let formatted = format!("{err}");
     assert!(formatted.contains("connection failed"));
 }
+
+/// `Batch::len` must report the number of sequences.
+///
+/// `cargo mutants` replaced it with the constants 0 and 1 and both survived:
+/// the crate's own tests only ever call `is_empty`, and every `len()` call site
+/// in the workspace is in a test that is free to assert whatever the
+/// implementation returns. `len` is what the server uses to size per-request
+/// accounting and what the batching code uses to decide whether a batch is
+/// worth a forward pass.
+#[test]
+fn test_batch_len_counts_sequences() {
+    let mut batch = Batch::empty();
+    assert_eq!(batch.len(), 0);
+
+    batch.seq_ids = vec![7];
+    batch.input_tokens = vec![vec![10]];
+    batch.is_prefill = vec![true];
+    assert_eq!(batch.len(), 1);
+
+    batch.seq_ids = vec![7, 9, 11];
+    batch.input_tokens = vec![vec![10], vec![20], vec![30]];
+    batch.is_prefill = vec![true, false, false];
+    assert_eq!(batch.len(), 3, "len must track seq_ids, not a constant");
+
+    // `is_empty` and `len` must agree — they read the same field.
+    assert!(!batch.is_empty());
+    batch.seq_ids.clear();
+    assert!(batch.is_empty());
+    assert_eq!(batch.len(), 0);
+}
+
+/// The phase helpers must agree with the `is_prefill` flags they read.
+///
+/// `has_prefill` / `has_decode` were each replaced by the constants `true` and
+/// `false`, and `has_decode`'s `!p` had its `!` deleted — five survivors. On a
+/// mixed batch all of them look right, so the fixture needs the three SHAPES:
+/// all-prefill, all-decode, and mixed.
+#[test]
+fn test_batch_phase_helpers_cover_every_shape() {
+    let make = |is_prefill: Vec<bool>| Batch {
+        seq_ids: (0..is_prefill.len() as u64).collect(),
+        input_tokens: is_prefill.iter().map(|_| vec![1]).collect(),
+        positions: is_prefill.iter().map(|_| vec![0]).collect(),
+        kv_block_ids: is_prefill.iter().map(|_| vec![0]).collect(),
+        num_computed_tokens: is_prefill.iter().map(|_| 0).collect(),
+        is_prefill: is_prefill.clone(),
+        sampling_params: is_prefill
+            .iter()
+            .map(|_| SamplingParams::default())
+            .collect(),
+        phase: BatchPhase::Mixed,
+        total_tokens: is_prefill.len(),
+        max_seq_len: 1,
+    };
+
+    let all_prefill = make(vec![true, true]);
+    assert!(all_prefill.has_prefill());
+    assert!(
+        !all_prefill.has_decode(),
+        "an all-prefill batch has no decode sequence"
+    );
+
+    let all_decode = make(vec![false, false]);
+    assert!(!all_decode.has_prefill());
+    assert!(all_decode.has_decode());
+
+    let mixed = make(vec![true, false]);
+    assert!(mixed.has_prefill(), "the first sequence prefills");
+    assert!(mixed.has_decode(), "the second sequence decodes");
+
+    // Order must not matter: an all-decode batch preceded by one prefill flag
+    // still has both phases.
+    let mixed_reversed = make(vec![false, true]);
+    assert!(mixed_reversed.has_prefill());
+    assert!(mixed_reversed.has_decode());
+
+    // An empty batch has neither phase.
+    let empty = make(vec![]);
+    assert!(!empty.has_prefill());
+    assert!(!empty.has_decode());
+}

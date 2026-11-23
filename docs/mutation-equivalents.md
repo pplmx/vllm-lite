@@ -371,6 +371,23 @@ The three neighbouring comparisons (`kind ==` → `!=`, `source ==` → `!=` on 
 filters) are NOT equivalent and are killed by
 `one_tick_records_every_schema_instrument`.
 
+### `sampling.rs:264` — `SamplingParams::builder()` → `SamplingParamsBuilder::default()`
+
+`builder()`'s body IS `SamplingParamsBuilder::default()`, so the "mutation" is
+the same expression with the type written out; `cargo-mutants` emits it as a
+candidate anyway, and it necessarily survives. The builder derives `Default`
+over one field, `inner: SamplingParams`, and `SamplingParams`'s own `Default` is
+the written impl.
+
+`builder_matches_the_documented_defaults` pins the property the reasoning
+depends on (both `Default` impls yielding the documented values), so a future
+divergence fails a test rather than the equivalence quietly going wrong.
+
+The neighbouring `with_stop_token_sequences_none` → `Default::default()` IS a
+real gap and is killed by `builder_clear_stop_sequences_keeps_other_fields`: the
+pre-existing test set only the field it then cleared, so a builder reset that
+discarded every other field passed it too.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

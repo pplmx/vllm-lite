@@ -290,6 +290,134 @@ mod tests {
         assert_eq!(output.next_tokens, expected);
     }
 
+    /// `supports_prefix_caching` must default to `true`.
+    ///
+    /// The trait method's default body is `true`, and `cargo mutants` replaced
+    /// it with `false`. The engine reads it to decide whether a full prefix
+    /// hit may admit a sequence straight into decode
+    /// (`engine/lifecycle.rs`); `false` turns every prefix hit into a full
+    /// re-prefill, so the prefix cache stops paying off while still costing
+    /// the memory it reserves. `StubModelBackend` does not override it, which
+    /// is exactly the default a plain transformer inherits.
+    #[test]
+    fn supports_prefix_caching_defaults_to_true() {
+        assert!(
+            StubModelBackend.supports_prefix_caching(),
+            "a stateless backend whose KV fully captures the sequence must \
+             allow skipping prefill on a prefix hit"
+        );
+    }
+
+    /// `StubModelBackend`'s `forward_logits` must be shape-consistent.
+    ///
+    /// `cargo mutants` replaced the body with `Ok(vec![])`,
+    /// `Ok(vec![vec![]])`, `Ok(vec![vec![0.0]])` and `Ok(vec![vec![1.0]])` —
+    /// four survivors. Callers zip the per-sequence logits against the batch,
+    /// so an empty outer vector silently drops every sequence, and a single
+    /// inner vector attributes every sequence's logits to the first one. The
+    /// stub documents a `tokens.len() * vocab` layout, and that layout is what
+    /// the speculative verification path expects.
+    #[test]
+    fn stub_forward_logits_is_size_consistent() {
+        let mut backend = StubModelBackend;
+        let input = vec![vec![5, 6, 7], vec![8]];
+        let positions = vec![vec![0, 1, 2], vec![0]];
+        let logits = backend
+            .forward_logits(
+                &[1, 2],
+                &input,
+                &positions,
+                &[vec![0], vec![0]],
+                &[0, 0],
+                &[true, true],
+            )
+            .expect("the stub never fails");
+
+        assert_eq!(logits.len(), 2, "one entry per sequence, not one total");
+        // `vocab_size` is `#[cfg(feature = "candle")]` on the trait; the stub's
+        // `forward_logits` falls back to a vocab of 1 without it, and the
+        // assertion must follow the same layout the code produces.
+        #[cfg(feature = "candle")]
+        let vocab = backend.vocab_size();
+        #[cfg(not(feature = "candle"))]
+        let vocab = 1;
+        for (i, row) in logits.iter().enumerate() {
+            assert_eq!(
+                row.len(),
+                input[i].len() * vocab,
+                "sequence {i} must report tokens.len() * vocab logits"
+            );
+            assert!(
+                row.iter().all(|&v| v == 0.0),
+                "the stub emits zero logits, not fabricated values"
+            );
+        }
+
+        // An empty batch yields no rows, not one fabricated row.
+        assert!(
+            backend
+                .forward_logits(&[], &[], &[], &[], &[], &[])
+                .expect("the stub never fails")
+                .is_empty()
+        );
+    }
+
+    /// `StubModelBackend`'s `embed` must be shape-consistent too.
+    ///
+    /// Five more survivors here (`Ok(vec![])` and the single-row variants).
+    /// The stub's contract is one row per sequence, `tokens.len()` wide.
+    #[test]
+    fn stub_embed_is_size_consistent() {
+        let mut backend = StubModelBackend;
+        let input = vec![vec![1, 2, 3], vec![4, 5]];
+        let positions = vec![vec![0, 1, 2], vec![0, 1]];
+        let embeddings = backend
+            .embed(&input, &positions)
+            .expect("the stub never fails");
+
+        assert_eq!(embeddings.len(), 2, "one row per sequence");
+        for (i, row) in embeddings.iter().enumerate() {
+            assert_eq!(
+                row.len(),
+                input[i].len(),
+                "sequence {i} must report one embedding per token"
+            );
+            assert!(row.iter().all(|&v| v == 0.0), "the stub emits zeros");
+        }
+
+        assert!(
+            backend
+                .embed(&[], &[])
+                .expect("the stub never fails")
+                .is_empty()
+        );
+    }
+
+    /// Every `StubModelBackend` accessor must stay the placeholder it documents.
+    ///
+    /// The trait defaults are `num_layers() == 0` and `num_heads() == 0`, with
+    /// `vocab_size() == 1` under the `candle` feature, and `cargo mutants`
+    /// replaced them with `1`, `1` and `0`. These values are not decorative:
+    /// `vocab_size` sizes the logits row in `forward_logits`, so a `0` there
+    /// makes every row empty, and the engine uses `num_layers` to decide
+    /// whether a model can be sharded.
+    #[test]
+    fn stub_model_backend_accessors_are_the_documented_placeholders() {
+        let backend = StubModelBackend;
+        assert_eq!(
+            backend.num_layers(),
+            0,
+            "the stub has no layers; a constant 1 would look shardable"
+        );
+        assert_eq!(backend.num_heads(), 0, "the stub has no attention heads");
+        #[cfg(feature = "candle")]
+        assert_eq!(
+            backend.vocab_size(),
+            1,
+            "the stub's vocab is 1, and it sizes the logits row"
+        );
+    }
+
     #[test]
     fn model_backend_default_arc_works() {
         let mut backend: Arc<dyn ModelBackend> = <dyn ModelBackend>::default_arc();

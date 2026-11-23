@@ -161,6 +161,81 @@ mod tests {
         assert_eq!(cfg.enable_graph_pooling, Some(true));
     }
 
+    /// `CudaGraphConfig::from_env` must READ the `VLLM_CUDA_GRAPH_*` variables.
+    ///
+    /// Replaced wholesale by `Default::default()` it survived: the only
+    /// `from_env` coverage asserted the defaults, which a stub returning
+    /// `Default::default()` satisfies identically. `from_env` is the ONLY way
+    /// an operator enables CUDA graphs, so the swap silently disables the
+    /// whole fast path for every deployment that sets the flag.
+    ///
+    /// The env vars are process-global, so this test takes a module-wide lock
+    /// and restores the previous values.
+    #[test]
+    #[allow(unsafe_code)]
+    fn cuda_graph_config_from_env_reads_each_variable() {
+        use std::sync::{Mutex, OnceLock};
+        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        // invariant: the lock only serialises this module's env mutations; a
+        // poisoned lock still gives exclusive access, so recovery is sound.
+        let guard = ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        const KEYS: [&str; 3] = [
+            "VLLM_CUDA_GRAPH_ENABLED",
+            "VLLM_CUDA_GRAPH_BATCH_SIZES",
+            "VLLM_CUDA_GRAPH_POOLING",
+        ];
+        let saved: Vec<Option<String>> = KEYS.iter().map(|k| std::env::var(k).ok()).collect();
+        let restore = || {
+            for (key, value) in KEYS.iter().zip(&saved) {
+                match value {
+                    // SAFETY: guarded by ENV_LOCK; no other thread touches these
+                    // keys while this test holds it.
+                    Some(v) => unsafe { std::env::set_var(key, v) },
+                    None => unsafe { std::env::remove_var(key) },
+                }
+            }
+        };
+
+        let run = |key: &str, value: &str| {
+            // SAFETY: guarded by ENV_LOCK for the duration of this closure.
+            unsafe { std::env::set_var(key, value) };
+            CudaGraphConfig::from_env()
+        };
+
+        // With nothing set, the documented fallbacks apply.
+        for key in KEYS {
+            // SAFETY: guarded by ENV_LOCK.
+            unsafe { std::env::remove_var(key) };
+        }
+        let fallback = CudaGraphConfig::from_env();
+        assert!(!fallback.enabled);
+        assert_eq!(fallback.batch_sizes, vec![1, 4, 8, 16, 32, 64]);
+        assert_eq!(fallback.enable_graph_pooling, None);
+
+        // Each variable must be picked up.
+        assert!(
+            run("VLLM_CUDA_GRAPH_ENABLED", "true").enabled,
+            "VLLM_CUDA_GRAPH_ENABLED=true must enable graphs"
+        );
+        assert_eq!(
+            run("VLLM_CUDA_GRAPH_BATCH_SIZES", "2,4,6").batch_sizes,
+            vec![2, 4, 6],
+            "the batch-size list must come from the variable"
+        );
+        assert_eq!(
+            run("VLLM_CUDA_GRAPH_POOLING", "false").enable_graph_pooling,
+            Some(false),
+            "pooling must follow the variable, not stay at the default"
+        );
+
+        restore();
+        drop(guard);
+    }
+
     #[test]
     fn model_graph_config_default() {
         let cfg = ModelGraphConfig::default();

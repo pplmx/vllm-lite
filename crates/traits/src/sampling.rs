@@ -595,6 +595,69 @@ mod tests {
         assert!(p.top_logprobs.is_none());
     }
 
+    /// `SamplingParams::builder()` must return a builder over the DEFAULTS.
+    ///
+    /// Replaced by `SamplingParamsBuilder::default()` it survived — because
+    /// that is literally what the body returns. `SamplingParamsBuilder` derives
+    /// `Default` over a single `inner: SamplingParams` field, and
+    /// `SamplingParams`'s own `Default` is the written impl. Registered as an
+    /// equivalence in `docs/mutation-equivalents.md`; this test pins the
+    /// property the equivalence depends on, so if either `Default` stops
+    /// agreeing the fixture fails rather than the reasoning rotting.
+    #[test]
+    fn builder_matches_the_documented_defaults() {
+        let built = SamplingParams::builder().build();
+        let default = SamplingParams::default();
+        assert!(
+            (built.temperature - default.temperature).abs() < f32::EPSILON,
+            "temperature: {} vs {}",
+            built.temperature,
+            default.temperature
+        );
+        assert!((built.top_p - default.top_p).abs() < f32::EPSILON);
+        assert_eq!(built.top_k, default.top_k);
+        assert_eq!(built.repeat_penalty, default.repeat_penalty);
+        assert_eq!(built.seed, default.seed);
+        assert_eq!(built.top_logprobs, default.top_logprobs);
+        assert_eq!(built.stop_token_sequences, default.stop_token_sequences);
+        assert_eq!(built.beam_width, default.beam_width);
+        assert_eq!(built.max_retries, default.max_retries);
+        assert!(built.stop_token_sequences.is_none());
+        assert!(built.seed.is_none());
+    }
+
+    /// `with_stop_token_sequences_none` must CLEAR a previously set value.
+    ///
+    /// Replaced by `Default::default()` it survived: the only test that calls
+    /// it (own-suite) builds a fresh builder, sets the sequences, then calls
+    /// `_none()`, and `Default::default()` also yields `None` — so the mutant
+    /// passes for the wrong reason. The distinguishing case is a builder that
+    /// has OTHER fields set: `Default::default()` would discard them too.
+    #[test]
+    fn builder_clear_stop_sequences_keeps_other_fields() {
+        let p = SamplingParams::builder()
+            .with_temperature(0.25)
+            .with_repeat_penalty(1.35)
+            .with_seed(9)
+            .with_stop_token_sequences(vec![vec![1, 2], vec![3]])
+            .with_stop_token_sequences_none()
+            .build();
+
+        assert!(
+            p.stop_token_sequences.is_none(),
+            "the sequences are cleared"
+        );
+        assert!(
+            (p.temperature - 0.25).abs() < f32::EPSILON,
+            "clearing the sequences must not reset temperature to the default"
+        );
+        assert!(
+            (p.repeat_penalty - 1.35).abs() < f32::EPSILON,
+            "repeat_penalty must survive the clear"
+        );
+        assert_eq!(p.seed, Some(9), "seed must survive the clear");
+    }
+
     #[test]
     fn builder_clear_stop_sequences() {
         let p = SamplingParams::builder()
