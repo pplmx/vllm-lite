@@ -808,6 +808,8 @@ impl OtlpExporterBuilder {
 #[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
+    use opentelemetry_sdk::metrics::InMemoryMetricExporter;
+    use opentelemetry_sdk::metrics::data::{AggregatedMetrics, MetricData};
 
     /// `Debug for OtlpExporter` must name the type and its fields.
     ///
@@ -891,6 +893,113 @@ mod tests {
             exporter.shutdown().is_err(),
             "a second shutdown must surface the provider's own state, which is \
              what distinguishes the real call from an `Ok(())` stub"
+        );
+    }
+
+    /// One `run()` tick must record every schema instrument, at the right
+    /// scale, from the right source.
+    ///
+    /// `cargo mutants` replaced `run` with `Ok(())` and relaxed three of the
+    /// four `==` in the two schema filters plus their `&&` to `||`. Every one of
+    /// those changes silently drops or duplicates series: `||` puts
+    /// snapshot-sourced gauges through the fixed-point division by 100,000 (a
+    /// 0.8 acceptance rate exports as 0.000008), and each `!=` drops the source
+    /// it selects. The test drives ONE tick against an in-memory reader and
+    /// asserts on the exported values, so all four are observable.
+    #[tokio::test]
+    async fn one_tick_records_every_schema_instrument() {
+        let exporter_inner = InMemoryMetricExporter::default();
+        let reader = PeriodicReader::builder(exporter_inner.clone())
+            .with_interval(Duration::from_millis(20))
+            .build();
+        let provider = SdkMeterProvider::builder().with_reader(reader).build();
+
+        let collector = Arc::new(EnhancedMetricsCollector::new());
+        // One atomic counter, one fixed-point ratio gauge, one snapshot gauge.
+        collector.record_cuda_graph_hit();
+        collector.record_speculative_acceptance(8, 10);
+        let cfg = OtlpConfig {
+            enabled: true,
+            metrics_export_interval_secs: 1,
+            ..OtlpConfig::default()
+        };
+        let exporter =
+            OtlpExporter::with_provider_for_test(Arc::clone(&collector), cfg, provider.clone());
+
+        let runner = tokio::spawn(async move { exporter.run().await });
+        // `run` skips the immediate tick, then exports once per interval.
+        tokio::time::sleep(Duration::from_millis(2500)).await;
+        let _ = provider.force_flush();
+        runner.abort();
+
+        let batches = exporter_inner
+            .get_finished_metrics()
+            .expect("the in-memory exporter never fails");
+        assert!(
+            !batches.is_empty(),
+            "a tick must export at least one batch of metrics"
+        );
+
+        let mut seen: HashMap<String, f64> = HashMap::new();
+        for batch in &batches {
+            for scope in batch.scope_metrics() {
+                for metric in scope.metrics() {
+                    let value = match metric.data() {
+                        AggregatedMetrics::U64(MetricData::Sum(sum)) => {
+                            sum.data_points().next().map(|p| p.value() as f64)
+                        }
+                        AggregatedMetrics::F64(MetricData::Gauge(gauge)) => {
+                            gauge.data_points().next().map(|p| p.value())
+                        }
+                        AggregatedMetrics::I64(MetricData::Sum(sum)) => {
+                            sum.data_points().next().map(|p| p.value() as f64)
+                        }
+                        _ => None,
+                    };
+                    if let Some(v) = value {
+                        seen.insert(metric.name().to_string(), v);
+                    }
+                }
+            }
+        }
+
+        // The atomic counter reaches its instrument (a `Counter`, so the first
+        // tick sends the absolute value as a delta).
+        assert_eq!(
+            seen.get("cuda.graph.hits").copied(),
+            Some(1.0),
+            "an atomic counter must be exported; got {seen:?}"
+        );
+
+        // The fixed-point ratio gauge is DIVIDED by the scale.
+        let rate = seen
+            .get("speculative.acceptance_rate")
+            .copied()
+            .unwrap_or_else(|| panic!("the acceptance-rate gauge must be exported; got {seen:?}"));
+        assert!(
+            (rate - 0.8).abs() < 1e-9,
+            "8/10 accepted is 0.8 after the 100,000 fixed-point division; got {rate}"
+        );
+
+        // Every schema instrument must be present: a filter mutated to `!=` or
+        // to `||` drops channels, and the count is what makes that visible.
+        assert_eq!(
+            seen.len(),
+            SCHEMA_MAP.len(),
+            "every schema instrument must export one series; missing {:?}",
+            SCHEMA_MAP
+                .iter()
+                .map(|(p, otel, _, _, _)| (*p, *otel))
+                .filter(|(_, otel)| !seen.contains_key(*otel))
+                .collect::<Vec<_>>()
+        );
+
+        // A SNAPSHOT-sourced gauge records the raw f64 value with no division;
+        // the fixture leaves it at 0, so the point is that the channel exists
+        // and is not routed through the `{ratio}` scale.
+        assert!(
+            seen.contains_key("latency.p50"),
+            "snapshot-sourced instruments must be exported; got {seen:?}"
         );
     }
 

@@ -58,6 +58,11 @@ proptest = { workspace = true }
 # (feature `opentelemetry`): those hooks are a second, hand-duplicated source of
 # the defaults that `impl Default` never calls.
 serde_json = { workspace = true }
+# `InMemoryMetricExporter` is gated behind `opentelemetry_sdk`'s `testing`
+# feature. Dev-dependencies unify features across the test build, so enabling it
+# here (not in `[dependencies]`) keeps the production build lean while letting
+# the OTLP exporter tests read back what `run()` actually recorded.
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
 vllm-testing = { path = "../testing", version = "0.1.0" }
 vllm-model = { path = "../model", version = "0.1.0" }
 

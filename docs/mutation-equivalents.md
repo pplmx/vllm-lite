@@ -349,6 +349,28 @@ The neighbouring `-` → `+` / `/` on the subtraction and the `>`/`==` variants 
 this comparison are NOT equivalent and are killed by
 `updown_delta_clamps_at_the_i64_bounds`.
 
+### `metrics/exporter/otlp.rs:627` — `&&` → `||` in the gauge-scale filter
+
+`gauge_scales` is only ever read in the `(Gauge, Atomic)` arm:
+
+```rust
+let scale = gauge_scales.get(prom_name).copied().unwrap_or(1.0);
+```
+
+so widening the filter from `kind == Gauge && source == Atomic` to
+`kind == Gauge || source == Atomic` ADDS keys that are never looked up, and for
+every key that IS looked up the two filters agree (those entries satisfy both
+conditions, so both select them). The map grows by ~20 entries; the exported
+values are identical.
+
+Held as long as `gauge_scales` has exactly one read site. If a second reader
+appears for a non-Gauge-or-non-Atomic name, this exclusion must be revisited —
+which is why the mutant is registered here rather than left as a survivor.
+
+The three neighbouring comparisons (`kind ==` → `!=`, `source ==` → `!=` on both
+filters) are NOT equivalent and are killed by
+`one_tick_records_every_schema_instrument`.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

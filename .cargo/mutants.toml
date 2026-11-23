@@ -132,6 +132,11 @@ exclude_re = [
   # `SpeculationConfigBuilder::default()` verbatim.
   'config\.rs:49:9: replace SpeculationConfig::builder -> SpeculationConfigBuilder with Default::default()',
 
+  # `gauge_scales` has exactly one reader, in the `(Gauge, Atomic)` arm, and
+  # computes its scale with `unwrap_or(1.0)`. Widening the filter adds keys
+  # nobody reads; on every key that IS read the two filters agree.
+  'otlp\.rs:627:48: replace && with \|\| in OtlpExporter::run',
+
   # The comparison is the `unwrap_or` argument: it runs only once
   # `i64::try_from` has failed, i.e. `delta` is outside i64's range, so `delta`
   # is never 0 there and `<` and `<=` agree on every reachable input.
