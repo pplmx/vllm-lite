@@ -313,6 +313,14 @@ rounding would make the equality case unreachable.
 derives `Default` over a single `config: SpeculationConfig` field whose own
 `Default` is the written impl. The mutant body is the original body.
 
+### `routing/hash_router.rs:94` — `hash % len` → `hash + len`
+
+The probe start is `(hash % len) as usize`, and the walk is
+`(start + offset) % len`. Replacing the FIRST `%` with `+` leaves
+`((hash + len) % len)`, which is `hash % len` by definition of the modulus, so
+the probe order is identical for every key. The `/` variant of the same line is
+NOT equivalent and is killed by `cache_probe_starts_at_hash_modulo_node_count`.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

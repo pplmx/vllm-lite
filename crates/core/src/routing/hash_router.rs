@@ -209,6 +209,140 @@ mod tests {
         assert!(route.is_some());
     }
 
+    /// `update_node_load` / `remove_node` / `get_all_nodes` must do their job.
+    ///
+    /// `cargo mutants` replaced `update_node_load` with `()`, flipped both of
+    /// its id comparisons (`==` -> `!=`) and its `remove_node` sibling
+    /// (`!=` -> `==`, which keeps ONLY the removed node), and replaced
+    /// `get_all_nodes` with `vec![]` and the placeholder lists — twelve
+    /// survivors in a file whose only consumer is its own test module. The
+    /// load value is the least-loaded fallback's input, and a `get_all_nodes`
+    /// that returns nothing makes a router look empty to any inspector.
+    #[tokio::test]
+    async fn node_bookkeeping_updates_and_reads_back() {
+        let router = HashRouter::new(100);
+        assert!(router.get_all_nodes().await.is_empty());
+        assert!(router.route("k").await.is_none(), "no nodes means no route");
+
+        router.add_node("a".to_string()).await;
+        router.add_node("b".to_string()).await;
+        router.add_node("a".to_string()).await; // duplicate is ignored
+        assert_eq!(router.get_node_count().await, 2);
+        let mut ids = router.get_all_nodes().await;
+        ids.sort();
+        assert_eq!(ids, vec!["a".to_string(), "b".to_string()]);
+
+        // Load decides the fallback: make "b" the least loaded and expect it.
+        router.update_node_load("a", 0.9).await;
+        router.update_node_load("b", 0.1).await;
+        for key in ["x", "y", "z", "w"] {
+            assert_eq!(
+                router.route(key).await,
+                Some("b".to_string()),
+                "the least-loaded node must win key {key}"
+            );
+        }
+
+        // Swapping the loads swaps the winner, proving the update is real.
+        router.update_node_load("a", 0.05).await;
+        for key in ["x", "y", "z", "w"] {
+            assert_eq!(router.route(key).await, Some("a".to_string()));
+        }
+
+        // An unknown id is a no-op, not a panic.
+        router.update_node_load("missing", 0.0).await;
+
+        // Removing "a" leaves exactly "b", and does NOT keep only "a".
+        router.remove_node("a").await;
+        assert_eq!(router.get_node_count().await, 1);
+        assert_eq!(router.get_all_nodes().await, vec!["b".to_string()]);
+        router.remove_node("b").await;
+        assert_eq!(router.get_node_count().await, 0);
+        assert!(router.route("k").await.is_none());
+    }
+
+    /// `route_by_prompt_hash` must select `hash % node_count`.
+    ///
+    /// `cargo mutants` replaced the method with `Some("")` / `Some("xyzzy")`
+    /// and the `%` with `/` and `+`. The hash is the only thing that makes the
+    /// mapping CONSISTENT across processes, so a division or a sum reshuffles
+    /// every key to a different node — the prefix cache then misses on every
+    /// peer. The fixture pins the exact index for a range of hashes.
+    #[tokio::test]
+    async fn route_by_prompt_hash_is_modulo_the_node_count() {
+        let router = HashRouter::new(100);
+        assert!(router.route_by_prompt_hash(0).await.is_none());
+
+        router.add_node("n0".to_string()).await;
+        router.add_node("n1".to_string()).await;
+        router.add_node("n2".to_string()).await;
+
+        for hash in 0u64..12 {
+            let expected = format!("n{}", hash % 3);
+            assert_eq!(
+                router.route_by_prompt_hash(hash).await,
+                Some(expected),
+                "hash {hash} must land on node {}",
+                hash % 3
+            );
+        }
+        // A large hash must not panic or overflow the index.
+        assert!(router.route_by_prompt_hash(u64::MAX).await.is_some());
+    }
+
+    /// `hash_key` must be a real hash: stable per key, distinct across keys.
+    ///
+    /// Replaced by the constants 0 and 1 it survived, because consistency was
+    /// only ever checked by routing the SAME key twice — a constant is
+    /// perfectly consistent. It is not, however, a hash: every key would land
+    /// on node 0, so all prefixes pile onto one backend.
+    #[test]
+    fn hash_key_is_stable_and_discriminating() {
+        let a = HashRouter::hash_key("prompt-a");
+        let b = HashRouter::hash_key("prompt-a");
+        let c = HashRouter::hash_key("prompt-b");
+        assert_eq!(a, b, "the same key must hash the same");
+        assert_ne!(a, c, "different keys must (almost surely) differ");
+        assert_ne!(a, 0, "a constant-zero hash would pin every key to node 0");
+    }
+
+    /// The cache-hit probe must START at `hash % node_count`.
+    ///
+    /// `route` probes `start, start+1, ...` (wrapping) and returns the first
+    /// node holding the prefix, so the start index decides WHICH cached node
+    /// wins when several hold one. `cargo mutants` relaxed `hash % len` to
+    /// `hash / len` and to `hash + len`; the first reshuffles the probe order,
+    /// the second leaves `(start + offset) % len` unchanged for every query.
+    ///
+    /// The fixture marks two of three nodes as cache holders and searches for a
+    /// key whose `hash % 3` and `hash / 3` start the walk at different cached
+    /// nodes, so the assertion is about the ORDER, not about cache preference
+    /// in general.
+    #[tokio::test]
+    async fn cache_probe_starts_at_hash_modulo_node_count() {
+        let router = HashRouter::new(100);
+        router.add_node("n0".to_string()).await;
+        router.add_node("n1".to_string()).await;
+        router.add_node("n2".to_string()).await;
+        // Only n0 and n2 hold the prefix, so the walk order decides.
+        router.update_cache_status("n0", true).await;
+        router.update_cache_status("n2", true).await;
+
+        let key = (0..10_000)
+            .map(|i| format!("probe-key-{i}"))
+            .find(|k| {
+                let h = HashRouter::hash_key(k);
+                h % 3 == 0 && (h / 3) % 3 == 1
+            })
+            .expect("some key starts the real and the `/` walk on different nodes");
+
+        assert_eq!(
+            router.route(&key).await,
+            Some("n0".to_string()),
+            "the walk starts at hash % 3 == 0, so n0 is reached before n2"
+        );
+    }
+
     #[tokio::test]
     async fn test_route_prefers_cache_hit_on_any_node() {
         let router = HashRouter::default();

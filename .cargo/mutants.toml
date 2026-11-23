@@ -132,6 +132,10 @@ exclude_re = [
   # `SpeculationConfigBuilder::default()` verbatim.
   'config\.rs:49:9: replace SpeculationConfig::builder -> SpeculationConfigBuilder with Default::default()',
 
+  # `(hash % len)` -> `(hash + len)` is the same residue; the walk re-applies
+  # `% len`, so the probe order is identical.
+  'hash_router\.rs:94:31: replace % with \+ in HashRouter::route',
+
   # `compose` routes to `compose_prefill_with_packing`, whose whole body is
   # `self.compose_prefill_batch(sequences)`: every guard variant picks between
   # two calls that run the same code on the same argument.
