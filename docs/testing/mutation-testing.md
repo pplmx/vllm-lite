@@ -114,25 +114,42 @@ so we can drop `--baseline skip`.
 
 `#[cfg(feature = "...")]` blocks are compiled out of a default-feature scan, so
 their mutants report as MISSED no matter how well they are tested. This is not a
-hypothetical: a full re-scan of `scheduler/**` (601 mutants, `-- --lib` test
-scope) measured
+hypothetical: four scans of the same `scheduler/**` mutant set measured
 
-| Scan                    | Missed | Caught |
-| ----------------------- | -----: | -----: |
-| default features        |     86 |    450 |
-| `--features multi-node` |      8 |    519 |
+| Scan                                           | Mutants | Missed | Caught |
+| ---------------------------------------------- | ------: | -----: | -----: |
+| `--lib scheduler` test scope, default features |     601 |    104 |    432 |
+| `--lib` test scope, default features           |     601 |     86 |    450 |
+| `--lib`, `--features multi-node`               |     601 |      8 |    519 |
+| `--lib`, `--all-features` (latest)             |     591 |      2 |    515 |
 
-Most of the 78-mutant difference is the `multi-node` wiring
-(`MemoryManager::with_*` / `set_*`) and the `#[cfg(feature = "multi-node")]`
-block arithmetic in `preallocate_kv_blocks`, `grow_running_table` and
-`push_token_and_allocate`. Scan a cfg-gated module with its feature enabled
-(`just mutants-featured scheduler multi-node`) — otherwise a green score is
-about code that was never compiled.
+Most of the 78-mutant difference between the first and third row is the
+`multi-node` wiring (`MemoryManager::with_*` / `set_*`) and the
+`#[cfg(feature = "multi-node")]` block arithmetic in `preallocate_kv_blocks`,
+`grow_running_table` and `push_token_and_allocate`. Scan a cfg-gated module with
+its features enabled (`just mutants-featured scheduler multi-node`) — otherwise
+a green score is about code that was never compiled.
 
-The same effect applies to the TEST side: a `--lib scheduler` test filter does
-not run `engine::tests`, so every `crate::engine::Engine` mutant in
-`scheduler/batch.rs` looked like a survivor (104 vs 86 with `--lib`). Pick the
-narrowest scope that actually contains the tests for the code you are mutating.
+The second row is the TEST-side version of the same trap: a `--lib scheduler`
+filter does not run `engine::tests`, so every `crate::engine::Engine` mutant in
+`scheduler/batch.rs` looked like a survivor. Pick the narrowest scope that
+actually contains the tests for the code you are mutating.
+
+The two misses in the latest scan are not gaps: one is `requeue_seq`'s
+`num_computed_tokens > 0` -> `>=`, registered as equivalent in
+[`mutation-equivalents.md`](../mutation-equivalents.md), and the other
+(`push_token_and_allocate`'s block index) is covered by a test added after that
+scan started.
+
+### Timeouts are a class, not gaps
+
+The 12 TIMEOUT verdicts in the latest scan are `+=` -> `*=` / `-=` loop-counter
+mutants (`admit_decode_sequences`, `requeue_partial_prefills`,
+`seq_id_is_taken`) and `allocate -> Some(vec![])`. Each makes the suite HANG
+instead of fail, so no assertion can kill them; they are counted against the
+conservative score by `scripts/check_mutation_score.sh`. The only way to turn
+one into a clean failure is a harness-level per-test timeout, which is a
+`nextest` configuration question rather than a test-quality one.
 
 ## Baseline Reports
 
