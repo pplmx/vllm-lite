@@ -71,14 +71,21 @@ filter = 'package(vllm-model) and test(~tokenizer_verification)'
 threads-required = 1
 slow-timeout = { period = "30s", terminate-after = 2 }
 
-# Qwen3.5 hybrid-model speculative tests run a full `Qwen35HybridModel::new`
-# on CPU + several forward passes; ~15s each when run alone, easily exceeds
-# the optimized profile's 10s `slow-timeout` under contention. Pin to 1 thread
-# and give them the same 30s window as `tokenizer_verification`.
+# Qwen3.5 hybrid-model speculative tests build a full `Qwen35HybridModel` twice
+# on CPU and run several forward passes each.
+#
+# Measured on the dev container, alone and idle:
+#   test_gdn_prefill_decode_sequence_is_stable   27.2 s
+#   test_multi_seq_gdn_state_isolation           14.7 s
+# A 30 s period with `terminate-after = 2` therefore killed them at 60 s the
+# moment the machine was busy — observed twice while a mutation scan ran with 8
+# workers. The window is now 2x the measured worst case, which is headroom for a
+# loaded CI runner rather than a blanket increase: the base profile keeps its
+# 30 s, and only these three tests are widened.
 [[profile.default.overrides]]
 filter = 'test(~test_gdn_prefill_decode_sequence_is_stable) or test(~test_multi_seq_gdn_state_isolation) or test(~test_full_forward_unchanged_after_partial_draft)'
 threads-required = 1
-slow-timeout = { period = "30s", terminate-after = 2 }
+slow-timeout = { period = "60s", terminate-after = 2 }
 
 [[profile.ci.overrides]]
 filter = 'test(~test_llama_block)'
