@@ -3215,3 +3215,175 @@ fn multi_node_decode_growth_chains_the_new_block_from_the_previous_hash() {
         block_size * 3
     );
 }
+
+/// A trace-only guard must stay silent when its condition is false.
+///
+/// `add_request_inner` guards the "Distributed prefix hit" trace line with
+/// `if distributed_matched_tokens > 0`. `cargo mutants` relaxed that `>` to
+/// `>=`, `==` and `<` and all three survived: nothing in the suite observed
+/// whether the event is emitted. With `==`/`<` the line fires exactly when the
+/// peer match count is ZERO — a trace that claims a distributed hit that never
+/// happened — and with `>=` it fires on every request.
+///
+/// The harness is a minimal `Subscriber` installed for the duration of the
+/// call, so the assertion is on the real emitted events, not on internals.
+#[test]
+fn distributed_prefix_hit_trace_stays_silent_without_a_match() {
+    use std::sync::Mutex;
+    use tracing::field::{Field, Visit};
+    use tracing::span::{Attributes, Id, Record};
+    use tracing::{Event, Metadata, Subscriber};
+
+    struct MessageVisitor<'a>(&'a mut Option<String>);
+
+    impl Visit for MessageVisitor<'_> {
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            if field.name() == "message" {
+                *self.0 = Some(format!("{value:?}"));
+            }
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct Capture(std::sync::Arc<Mutex<Vec<String>>>);
+
+    impl Subscriber for Capture {
+        fn enabled(&self, _: &Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _: &Attributes<'_>) -> Id {
+            Id::from_u64(1)
+        }
+        fn record(&self, _: &Id, _: &Record<'_>) {}
+        fn record_follows_from(&self, _: &Id, _: &Id) {}
+        fn event(&self, event: &Event<'_>) {
+            let mut message = None;
+            event.record(&mut MessageVisitor(&mut message));
+            if let Some(message) = message {
+                // invariant: the mutex is held only for this push, and a
+                // poisoned lock still has a readable vector.
+                self.0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(message);
+            }
+        }
+        fn enter(&self, _: &Id) {}
+        fn exit(&self, _: &Id) {}
+    }
+
+    let capture = Capture::default();
+    let handle = capture.0.clone();
+    tracing::subscriber::with_default(capture, || {
+        // Control: the harness really does capture TRACE events.
+        tracing::trace!("capture-harness-control");
+
+        let mut engine = create_test_engine(SchedulerConfig::default(), 64);
+        let _ = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
+    });
+
+    // invariant: the closure above is the only writer and it has returned.
+    let events = handle
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    assert!(
+        events.iter().any(|e| e.contains("capture-harness-control")),
+        "control: the subscriber must capture TRACE events; got {events:?}"
+    );
+    assert!(
+        !events.iter().any(|e| e.contains("Distributed prefix hit")),
+        "no peer matched any tokens, so the distributed-hit trace must NOT fire; \
+         got {events:?}"
+    );
+}
+
+/// A distributed prefix hit must EMIT the trace line (the complement of
+/// `distributed_prefix_hit_trace_stays_silent_without_a_match`).
+///
+/// With the silent case pinned, `cargo mutants` still replaced the
+/// `distributed_matched_tokens > 0` guard with `>=`/`==`, both now caught. The
+/// remaining variant is `<`, which never fires — and under default features
+/// `lookup_distributed_matched_tokens` always returns 0, so no fixture can
+/// distinguish it there. With `multi-node` on, a cache that already holds this
+/// prompt's block chain makes the count non-zero, and the trace must appear.
+#[cfg(feature = "multi-node")]
+#[test]
+fn distributed_prefix_hit_trace_fires_when_a_peer_holds_the_prefix() {
+    use std::sync::Mutex;
+    use tracing::field::{Field, Visit};
+    use tracing::span::{Attributes, Id, Record};
+    use tracing::{Event, Metadata, Subscriber};
+    use vllm_dist::{CacheConfig, DistributedKVCache, NodeId};
+
+    struct MessageVisitor<'a>(&'a mut Option<String>);
+    impl Visit for MessageVisitor<'_> {
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            if field.name() == "message" {
+                *self.0 = Some(format!("{value:?}"));
+            }
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct Capture(std::sync::Arc<Mutex<Vec<String>>>);
+    impl Subscriber for Capture {
+        fn enabled(&self, _: &Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _: &Attributes<'_>) -> Id {
+            Id::from_u64(1)
+        }
+        fn record(&self, _: &Id, _: &Record<'_>) {}
+        fn record_follows_from(&self, _: &Id, _: &Id) {}
+        fn event(&self, event: &Event<'_>) {
+            let mut message = None;
+            event.record(&mut MessageVisitor(&mut message));
+            if let Some(message) = message {
+                self.0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(message);
+            }
+        }
+        fn enter(&self, _: &Id) {}
+        fn exit(&self, _: &Id) {}
+    }
+
+    let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 8)));
+    let prompt: Vec<u32> = (0..vllm_traits::BLOCK_SIZE * 2)
+        .map(|t| t as u32 + 1)
+        .collect();
+
+    // Publish this prompt's block chain into the cache from a first engine.
+    {
+        let mut publisher = create_test_engine(SchedulerConfig::default(), 64);
+        publisher.set_distributed_kv(Arc::clone(&cache));
+        let _ = publisher.add_request(Request::new(0, prompt.clone(), 5));
+        let _ = publisher.build_batch();
+        assert!(
+            cache.stats().updates >= 2,
+            "setup: publishing must write one cache entry per prompt block, \
+             got {} updates",
+            cache.stats().updates
+        );
+    }
+
+    let capture = Capture::default();
+    let handle = capture.0.clone();
+    tracing::subscriber::with_default(capture, || {
+        let mut consumer = create_test_engine(SchedulerConfig::default(), 64);
+        consumer.set_distributed_kv(Arc::clone(&cache));
+        let _ = consumer.add_request(Request::new(0, prompt, 5));
+    });
+
+    let events = handle
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    assert!(
+        events.iter().any(|e| e.contains("Distributed prefix hit")),
+        "a prompt whose block chain is already in the distributed cache must \
+         emit the hit trace; got {events:?}"
+    );
+}

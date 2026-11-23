@@ -358,6 +358,39 @@ mutants MODULE:
         --baseline skip \
         --shuffle
 
+# Run a mutation scan with a cargo feature enabled.
+#
+# `#[cfg(feature = "...")]` blocks are compiled OUT of the default scan, so
+# their mutants report as MISSED no matter how well they are tested. Measured on
+# `scheduler/**` (601 mutants): default features leave 86 survivors,
+# `--features multi-node` leaves 8 — the gap is the distributed-KV wiring and
+# the per-block chain-hash arithmetic, none of which even exists without the
+# feature. Use this recipe for any module with cfg-gated code.
+#
+# Usage: `just mutants-featured scheduler multi-node`
+mutants-featured MODULE FEATURE:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TARGET="crates/core/src/{{MODULE}}"
+    if [ -d "$TARGET" ]; then
+        FILE_ARGS="--file=${TARGET}/**/*.rs"
+    elif [ -f "$TARGET" ]; then
+        FILE_ARGS="--file=$TARGET"
+    elif [ -f "${TARGET}.rs" ]; then
+        FILE_ARGS="--file=${TARGET}.rs"
+    else
+        echo "Path not found: $TARGET (or ${TARGET}.rs)" >&2
+        exit 1
+    fi
+    cargo mutants \
+        --package vllm-core \
+        "$FILE_ARGS" \
+        --features {{FEATURE}} \
+        --timeout 60 \
+        --jobs $(($(nproc) > 8 ? 8 : $(nproc))) \
+        --output .mutants-out/ \
+        --shuffle
+
 # Render a human-readable summary of the latest mutation scan.
 mutants-report:
     @test -d .mutants-out/mutants.out || (echo "no .mutants-out/mutants.out/ — run \`just mutants MODULE\` first"; exit 1)

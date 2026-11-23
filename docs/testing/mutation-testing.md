@@ -110,6 +110,30 @@ default baseline check. The flag skips the pre-mutation baseline run, but
 mutations are still tested individually. **TODO (v31+):** repair the test
 so we can drop `--baseline skip`.
 
+## Feature-gated code: scan with the feature ON
+
+`#[cfg(feature = "...")]` blocks are compiled out of a default-feature scan, so
+their mutants report as MISSED no matter how well they are tested. This is not a
+hypothetical: a full re-scan of `scheduler/**` (601 mutants, `-- --lib` test
+scope) measured
+
+| Scan                    | Missed | Caught |
+| ----------------------- | -----: | -----: |
+| default features        |     86 |    450 |
+| `--features multi-node` |      8 |    519 |
+
+Most of the 78-mutant difference is the `multi-node` wiring
+(`MemoryManager::with_*` / `set_*`) and the `#[cfg(feature = "multi-node")]`
+block arithmetic in `preallocate_kv_blocks`, `grow_running_table` and
+`push_token_and_allocate`. Scan a cfg-gated module with its feature enabled
+(`just mutants-featured scheduler multi-node`) — otherwise a green score is
+about code that was never compiled.
+
+The same effect applies to the TEST side: a `--lib scheduler` test filter does
+not run `engine::tests`, so every `crate::engine::Engine` mutant in
+`scheduler/batch.rs` looked like a survivor (104 vs 86 with `--lib`). Pick the
+narrowest scope that actually contains the tests for the code you are mutating.
+
 ## Baseline Reports
 
 - [`mutation-scheduler-baseline.md`](./mutation-scheduler-baseline.md)
