@@ -36,7 +36,9 @@ tracing-subscriber = { workspace = true, features = ["json"] }
 tracing-appender = "0.2"
 uuid = { version = "1", features = ["v4"] }
 clap = { version = "4", features = ["derive", "env"] }
-chrono = { version = "0.4", features = ["serde"] }
+# `time` (already in the graph via jsonwebtoken / tracing-appender) replaces
+# `chrono`, which RustSec flagged as unmaintained (RUSTSEC-2026-0543).
+time = { version = "0.3", features = ["formatting"] }
 base64 = "0.23"
 thiserror = { workspace = true }
 anyhow = "1"

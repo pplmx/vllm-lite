@@ -240,7 +240,7 @@ fn test_sample_batch_with_params_all_neg_inf_degenerates_safely() {
             .with_temperature(0.8)
             .build(),
     ] {
-        let out = sample_batch_with_params(&[logits.clone()], &[params], &[vec![]]);
+        let out = sample_batch_with_params(std::slice::from_ref(&logits), &[params], &[vec![]]);
         assert_eq!(
             out[0].token, 0,
             "all-(-inf) logits must pick the first token"

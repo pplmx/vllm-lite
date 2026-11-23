@@ -14,7 +14,7 @@ API baseline 和供应链检查均有较好投入。主要问题是本地命令�
 - 约 41 个 ignored 慢测试/真实 checkpoint 测试。
 - 12 个 Criterion benchmark。
 - 8 个 fuzz target，PR/nightly 仅覆盖其中部分。
-- Rust 1.88、Edition 2024；根 `Cargo.lock` 已提交。
+- Rust 1.94、Edition 2024；根 `Cargo.lock` 已提交。
 
 精确数字会随提交变化，README 不应手工维护具体测试数量。
 
@@ -141,7 +141,7 @@ PR 可在 CI 通过、却在维护者本地失败；`multi-node`、`cuda-graph`�
 
 **证据**
 
-- 根 `Cargo.toml` 要求 Rust 1.88。
+- 根 `Cargo.toml` 要求 Rust 1.94。
 - Dockerfile builder 使用 Rust 1.82。
 - fuzz workspace 声明 Rust 1.85。
 - 仓库无 `rust-toolchain.toml`。

@@ -56,7 +56,7 @@ body:
       description: OS, Rust version, GPU/CPU, CUDA, candle features.
       placeholder: |
         - OS: Ubuntu 24.04
-        - Rust: 1.88
+        - Rust: 1.94
         - CUDA: 12.6
         - candle features: cuda,flash-attn
     validations:

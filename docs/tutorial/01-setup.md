@@ -5,7 +5,7 @@ working build.
 
 ## Prerequisites
 
-- **Rust 1.88+** (we use edition 2024 — matches `rust-version` in
+- **Rust 1.94+** (we use edition 2024 — matches `rust-version` in
   the root `Cargo.toml` and the `rust-toolchain.toml` pinned by the
   repo). Install via [rustup](https://rustup.rs/):
 

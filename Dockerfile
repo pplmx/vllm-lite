@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for vLLM-lite.
 #
-# DEP-01 (technical due diligence): Rust bumped 1.82 -> 1.88 to
+# DEP-01 (technical due diligence): Rust bumped 1.82 -> 1.88 -> 1.94 to
 # match `rust-version` in the root Cargo.toml. `--locked` added
 # so container builds fail loudly on lockfile drift instead of
 # silently picking up a different dependency set than CI/local.
@@ -34,7 +34,7 @@ ARG VLLM_GIT_SHA=unknown
 ARG VLLM_BUILD_TIMESTAMP=unknown
 
 # ---- builder ----
-FROM rust:1.88-bookworm AS builder
+FROM rust:1.94-bookworm AS builder
 
 WORKDIR /app
 

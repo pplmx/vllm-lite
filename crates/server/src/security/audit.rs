@@ -31,6 +31,19 @@ pub struct AuditEvent {
     pub user_agent: Option<String>,
 }
 
+/// RFC-3339 UTC timestamp for an [`AuditEvent`].
+///
+/// Replaces `chrono::Utc::now().to_rfc3339()`: `chrono` is unmaintained
+/// (RUSTSEC-2026-0543), and `time` is already in the dependency graph.
+#[must_use]
+fn rfc3339_now() -> String {
+    time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        // invariant: `Rfc3339` is a well-known constant format and `now_utc()`
+        // is always a representable date, so formatting cannot fail.
+        .unwrap_or_else(|_| String::from("1970-01-01T00:00:00Z"))
+}
+
 /// Bounded in-memory ring buffer of [`AuditEvent`]s with structured tracing.
 ///
 /// Each `log_*` call also emits a structured `tracing` event at INFO (success)
@@ -83,7 +96,7 @@ impl AuditLogger {
     /// (`action = "authenticate"`, `result = "success"`).
     pub async fn log_auth_success(&self, user_id: &str, request_id: &str) {
         self.log(AuditEvent {
-            timestamp: chrono::Utc::now().to_rfc3339(),
+            timestamp: rfc3339_now(),
             user_id: Some(user_id.to_string()),
             action: "authenticate".to_string(),
             resource: "api".to_string(),
@@ -99,7 +112,7 @@ impl AuditLogger {
     /// (`action = "authenticate"`, `result = "failure: <reason>"`).
     pub async fn log_auth_failure(&self, reason: &str, request_id: &str) {
         self.log(AuditEvent {
-            timestamp: chrono::Utc::now().to_rfc3339(),
+            timestamp: rfc3339_now(),
             user_id: None,
             action: "authenticate".to_string(),
             resource: "api".to_string(),
@@ -149,7 +162,7 @@ impl AuditLogger {
         user_agent: Option<&str>,
     ) {
         self.log(AuditEvent {
-            timestamp: chrono::Utc::now().to_rfc3339(),
+            timestamp: rfc3339_now(),
             user_id: user_id.map(std::string::ToString::to_string),
             action: action.to_string(),
             resource: resource.to_string(),

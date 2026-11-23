@@ -1,7 +1,7 @@
 name: MSRV Check
 
 # Verify the workspace compiles against the project's stated Minimum Supported
-# Rust Version (1.88 — see Cargo.toml [workspace.package].rust-version).
+# Rust Version (1.94 — see Cargo.toml [workspace.package].rust-version).
 # Triggered on push to main + PRs; cheap (~2-3 min) thanks to the shared cache.
 
 on:
@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust: ["1.88"]  # MSRV; expand here when bumped
+        rust: ["1.94"]  # MSRV; expand here when bumped
     steps:
       - uses: actions/checkout@v7
 

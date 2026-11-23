@@ -29,7 +29,7 @@ async fn test_audit_log_overflow() {
     for i in 0..5 {
         logger
             .log(AuditEvent {
-                timestamp: chrono::Utc::now().to_rfc3339(),
+                timestamp: rfc3339_now(),
                 user_id: None,
                 action: format!("action-{i}"),
                 resource: "test".to_string(),

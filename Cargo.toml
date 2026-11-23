@@ -11,7 +11,7 @@ authors = ["vLLM-lite Team"]
 license = "MIT"
 repository = "https://github.com/pplmx/vllm-lite"
 homepage = "https://github.com/pplmx/vllm-lite"
-rust-version = "1.88"
+rust-version = "1.94"
 
 [workspace.metadata]
 description = "A lightweight LLM inference engine in Rust implementing vLLM innovations"

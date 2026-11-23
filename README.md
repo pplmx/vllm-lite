@@ -1,6 +1,6 @@
 <!-- PROJECT SHIELDS -->
 <p align="center">
-  <img src="https://img.shields.io/badge/Rust-1.88+-orange.svg?style=flat-square&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Rust-1.94+-orange.svg?style=flat-square&logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License">
   <a href="https://github.com/pplmx/vllm-lite/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/pplmx/vllm-lite/ci.yml?branch=main&style=flat-square&label=CI" alt="Build Status">

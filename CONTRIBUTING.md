@@ -6,7 +6,7 @@ Thank you for your interest in contributing to vLLM-lite! This guide will help y
 
 Before building from source, ensure you have:
 
-- **Rust 1.88+** (MSRV; declared in root `Cargo.toml` `[workspace.package].rust-version`)
+- **Rust 1.94+** (MSRV; declared in root `Cargo.toml` `[workspace.package].rust-version`)
   — Install via [rustup](https://rustup.rs/)
 - **CUDA 12.1+** - Optional, for GPU support
 - **CMake 3.18+** - For building some dependencies
@@ -14,7 +14,7 @@ Before building from source, ensure you have:
 
 ```bash
 # Verify installation
-rustc --version   # Should be 1.88 or higher
+rustc --version   # Should be 1.94 or higher
 cargo --version
 cargo nextest --version
 ```

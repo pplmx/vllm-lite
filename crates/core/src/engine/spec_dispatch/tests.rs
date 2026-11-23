@@ -1508,7 +1508,7 @@ fn verifier_accepts_high_prob_drafts_under_sampling() {
         model
             .forward_logits(
                 &[seq_id],
-                &[verify_tokens.clone()],
+                std::slice::from_ref(&verify_tokens),
                 &[verify_positions],
                 &[vec![0_usize; 1]],
                 &[0_usize],

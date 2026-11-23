@@ -91,7 +91,7 @@ echo "$VLLM_VERSION"   # → 0.1.0
    `SHA256SUMS` artifacts attached.
 
 Docker image builds are emitted via the `Dockerfile` (multi-stage,
-MSRV 1.88, named `runtime` stage) but are NOT auto-pushed to a
+MSRV 1.94, named `runtime` stage) but are NOT auto-pushed to a
 container registry by `release.yml` — container publishing is a
 separate operator responsibility (the registry credentials / GHCR
 secret are not committed). The Dockerfile threads the workspace
