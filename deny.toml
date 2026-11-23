@@ -36,36 +36,42 @@ ignore = [
 
 [licenses]
 # Allowlist aligned with MIT-compatible licenses.
+# Only licenses that actually occur in the graph. `cargo-deny` reports an
+# unmatched entry as `license-not-encountered`, which is how `OpenSSL`,
+# `MPL-2.0` and `OpenSSL`/`0BSD` sat here unnoticed: the graph contains no
+# crate under those terms, so the entries widened the allowlist without
+# protecting anything. Re-add one only together with the crate that needs it.
 allow = [
     "MIT",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
+    "MIT-0",
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
     "Zlib",
-    "Unicode-DFS-2016",
     "Unicode-3.0",
     "CC0-1.0",
-    "OpenSSL",
-    "MPL-2.0",
-    "0BSD",
 ]
 confidence-threshold = 0.8
 
 # Some transitive deps carry non-standard license strings we accept.
-# Each entry maps crate name -> allowed license expressions.
+# Each entry maps crate name -> the extra licenses allowed for that crate.
+#
+# Every entry here must correspond to a crate that is ACTUALLY in the graph:
+# `cargo-deny` accepts an exception for an absent crate silently, so a removed
+# dependency leaves the permission behind. `rustls-pemfile` and `cpp_demangle`
+# used to be listed and are both gone; re-add with the crate or not at all.
 exceptions = [
-    # ring: dual OpenSSL/ISC; OpenSSL license is in the allowlist above.
-    { name = "ring", allow = ["OpenSSL", "ISC"] },
-    # aws-lc-rs / aws-lc-sys: OpenSSL/ISC.
-    { name = "aws-lc-rs", allow = ["OpenSSL", "ISC"] },
-    { name = "aws-lc-sys", allow = ["OpenSSL", "ISC"] },
-    # rustls-pemfile historically had ISC; keep both options open.
-    { name = "rustls-pemfile", allow = ["ISC", "Apache-2.0", "MIT"] },
-    # cpp_demangle: BSL-1.0 (Boost Software License 1.0; not in allowlist but permissive).
-    # Pin to specific version to avoid drift.
-    { name = "cpp_demangle", version = "=0.5.1", allow = ["BSL-1.0"] },
+    # aws-lc-sys: a long AND chain including MIT-0, which the global allowlist
+    # now carries directly. Its `(Apache-2.0 OR ISC OR MIT-0)` disjunction needs
+    # MIT-0 to be allowed, hence the entry.
+    {
+        name = "aws-lc-sys",
+        allow = ["Apache-2.0", "ISC", "MIT", "MIT-0", "BSD-3-Clause"],
+    },
+    # ryu is `Apache-2.0 OR BSL-1.0`; Apache-2.0 already satisfies it, so no
+    # entry is needed. Kept out rather than allowed broadly.
 ]
 
 [bans]
