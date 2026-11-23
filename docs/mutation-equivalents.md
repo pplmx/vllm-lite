@@ -298,6 +298,21 @@ not a panic, which the zero-rate assertion on an idle collector already pins.
 (The `/` -> `*` and `/` -> `%` variants of the same division are NOT equivalent —
 they are killed by `throughput_is_tokens_divided_by_measured_uptime`.)
 
+### `speculative/adaptive.rs:180` / `:183` — the deadband boundaries
+
+`maybe_adjust` treats equality as "inside the deadband" (`> threshold` grows,
+`< -threshold` shrinks). The `>=` / `<=` relaxations are NOT equivalent and are
+killed by `deadband_boundary_is_strict` — recorded here only to note that the
+boundary IS reachable in `f32` (`1/4 - 0.5 == -0.25` and `0.75 - 0.5 == 0.25`
+are exact), which is what a first attempt got wrong when it assumed the f32
+rounding would make the equality case unreachable.
+
+### `speculative/config.rs:49` — `SpeculationConfig::builder()`
+
+`builder()` returns `SpeculationConfigBuilder::default()`, and the builder
+derives `Default` over a single `config: SpeculationConfig` field whose own
+`Default` is the written impl. The mutant body is the original body.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

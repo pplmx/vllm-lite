@@ -173,3 +173,37 @@ mod tests {
         assert!(result.rejected_at.is_none());
     }
 }
+
+#[cfg(test)]
+mod verifier_tests {
+    use super::*;
+
+    /// The stub must return one entry PER sequence in the batch, each empty.
+    ///
+    /// `StubDraftVerifier::generate_draft` is the default verifier: it produces
+    /// no draft tokens but must still map every sequence id, because callers
+    /// zip the result against the batch. `cargo mutants` replaced the body with
+    /// `Ok(vec![])`, `Ok(vec![(0, vec!)])` and `Ok(vec![(0, vec![0])])` — all
+    /// three survived. An empty vector drops every sequence (the speculative
+    /// step silently degenerates to a no-op), and the single-entry variants
+    /// attribute the wrong id and hand a bogus token to verification.
+    #[test]
+    fn stub_generate_draft_maps_every_sequence_with_no_tokens() {
+        let mut verifier = StubDraftVerifier;
+        let mut batch = Batch::empty();
+        batch.seq_ids = vec![7, 9];
+
+        let drafts = verifier
+            .generate_draft(&batch, 4)
+            .expect("the stub never fails");
+        assert_eq!(drafts.len(), 2, "one entry per sequence");
+        assert_eq!(drafts[0].0, 7, "ids must be preserved in order");
+        assert_eq!(drafts[1].0, 9);
+        assert!(drafts[0].1.is_empty(), "the stub drafts no tokens");
+        assert!(drafts[1].1.is_empty());
+
+        // An empty batch yields an empty result, not a fabricated entry.
+        let empty = verifier.generate_draft(&Batch::empty(), 4).unwrap();
+        assert!(empty.is_empty());
+    }
+}

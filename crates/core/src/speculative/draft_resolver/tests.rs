@@ -211,3 +211,109 @@ fn draft_loader_default_arc_is_noop() {
     let result = loader.load(&id);
     assert!(result.is_err(), "NoopLoader must always error");
 }
+
+/// `ResolvedDraft`'s three accessors must describe the actual variant.
+///
+/// `cargo mutants` replaced `kind()` with `""` / `"xyzzy"`, `is_some()` with the
+/// constants `true` and `false`, and the `Debug` impl's whole body with
+/// `Ok(())`. All five survived because no test ever called them — the resolver
+/// tests only match on the variants. These accessors are what metrics labels
+/// and error logs are built from: `kind()` names the draft resolution in the
+/// `draft_resolutions_*` counters, and `is_some()` decides whether the engine
+/// treats a resolution as speculative at all.
+#[test]
+fn resolved_draft_accessors_describe_the_variant() {
+    let external = ResolvedDraft::External(Arc::new(Mutex::new(
+        Box::new(StubBackend) as Box<dyn ModelBackend>
+    )));
+    let self_spec = ResolvedDraft::SelfSpec(Arc::new(Mutex::new(
+        Box::new(StubBackend) as Box<dyn ModelBackend>
+    )));
+    let none = ResolvedDraft::None;
+
+    assert_eq!(external.kind(), "external");
+    assert_eq!(self_spec.kind(), "self_spec");
+    assert_eq!(none.kind(), "none");
+
+    assert!(external.is_some(), "External must report some");
+    assert!(self_spec.is_some(), "SelfSpec must report some");
+    assert!(!none.is_some(), "None must report not-some");
+
+    // `Debug` prints the variant name and never the backend.
+    let rendered = format!("{external:?}");
+    assert!(
+        rendered.contains("External") && rendered.contains("<backend>"),
+        "Debug must name the variant without dumping the model; got {rendered}"
+    );
+    assert!(
+        format!("{none:?}").contains("None"),
+        "Debug of None must say None"
+    );
+    assert!(
+        !format!("{self_spec:?}").contains("External"),
+        "Debug must not confuse the variants"
+    );
+}
+
+/// `self_spec()` must hand back the configured backend, not `None`.
+///
+/// Replaced by `None` the accessor survived: no test called it. The engine uses
+/// it to keep a reference across a resolver rebuild (see the doc comment), so a
+/// constant `None` makes the engine silently drop self-speculation — and, with
+/// no external draft, fall all the way back to plain target decode.
+#[test]
+fn resolver_self_spec_accessor_returns_the_configured_backend() {
+    let backend: Arc<Mutex<Box<dyn ModelBackend>>> =
+        Arc::new(Mutex::new(Box::new(StubBackend) as Box<dyn ModelBackend>));
+    let (resolver, _metrics) = make_resolver(vec![], &[], Some(Arc::clone(&backend)), vec![]);
+
+    let got = resolver.self_spec().expect("the backend is configured");
+    assert!(
+        Arc::ptr_eq(&got, &backend),
+        "self_spec must clone the SAME Arc, not a fresh or missing one"
+    );
+
+    // Without a configured backend the accessor is None, so the assertion above
+    // cannot pass by the method always returning `Some`.
+    let (bare, _metrics) = make_resolver(vec![], &[], None, vec![]);
+    assert!(bare.self_spec().is_none());
+}
+
+/// `Debug for DraftResolver` must describe the resolver without leaking state.
+///
+/// Replaced by `Ok(())` the impl survived — nothing formatted a resolver.
+/// `Debug` is what an operator sees when the registry fails to load a draft, so
+/// an empty rendering removes the only diagnostic in that path.
+#[test]
+fn resolver_debug_names_its_fields() {
+    let (resolver, _metrics) = make_resolver(vec![], &[], None, vec![]);
+    let rendered = format!("{resolver:?}");
+
+    assert!(
+        rendered.contains("DraftResolver"),
+        "Debug must name the type; got {rendered}"
+    );
+    for field in ["registry", "self_spec", "loader", "metrics"] {
+        assert!(
+            rendered.contains(field),
+            "Debug must include the `{field}` field; got {rendered}"
+        );
+    }
+    assert!(
+        rendered.contains("<dyn DraftLoader>"),
+        "the boxed loader must be rendered as a placeholder, not printed; \
+         got {rendered}"
+    );
+
+    // With a backend configured the self_spec field is rendered as a
+    // placeholder too, instead of dumping the model.
+    let backend: Arc<Mutex<Box<dyn ModelBackend>>> =
+        Arc::new(Mutex::new(Box::new(StubBackend) as Box<dyn ModelBackend>));
+    let (with_backend, _metrics) = make_resolver(vec![], &[], Some(backend), vec![]);
+    let rendered = format!("{with_backend:?}");
+    assert!(
+        rendered.contains("Some(\"<dyn ModelBackend>\")"),
+        "a configured self-spec backend must stay hidden behind a placeholder; \
+         got {rendered}"
+    );
+}

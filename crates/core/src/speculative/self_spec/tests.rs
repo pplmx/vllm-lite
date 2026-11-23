@@ -248,3 +248,41 @@ impl ModelBackend for TrackingModel {
         32
     }
 }
+
+/// The mutable setters must actually write.
+///
+/// `set_draft_layer_count` replaced by `()` and `remove_draft_seq` replaced by
+/// `()` both survived: the suite sets the layer count through the CONSTRUCTOR
+/// and its only `remove_draft_seq` call targets an id that was never inserted
+/// (so a no-op and a real removal look identical). `set_draft_layer_count` is
+/// how the engine follows a draft whose layer count resolves after
+/// construction; `remove_draft_seq` is the per-request cleanup — a no-op leaks
+/// a KV entry for every finished request until the process exits.
+#[test]
+fn set_draft_layer_count_and_remove_draft_seq_take_effect() {
+    let config = SpeculationConfig::default();
+    let mut ssm = SelfSpeculativeModel::new(StubSpecModel, config);
+    let initial = ssm.draft_layer_count();
+
+    ssm.set_draft_layer_count(initial + 3);
+    assert_eq!(
+        ssm.draft_layer_count(),
+        initial + 3,
+        "set_draft_layer_count must store the new count"
+    );
+
+    ssm.draft_kv_block_ids_mut().insert(7, vec![1, 2, 3]);
+    ssm.draft_kv_block_ids_mut().insert(9, vec![4]);
+    assert_eq!(ssm.draft_kv_block_ids().len(), 2, "setup: two entries");
+
+    ssm.remove_draft_seq(7);
+    assert!(
+        !ssm.draft_kv_block_ids().contains_key(&7),
+        "remove_draft_seq must drop the entry"
+    );
+    assert_eq!(
+        ssm.draft_kv_block_ids().len(),
+        1,
+        "removing one entry must not clear the others"
+    );
+}

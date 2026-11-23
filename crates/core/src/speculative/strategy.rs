@@ -88,6 +88,34 @@ mod tests {
         assert_eq!(strategy, RejectionStrategy::TokenLevel);
     }
 
+    /// Each strategy must report its own numerical floor.
+    ///
+    /// `acceptance_threshold` returns `0.0` for token-level and `1e-6` for
+    /// block-level. `cargo mutants` replaced the whole method with the constants
+    /// `0.0`, `1.0` and `-1.0`, all surviving: no test called it. The value is
+    /// the floor the acceptance sampler uses to avoid dividing by zero, so a
+    /// `-1.0` would let negative ratios through and a `1.0` would reject every
+    /// draft token outright.
+    #[test]
+    fn acceptance_threshold_matches_the_strategy() {
+        assert!(
+            RejectionStrategy::TokenLevel.acceptance_threshold().abs() < f32::EPSILON,
+            "token-level needs no floor"
+        );
+        let block = RejectionStrategy::new_block_level(4);
+        assert!(
+            (block.acceptance_threshold() - 1e-6).abs() < 1e-9,
+            "block-level reports the 1e-6 stability floor, got {}",
+            block.acceptance_threshold()
+        );
+        // The two strategies must NOT share a value, so neither constant passes.
+        assert!(
+            (RejectionStrategy::TokenLevel.acceptance_threshold() - block.acceptance_threshold())
+                .abs()
+                > f32::EPSILON
+        );
+    }
+
     #[test]
     fn test_block_size_minimum() {
         let strategy = RejectionStrategy::new_block_level(0);

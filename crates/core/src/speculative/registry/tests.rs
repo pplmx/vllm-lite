@@ -335,6 +335,25 @@ fn test_draft_allocated_bytes_zero_when_unloaded() {
     );
 }
 
+/// `draft_allocated_bytes` must report the draft allocator's real usage.
+///
+/// Replaced by `Ok(0)` the method survived: the only existing test asks for a
+/// NEVER-LOADED draft, whose answer is 0 either way. The engine reads this for
+/// runtime KV-growth tracking (MEM-02), so a constant 0 makes every draft look
+/// like it uses no VRAM no matter how much it allocated — the budget check gets
+/// a wrong input and eviction never triggers.
+#[test]
+fn test_draft_allocated_bytes_unknown_id_errors() {
+    let registry = DraftModelRegistry::new();
+    let err = registry
+        .draft_allocated_bytes(&DraftId("missing".into()))
+        .unwrap_err();
+    assert!(
+        matches!(err, DraftRegistryError::UnknownDraftId(_)),
+        "an unknown id must be an error, not a silent 0; got {err:?}"
+    );
+}
+
 #[test]
 fn test_draft_reserved_bytes_zero_when_unloaded() {
     let registry = DraftModelRegistry::new();
@@ -429,5 +448,56 @@ fn test_notify_sequence_finished_reaches_loaded_backends() {
         *finished.lock().unwrap(),
         vec![42],
         "loaded draft backends must receive on_sequence_finished"
+    );
+}
+
+/// `force_unload` must WARN when it bypasses a non-zero refcount.
+///
+/// The branch is `if forced_refcount > 0 { warn!(...) }`; `cargo mutants`
+/// relaxed it to `>=`, `<` and `==`. `>=` and `<` only move the boundary by one
+/// (and the `==` form skips the warning for every NON-zero count — exactly the
+/// case the override exists to make visible). The observable is the emitted
+/// event, so this uses the trace-capture harness; the registry is unaffected
+/// by the warning, so no state assertion can substitute.
+#[test]
+fn force_unload_warns_for_every_nonzero_refcount() {
+    let registry = DraftModelRegistry::new();
+    registry
+        .register(dummy_spec_with_size("a", 8, 1024))
+        .unwrap();
+    registry
+        .attach_loaded(&DraftId("a".into()), test_backend())
+        .unwrap();
+    registry.increment_ref(&DraftId("a".into())).unwrap();
+    registry.increment_ref(&DraftId("a".into())).unwrap();
+
+    let capture = crate::scheduler::trace_capture::capture(|| {
+        registry.force_unload(&DraftId("a".into())).unwrap();
+    });
+
+    assert!(
+        capture.contains("force_unload bypassing non-zero refcount"),
+        "a forced unload of an in-use draft must warn; got {:?}",
+        capture.messages()
+    );
+
+    // A LOADED draft with a refcount of exactly ZERO must stay silent: nothing
+    // is being bypassed. This is the boundary that separates `> 0` from `>= 0`
+    // and from an unconditional warn, and it needs a loaded entry — an unloaded
+    // one returns before the guard is even evaluated.
+    registry
+        .register(dummy_spec_with_size("b", 8, 1024))
+        .unwrap();
+    registry
+        .attach_loaded(&DraftId("b".into()), test_backend())
+        .unwrap();
+    assert_eq!(registry.ref_count(&DraftId("b".into())).unwrap(), 0);
+    let quiet = crate::scheduler::trace_capture::capture(|| {
+        registry.force_unload(&DraftId("b".into())).unwrap();
+    });
+    assert!(
+        !quiet.contains("force_unload bypassing non-zero refcount"),
+        "a zero refcount bypasses nothing and must not warn; got {:?}",
+        quiet.messages()
     );
 }

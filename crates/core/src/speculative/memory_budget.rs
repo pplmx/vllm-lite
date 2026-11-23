@@ -250,6 +250,54 @@ mod tests {
         assert_eq!(snap.available_bytes, 300);
     }
 
+    /// `reserve_target` must charge target AND draft reservations together.
+    ///
+    /// The guard is `reserved_target + reserved_drafts + bytes > total`.
+    /// `cargo mutants` relaxed the `+` joining the two reservations to `-` and
+    /// `*` and the `>` to `>=` / `==`, and all four survived: the existing
+    /// tests only reserve ONE of the two kinds before checking the limit, so
+    /// the cross-term was always zero and every variant agreed.
+    ///
+    /// With 300 target + 300 draft already reserved, a 400-byte target request
+    /// lands EXACTLY on the 1000-byte total (accepted, so `>` not `>=`), and a
+    /// 401-byte one does not fit (rejected, so the sum is not a product or a
+    /// difference).
+    #[test]
+    fn reserve_target_charges_both_reservations() {
+        let budget = MemoryBudget::new(1000).unwrap();
+        budget.reserve_target(300).unwrap();
+        budget.try_reserve_draft(300, None).unwrap();
+
+        // 300 + 300 + 400 == 1000: an exact fit must be accepted.
+        budget
+            .reserve_target(400)
+            .expect("an exact fit must be accepted (`>` not `>=`)");
+        let snap = budget.snapshot();
+        assert_eq!(snap.reserved_target_bytes, 700);
+        assert_eq!(snap.available_bytes, 0);
+
+        // One more byte cannot fit.
+        let err = budget
+            .reserve_target(1)
+            .expect_err("one byte over the total must be rejected");
+        assert_eq!(err.requested_bytes, 1);
+        assert_eq!(
+            err.available_bytes, 0,
+            "the error must report the real remaining headroom"
+        );
+
+        // A draft reservation must be charged the same way, from the same total.
+        let budget = MemoryBudget::new(1000).unwrap();
+        budget.reserve_target(600).unwrap();
+        budget
+            .try_reserve_draft(400, None)
+            .expect("600 + 400 is an exact fit");
+        assert!(
+            budget.try_reserve_draft(1, None).is_err(),
+            "the budget is exhausted by the exact fit"
+        );
+    }
+
     #[test]
     fn test_reserve_draft_fails_when_exceeds() {
         let budget = MemoryBudget::new(1000).unwrap();
@@ -258,6 +306,43 @@ mod tests {
         assert_eq!(err.requested_bytes, 300);
         assert_eq!(err.available_bytes, 200);
         assert!(err.draft_id.is_none());
+    }
+
+    /// The DRAFT reservation path must charge both reservations too.
+    ///
+    /// `try_reserve_draft` repeats the same `reserved_target + reserved_drafts`
+    /// sum. `cargo mutants` replaced that `+` with `-` (and the sibling `>`
+    /// with `>=` / `==` at `reserve_target`), surviving because the existing
+    /// draft tests never pre-reserve a TARGET: with one side zero, `a + b`,
+    /// `a - b`, `a * b` all collapse to the same number.
+    #[test]
+    fn try_reserve_draft_charges_both_reservations() {
+        let budget = MemoryBudget::new(1000).unwrap();
+        budget.reserve_target(700).unwrap();
+
+        // 700 + 300 == 1000: an exact fit is accepted.
+        budget
+            .try_reserve_draft(300, None)
+            .expect("an exact fit must be accepted");
+        assert_eq!(budget.snapshot().available_bytes, 0);
+
+        let err = budget
+            .try_reserve_draft(1, None)
+            .expect_err("the budget is exhausted");
+        assert_eq!(err.available_bytes, 0);
+
+        // Subtraction instead of addition would report 400 bytes of headroom
+        // here (700 - 300) and accept a request that does not fit.
+        let budget = MemoryBudget::new(1000).unwrap();
+        budget.reserve_target(700).unwrap();
+        budget.try_reserve_draft(250, None).unwrap();
+        let err = budget
+            .try_reserve_draft(100, None)
+            .expect_err("700 + 250 + 100 exceeds the 1000-byte total");
+        assert_eq!(
+            err.available_bytes, 50,
+            "the error must report 1000 - 950 = 50 bytes of headroom"
+        );
     }
 
     #[test]

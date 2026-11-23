@@ -483,3 +483,147 @@ fn test_record_verification_returns_false_within_deadband() {
         "max_draft_tokens should be unchanged within deadband"
     );
 }
+
+/// The tracker's accessors and `reset` must reflect the recorded history.
+///
+/// `cargo mutants` replaced `len()` with the constants 0 / 1, `is_empty()` with
+/// `true` / `false`, and `reset` with `()` — five survivors, because the suite
+/// only ever read `acceptance_rate()` and `acceptance_rate_ewma()`. `len()`
+/// is the sliding window's fill level and `reset` is what the engine calls
+/// between requests: a no-op reset keeps a previous request's accuracy (and its
+/// EWMA) and silently biases the next request's draft-token adjustment.
+#[test]
+fn tracker_accessors_track_history_and_reset_clears_it() {
+    let mut tracker = DraftAccuracyTracker::with_alpha(4, 0.5);
+    assert_eq!(tracker.len(), 0, "a fresh tracker holds no results");
+    assert!(tracker.is_empty());
+
+    tracker.record(true);
+    tracker.record(false);
+    assert_eq!(tracker.len(), 2, "len must count recorded results");
+    assert!(!tracker.is_empty(), "two results means not empty");
+
+    // The window is bounded: overflow keeps `len` at the window size.
+    tracker.record(true);
+    tracker.record(true);
+    tracker.record(true);
+    assert_eq!(tracker.len(), 4, "len must saturate at the window size");
+
+    let rate_before = tracker.acceptance_rate_ewma();
+    assert!(rate_before > 0.0, "fixture: a rate was recorded");
+
+    tracker.reset();
+    assert_eq!(tracker.len(), 0, "reset must clear the history");
+    assert!(tracker.is_empty(), "reset must leave the tracker empty");
+    assert!(
+        tracker.acceptance_rate_ewma().abs() < f32::EPSILON,
+        "reset must clear the EWMA too, not just the window"
+    );
+    assert!(
+        tracker.acceptance_rate().abs() < f32::EPSILON,
+        "a reset tracker reports a zero sliding-window rate"
+    );
+}
+
+/// The decomposition's `reset` must restore the CONFIGURED max, not drift.
+///
+/// `AdaptiveSpeculativeDecoder::reset` replaced by `()` survived: the decoder's
+/// `current_max_draft_tokens` mutates with accuracy, and a reset that leaves it
+/// where the previous request put it makes the next request start with a draft
+/// budget the operator never chose. It also has to clear the tracker and the
+/// cooldown, so the next `record_verification` counts from zero.
+#[test]
+fn decoder_reset_restores_configured_max_and_clears_tracker() {
+    let config = AdaptiveDraftConfig {
+        min_draft_tokens: 2,
+        max_draft_tokens: 8,
+        target_acceptance_rate: 0.5,
+        accuracy_window_size: 4,
+        adjustment_step: 1,
+        cooldown_steps: 1,
+        ewma_alpha: 0.5,
+        deadband_threshold: 0.1,
+    };
+    let mut decoder = AdaptiveSpeculativeDecoder::new(config);
+    assert_eq!(decoder.current_max_draft_tokens(), 8);
+
+    // All drafts rejected: the deviation is -0.5, below -0.1, so it decreases.
+    decoder.reset();
+    decoder.record_verification(4, 0);
+    let decreased = decoder.current_max_draft_tokens();
+    assert!(
+        decreased < 8,
+        "setup: accuracy drove the max down, got {decreased}"
+    );
+    assert!(
+        decoder.accuracy_tracker().len() > 0,
+        "setup: results recorded"
+    );
+
+    decoder.reset();
+
+    assert_eq!(
+        decoder.current_max_draft_tokens(),
+        8,
+        "reset must restore the configured max_draft_tokens"
+    );
+    assert_eq!(
+        decoder.accuracy_tracker().len(),
+        0,
+        "reset must clear the accuracy tracker"
+    );
+    assert_eq!(
+        decoder.steps_since_adjustment, 0,
+        "reset must clear the cooldown counter"
+    );
+}
+
+/// The deadband must be STRICT: a deviation exactly at the threshold is inside.
+///
+/// `maybe_adjust` uses `deviation > threshold` to grow and
+/// `deviation < -threshold` to shrink, so equality is the deadband. `cargo
+/// mutants` relaxed the lower test to `<=` and the upper to `>=`; both survived
+/// because every existing fixture picks rates that land clearly inside or
+/// clearly outside, never exactly on the boundary. The boundary is reachable in
+/// `f32`: with `ewma_alpha = 1.0` the smoothed rate equals the window rate, and
+/// `1/4 - 0.5 == -0.25` / `3/4 - 0.25 == 0.5 - 0.25` are exact (measured).
+///
+/// Relaxed, the decoder changes its draft budget on a deviation the configured
+/// deadband says to ignore — the hysteresis the whole struct exists for.
+#[test]
+fn deadband_boundary_is_strict() {
+    let config = AdaptiveDraftConfig {
+        min_draft_tokens: 2,
+        max_draft_tokens: 8,
+        target_acceptance_rate: 0.5,
+        accuracy_window_size: 4,
+        adjustment_step: 1,
+        cooldown_steps: 1,
+        // Exact EWMA: the smoothed rate IS the window rate, no interpolation.
+        ewma_alpha: 1.0,
+        deadband_threshold: 0.25,
+    };
+
+    // Rate 0.25, target 0.5 -> deviation exactly -threshold -> deadband.
+    let mut lower = AdaptiveSpeculativeDecoder::new(config.clone());
+    let before = lower.current_max_draft_tokens();
+    lower.record_verification(4, 1);
+    assert_eq!(
+        lower.current_max_draft_tokens(),
+        before,
+        "a deviation EQUAL to the threshold must not shrink the draft budget"
+    );
+
+    // Rate 0.75, target 0.5 -> +threshold. Start below the max so a spurious
+    // increase would be visible: reject everything once to shrink first.
+    let mut upper = AdaptiveSpeculativeDecoder::new(config);
+    upper.record_verification(4, 0);
+    let shrunken = upper.current_max_draft_tokens();
+    assert!(shrunken < 8, "setup: a clear low rate shrinks the budget");
+    upper.record_verification(4, 3);
+    assert_eq!(
+        upper.current_max_draft_tokens(),
+        shrunken,
+        "a deviation EQUAL to the threshold must not grow the draft budget"
+    );
+}

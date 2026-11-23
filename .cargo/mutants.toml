@@ -127,6 +127,11 @@ exclude_re = [
   'lock_free\.rs:282:44: replace > with >= in LockFreeMetrics::snapshot',
   'lock_free\.rs:287:43: replace > with >= in LockFreeMetrics::snapshot',
 
+  # `SpeculationConfigBuilder` derives `Default` over a single `config` field
+  # whose own `Default` is the documented one, and `builder()` returns
+  # `SpeculationConfigBuilder::default()` verbatim.
+  'config\.rs:49:9: replace SpeculationConfig::builder -> SpeculationConfigBuilder with Default::default()',
+
   # `compose` routes to `compose_prefill_with_packing`, whose whole body is
   # `self.compose_prefill_batch(sequences)`: every guard variant picks between
   # two calls that run the same code on the same argument.

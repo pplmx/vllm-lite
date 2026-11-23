@@ -170,3 +170,108 @@ impl DraftState {
         matches!(self, Self::Loaded(_))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `DraftState::is_loaded` must distinguish the two variants, and both
+    /// `Debug` impls must name them.
+    ///
+    /// `cargo mutants` replaced `is_loaded` with the constants `true` and
+    /// `false`, and swapped the `Debug for DraftState` and `Debug for
+    /// LoadedDraft` bodies for `Ok(())`. All four survived: the registry tests
+    /// match on the variants directly, so the accessor was never read, and
+    /// nothing ever formatted these types. `is_loaded` is what the loader and
+    /// the lifecycle metrics branch on.
+    #[test]
+    fn draft_state_is_loaded_and_debug_describe_the_variant() {
+        let spec = DraftSpec::new("draft-7b", "models/draft", 512);
+        let unloaded = DraftState::Unloaded(spec.clone());
+        assert!(!unloaded.is_loaded(), "Unloaded must report not-loaded");
+        assert_eq!(unloaded.id(), &spec.id);
+        let rendered = format!("{unloaded:?}");
+        assert!(
+            rendered.contains("Unloaded"),
+            "Debug must name the variant; got {rendered}"
+        );
+
+        // A loaded state needs a backend; the registry owns that construction,
+        // so build it through the public path used by `attach_loaded`.
+        let backend: Arc<Mutex<Box<dyn ModelBackend>>> = Arc::new(Mutex::new(Box::new(Noop)));
+        let loaded = DraftState::Loaded(LoadedDraft {
+            spec: spec.clone(),
+            backend,
+            block_allocator: BlockAllocator::new(8),
+        });
+        assert!(loaded.is_loaded(), "Loaded must report loaded");
+        assert_eq!(loaded.id(), &spec.id, "both variants expose the same id");
+
+        let rendered = format!("{loaded:?}");
+        assert!(
+            rendered.contains("Loaded"),
+            "Debug must name the loaded variant; got {rendered}"
+        );
+        assert!(
+            !rendered.contains("Unloaded"),
+            "Debug must not confuse the variants; got {rendered}"
+        );
+
+        let rendered = format!(
+            "{:?}",
+            LoadedDraft {
+                spec,
+                backend: Arc::new(Mutex::new(Box::new(Noop))),
+                block_allocator: BlockAllocator::new(8),
+            }
+        );
+        assert!(
+            rendered.contains("LoadedDraft") && rendered.contains("<dyn ModelBackend>"),
+            "LoadedDraft's Debug must name the struct and hide the backend; got {rendered}"
+        );
+    }
+
+    #[derive(Debug)]
+    struct Noop;
+
+    impl ModelBackend for Noop {
+        fn forward(
+            &mut self,
+            _seq_ids: &[vllm_traits::SeqId],
+            _input_tokens: &[Vec<vllm_traits::TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> vllm_traits::Result<vllm_traits::BatchOutput> {
+            panic!("Noop::forward not used in types tests")
+        }
+        fn forward_logits(
+            &mut self,
+            _seq_ids: &[vllm_traits::SeqId],
+            _input_tokens: &[Vec<vllm_traits::TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> vllm_traits::Result<Vec<Vec<f32>>> {
+            panic!("Noop::forward_logits not used in types tests")
+        }
+        fn embed(
+            &mut self,
+            _input_tokens: &[Vec<vllm_traits::TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> vllm_traits::Result<Vec<Vec<f32>>> {
+            panic!("Noop::embed not used in types tests")
+        }
+        fn vocab_size(&self) -> usize {
+            32000
+        }
+        fn num_layers(&self) -> usize {
+            1
+        }
+        fn num_heads(&self) -> usize {
+            1
+        }
+    }
+}

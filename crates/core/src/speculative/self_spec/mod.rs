@@ -65,6 +65,13 @@ impl<M: ModelBackend> SelfSpeculativeModel<M> {
         &self.draft_kv_block_ids
     }
 
+    /// Mutable access to the per-sequence draft KV block table (test-only;
+    /// the production path records blocks through the verifier).
+    #[cfg(test)]
+    pub(crate) const fn draft_kv_block_ids_mut(&mut self) -> &mut HashMap<SeqId, Vec<usize>> {
+        &mut self.draft_kv_block_ids
+    }
+
     #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
     pub(crate) fn remove_draft_seq(&mut self, seq_id: SeqId) {
         self.draft_kv_block_ids.remove(&seq_id);
