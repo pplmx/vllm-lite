@@ -3387,3 +3387,106 @@ fn distributed_prefix_hit_trace_fires_when_a_peer_holds_the_prefix() {
          emit the hit trace; got {events:?}"
     );
 }
+
+/// `ensure_blocks_for_tokens` must chain each added block over its OWN tokens.
+///
+/// The speculative verification path pre-allocates blocks BEYOND the current
+/// token count, so the usual fixture has `start >= tokens.len()` and the
+/// `if start < tokens.len()` guard skips the chain feed entirely. That made the
+/// whole multi-node block live in the dark: `cargo mutants` relaxed
+/// `block_idx * BLOCK_SIZE` to `+` and `/`, `(start + BLOCK_SIZE)` to `-` and
+/// `*`, and `start < tokens.len()` to `==` and `<=` — six survivors, even with
+/// `--all-features`.
+///
+/// This fixture grows blocks the sequence ALREADY covers (48 tokens, one block,
+/// two more requested), so every added block has a real slice and the recorded
+/// chain can be checked against the manager's own hasher. Growing two blocks at
+/// once is required: with a single added block the `.min(tokens.len())` clamp
+/// hides the `end` mutant.
+#[cfg(feature = "multi-node")]
+#[test]
+fn ensure_blocks_for_tokens_chains_each_added_block_over_its_own_slice() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 64);
+    let tokens: Vec<u32> = (0..block_size * 3).map(|t| t as u32 + 1).collect();
+
+    // Seed exactly one block, recorded from the first block's slice.
+    let mut head = Sequence {
+        id: 11,
+        tokens: tokens.clone(),
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: tokens.len(),
+        prompt_len: tokens.len(),
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    let mut first_block_only = head.clone();
+    first_block_only.tokens.truncate(block_size);
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut first_block_only));
+    head.kv_blocks = first_block_only.kv_blocks.clone();
+    assert_eq!(head.kv_blocks.len(), 1, "setup: one block held");
+    engine.running.push(head);
+
+    assert_eq!(
+        engine.ensure_blocks_for_tokens(11, 3),
+        3,
+        "grown to 3 blocks"
+    );
+
+    let hasher = engine.memory.hasher();
+    let mut expected = 0u64;
+    for start in (0..tokens.len()).step_by(block_size) {
+        let end = (start + block_size).min(tokens.len());
+        expected = hasher.hash_block(expected, &tokens[start..end]);
+    }
+    assert_eq!(
+        engine.chain_cursors.get(&11).copied(),
+        Some(expected),
+        "the two added blocks must chain over tokens[{block_size}..{}] and \
+         tokens[{}..{}]",
+        block_size * 2,
+        block_size * 2,
+        block_size * 3
+    );
+
+    // The guard's other side: a span that starts EXACTLY at the token count.
+    // 32 tokens with two blocks held, one more requested — the added block has
+    // no tokens yet, so the chain feed must be SKIPPED and the cursor left at
+    // block 1's hash. The `<=` relaxation feeds an empty slice instead, which
+    // replaces the cursor with `hash(h1, &[])`.
+    let mut exact = Sequence {
+        id: 12,
+        tokens: tokens[..block_size * 2].to_vec(),
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size * 2,
+        prompt_len: block_size * 2,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut exact));
+    assert_eq!(exact.kv_blocks.len(), 2, "setup: two blocks held");
+    engine.running.push(exact);
+    let hash_before = engine.chain_cursors.get(&12).copied();
+    assert!(hash_before.is_some(), "setup: the two blocks were chained");
+
+    assert_eq!(
+        engine.ensure_blocks_for_tokens(12, 3),
+        3,
+        "the third block is allocated"
+    );
+    assert_eq!(
+        engine.chain_cursors.get(&12).copied(),
+        hash_before,
+        "a block with no tokens yet must NOT advance the chain cursor"
+    );
+}
