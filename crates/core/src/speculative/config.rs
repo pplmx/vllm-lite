@@ -166,6 +166,25 @@ impl SpeculationConfigBuilder {
 mod tests {
     use super::*;
 
+    /// Serialises every test that touches `VLLM_SPECULATIVE_*`.
+    ///
+    /// Module-scoped on purpose: a `static` declared INSIDE a test function is
+    /// a distinct lock per function, so two tests would not exclude each other.
+    /// `test_from_env_not_set` reads the same variables and needs the same
+    /// guard — without it the pair raced and the suite failed intermittently
+    /// (observed as a `cargo mutants` baseline failure).
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Take the lock, recovering from a previous test's panic.
+    ///
+    /// invariant: a poisoned lock means an earlier assertion failed; the data
+    /// under test is the process environment, which every test restores.
+    fn env_guard() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     #[test]
     fn test_default_config() {
         let config = SpeculationConfig::default();
@@ -232,12 +251,7 @@ mod tests {
     /// static mutex and restores every variable it touches.
     #[test]
     fn test_from_env_reads_each_variable() {
-        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        // invariant: a poisoned lock means an earlier assertion failed; the
-        // data under test is the process environment, which we still restore.
-        let _guard = ENV_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _guard = env_guard();
 
         let vars = [
             ("VLLM_SPECULATIVE_DRAFT_COUNT", "7"),
@@ -281,10 +295,47 @@ mod tests {
         );
     }
 
+    /// With every `VLLM_SPECULATIVE_*` variable absent, `from_env` must return
+    /// the documented defaults.
+    ///
+    /// Takes the SAME module lock as `test_from_env_reads_each_variable`: both
+    /// read the process environment, so without a shared guard they race and
+    /// this one intermittently sees the other test's values.
     #[test]
     fn test_from_env_not_set() {
+        let _guard = env_guard();
+
+        const KEYS: [&str; 8] = [
+            "VLLM_SPECULATIVE_DRAFT_COUNT",
+            "VLLM_SPECULATIVE_MAX_DEPTH",
+            "VLLM_SPECULATIVE_TEMPERATURE",
+            "VLLM_SPECULATIVE_TOP_K",
+            "VLLM_SPECULATIVE_TOP_P",
+            "VLLM_SPECULATIVE_TARGET_MODEL",
+            "VLLM_SPECULATIVE_DRAFT_LAYERS",
+            "VLLM_SPECULATIVE_SELF",
+        ];
+        let saved: Vec<_> = KEYS.iter().map(|k| (*k, std::env::var(k).ok())).collect();
+        for key in KEYS {
+            // SAFETY: guarded by `env_guard()`; restored before it is released.
+            unsafe { std::env::remove_var(key) };
+        }
+
         let config = SpeculationConfig::from_env();
+
+        for (k, v) in saved {
+            match v {
+                // SAFETY: still holding the guard.
+                Some(v) => unsafe { std::env::set_var(k, v) },
+                None => unsafe { std::env::remove_var(k) },
+            }
+        }
+
         assert_eq!(config.draft_count, 4);
         assert_eq!(config.max_depth, 8);
+        assert!(
+            config.self_speculation,
+            "self-speculation defaults to ON when unset"
+        );
     }
 }
