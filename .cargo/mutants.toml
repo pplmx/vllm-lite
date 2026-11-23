@@ -113,6 +113,25 @@ exclude_re = [
   # current length is a no-op too, so `<=` performs the same work.
   'mod\.rs:550:25: replace < with <= in MemoryManager::rollback',
 
+  # `elapsed` is `as_millis() as f64`; `>` and `>=` differ only at 0, where
+  # both skip the sample. (Same class as dispatch.rs:227 / graph_step.rs:280.)
+  'batch\.rs:404:20: replace > with >= in crate::engine::Engine::finalize_and_record',
+
+  # `compose` routes to `compose_prefill_with_packing`, whose whole body is
+  # `self.compose_prefill_batch(sequences)`: every guard variant picks between
+  # two calls that run the same code on the same argument.
+  'mod\.rs:92:31: replace match guard self\.packing_config\.enabled && sequences\.len\(\) > 1 with false',
+  'mod\.rs:92:31: replace match guard self\.packing_config\.enabled && sequences\.len\(\) > 1 with true',
+  'mod\.rs:92:59: replace && with \|\|',
+  'mod\.rs:92:78: replace > with <',
+  'mod\.rs:92:78: replace > with ==',
+  'mod\.rs:92:78: replace > with >=',
+
+  # Three more `builder()` bodies that return `XBuilder::default()` verbatim.
+  'validate\.rs:38:9: replace BatchCompositionConfig::builder -> BatchCompositionConfigBuilder with Default::default()',
+  'validate\.rs:100:9: replace ChunkedPrefillConfig::builder -> ChunkedPrefillConfigBuilder with Default::default()',
+  'cuda_graph\.rs:97:9: replace SchedulerCudaGraphConfig::builder -> SchedulerCudaGraphConfigBuilder with Default::default()',
+
   # Both `builder()` bodies return `XBuilder::default()` verbatim, and each
   # builder's `Default` already carries the documented field values.
   'breaker\.rs:49:9: replace CircuitBreakerConfig::builder -> CircuitBreakerConfigBuilder with Default::default()',

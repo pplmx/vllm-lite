@@ -237,6 +237,39 @@ The sibling builder mutants in both files are NOT equivalent and are killed:
 replacing `build` with `Default::default()` ignores every `with_*` override,
 and replacing a `with_*` setter drops its field.
 
+### `batch_composer/compose/mod.rs:92` — the packing dispatch guard
+
+`compose` matches `Phase::Prefill if self.packing_config.enabled && sequences.len() > 1`
+to `compose_prefill_with_packing` and the fall-through `Phase::Prefill` arm to
+`compose_prefill_batch`. Those two functions have the same body:
+
+```rust
+pub(super) fn compose_prefill_with_packing(&self, sequences: Vec<Sequence>) -> Batch {
+    self.compose_prefill_batch(sequences)
+}
+```
+
+The packing optimisation is deferred (the entry point exists so callers can opt
+in without changing the dispatcher), so every guard variant — `false`, `true`,
+`&&`→`||`, `>`→`<`/`==`/`>=` — only chooses between two calls that run the same
+code on the same argument. Six mutants, all equivalent. When the packing
+optimisation lands, the bodies diverge and these exclusions lapse (the patterns
+are line-anchored, so a refactor also makes them fail loudly).
+
+### `batch_composer/validate.rs:38`, `validate.rs:100`, `cuda_graph.rs:97` — `builder()`
+
+Same class as the `phase_scheduler`/circuit-breaker entries above: each
+`builder()` returns `XBuilder::default()` verbatim, and each builder derives
+`Default` over a single `inner` field whose own `Default` is the written impl.
+
+### `scheduler/batch.rs:404` — `elapsed > 0.0` → `>=`
+
+Same reasoning as `spec_dispatch/dispatch.rs:227` and `engine/graph_step.rs:280`:
+`elapsed` is `start.elapsed().as_millis() as f64`, so the two variants differ
+only at exactly `0`, where both skip the sample. (The `<` and `==` variants of
+this line are NOT equivalent — they drop every sample — and are killed by the
+latency-recording test.)
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

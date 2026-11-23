@@ -2734,3 +2734,484 @@ fn phase2_continues_from_the_blocks_phase1_freed() {
         engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
     );
 }
+
+/// A Prefill round on the CUDA-Graph path must not select running decoders,
+/// and a Decode round must select only `Decoding` sequences.
+///
+/// `select_sequences_for_phase` opens with `if phase == Phase::Decode {
+/// running.filter(|s| s.status == Status::Decoding) } else { Vec::new() }`.
+/// `cargo mutants` flipped BOTH comparisons to `!=` and both survived.
+/// Observing this through `build_batch_with_graph` is not enough: the composer
+/// SKIPS a decoding sequence on a Prefill round (its remaining-token count is
+/// zero), so an inverted gate still produces a clean batch and only the
+/// sequence SELECTION is wrong. The tests therefore call
+/// `select_sequences_for_phase` directly, which is `pub(super)` and so visible
+/// from this module.
+#[test]
+fn graph_prefill_round_excludes_running_decoders_and_decode_round_admits_only_decoders() {
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(config, 64);
+
+    // A healthy decoder that must only ever be forwarded on a Decode round.
+    let mut decoder = Sequence {
+        id: 100,
+        tokens: vec![1; block_size * 2],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size * 2,
+        prompt_len: block_size * 2,
+        status: Status::Decoding,
+        max_tokens: 50,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut decoder));
+    engine.running.push(decoder);
+
+    // An orphaned mid-prefill sequence sitting in `running`: it is NOT a
+    // decoder, so a Decode round must leave it out.
+    let orphan = Sequence {
+        id: 200,
+        tokens: vec![2; block_size * 4],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size,
+        prompt_len: block_size * 4,
+        status: Status::Prefilling,
+        max_tokens: 50,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.running.push(orphan);
+
+    // Ask for a PREFILL round explicitly with a queued prefill request.
+    engine.add_request(Request::new(300, vec![3; block_size], 5));
+    let (selected, _admitted) = engine.select_sequences_for_phase(Phase::Prefill);
+    let prefill_ids: Vec<_> = selected.iter().map(|s| s.id).collect();
+    assert!(
+        prefill_ids.contains(&300),
+        "setup: the queued prefill must be admitted, got {prefill_ids:?}"
+    );
+    assert!(
+        !prefill_ids.contains(&100),
+        "a Prefill round must NOT forward the running decoder; got {prefill_ids:?}"
+    );
+    assert!(
+        !prefill_ids.contains(&200),
+        "a Prefill round must not forward the orphan either; got {prefill_ids:?}"
+    );
+
+    // Drain the prefill queue, then ask for a DECODE round.
+    while engine.request_queue.phase_len(Phase::Prefill) > 0 {
+        let _ = engine.build_batch_with_graph();
+    }
+    let (selected, _admitted) = engine.select_sequences_for_phase(Phase::Decode);
+    let decode_ids: Vec<_> = selected.iter().map(|s| s.id).collect();
+    assert!(
+        decode_ids.contains(&100),
+        "a Decode round must forward the real decoder; got {decode_ids:?}"
+    );
+    assert!(
+        !decode_ids.contains(&200),
+        "a Decode round must NOT forward a Prefilling sequence; got {decode_ids:?}"
+    );
+}
+
+/// The graph path's preemption gate must be charged for the DECODERS' growth.
+///
+/// `select_sequences_for_phase` fills `sequences` from
+/// `running.filter(|s| s.status == Status::Decoding)` and then runs the
+/// memory-pressure gate over it — so a decoder that needs one more block is
+/// charged that block and the engine preempts to make room. `cargo mutants`
+/// flipped that status filter to `!=` and it survived, because the filter's
+/// OUTPUT is replaced by `admit_decode_sequences()` a few lines later: the
+/// composed batch looks identical either way. What changes is the GATE, which
+/// is fed the wrong set — with `!=` it sees no decoders at all, so nothing is
+/// preempted, and `admit_decode_sequences` then has to defer the very decoder
+/// the gate was supposed to make room for.
+///
+/// Fixture: a 4-block pool, one decoder holding 3 blocks with a complete table,
+/// and one decoder holding 1 block whose next token needs a second. Nothing is
+/// free, so only preemption can admit the growing decoder.
+#[test]
+fn graph_decode_gate_charges_decoders_for_growth() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 4);
+
+    let mut holder = Sequence {
+        id: 2,
+        tokens: vec![2; block_size * 3],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size * 3,
+        prompt_len: block_size * 3,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        // Young decoder -> eviction priority 3 (evicted first).
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut holder));
+    assert_eq!(holder.kv_blocks.len(), 3, "setup: holder owns 3 blocks");
+    engine.running.push(holder);
+
+    // A decoder whose token count has crossed a block boundary: 17 tokens need
+    // 2 blocks but only 1 is held.
+    let mut growing = Sequence {
+        id: 1,
+        tokens: vec![1; block_size + 1],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size,
+        prompt_len: block_size,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        // Long-running decoder -> eviction priority 1, so the victim is the
+        // holder above rather than this sequence itself.
+        consecutive_decode_rounds: 6,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut growing));
+    assert_eq!(
+        growing.kv_blocks.len(),
+        1,
+        "setup: the growing decoder holds 1 of the 2 blocks its tokens need"
+    );
+    engine.running.push(growing);
+    assert_eq!(
+        engine.memory.available_blocks(),
+        0,
+        "setup: the pool is fully held, so growth REQUIRES preemption"
+    );
+
+    let (selected, _admitted) = engine.select_sequences_for_phase(Phase::Decode);
+    let selected_ids: Vec<_> = selected.iter().map(|s| s.id).collect();
+    assert!(
+        selected_ids.contains(&1),
+        "the gate must charge decoder 1 for its growth block and preempt to \
+         make room; selected = {selected_ids:?}"
+    );
+    assert!(
+        selected
+            .iter()
+            .find(|s| s.id == 1)
+            .is_some_and(|s| s.kv_blocks.len() >= 2),
+        "the admitted decoder's table must cover its tokens"
+    );
+}
+
+/// The graph path must record the admission wait in MILLISECONDS too.
+///
+/// `select_sequences_for_phase` has its own `wait.as_secs_f64() * 1000.0`,
+/// separate from `build_batch`'s. `cargo mutants` turned that `*` into `+` and
+/// `/` and both survived, because the existing wait-time test drives
+/// `build_batch`, not the graph path — so on a `cuda-graph` build (where the
+/// engine routes exclusively through here) the published metric would be wrong
+/// by three orders of magnitude in either direction.
+#[test]
+fn graph_path_records_scheduler_wait_in_milliseconds() {
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    let mut engine = create_test_engine(config, 1024);
+    engine.add_request(Request::new(1, vec![5; vllm_traits::BLOCK_SIZE], 10));
+
+    std::thread::sleep(std::time::Duration::from_millis(20));
+
+    let batch = engine.build_batch_with_graph().into_regular();
+    assert!(!batch.seq_ids.is_empty(), "setup: the request was admitted");
+
+    let recorded = engine.metrics.snapshot().avg_scheduler_wait_time_ms;
+    assert!(
+        (5.0..500.0).contains(&recorded),
+        "a ~20ms wait must record as tens of milliseconds on the graph path; \
+         got {recorded}. A `+` mutant gives ~1000 and a `/` mutant ~0.00002."
+    );
+}
+
+/// An EXACT block fit must not preempt on the CUDA-Graph path either.
+///
+/// `select_sequences_for_phase` gates preemption on
+/// `additional > self.memory.available_blocks()`. With `>=` an exact fit also
+/// calls `execute_preemption`, whose phase 1 evicts a decode victim WHOLESALE —
+/// its whole table released and its progress reset to a full re-prefill — to
+/// free blocks the new sequence did not need.
+#[test]
+fn graph_exact_block_fit_does_not_preempt() {
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
+        ..Default::default()
+    };
+    let block_size = vllm_traits::BLOCK_SIZE;
+    // Pool of 6 blocks: the decoder holds 4, leaving exactly 2 free.
+    let mut engine = create_test_engine(config, 6);
+
+    let mut decoder = Sequence {
+        id: 1,
+        tokens: vec![1; block_size * 4],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size * 4,
+        prompt_len: block_size * 4,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut decoder));
+    assert_eq!(decoder.kv_blocks.len(), 4, "setup: decoder holds 4 blocks");
+    engine.running.push(decoder);
+    assert_eq!(
+        engine.memory.available_blocks(),
+        2,
+        "setup: exactly two blocks free"
+    );
+
+    engine.add_request(Request::new(2, vec![2; block_size * 2], 10));
+    let batch = engine.build_batch_with_graph().into_regular();
+
+    assert!(
+        batch.seq_ids.contains(&2),
+        "the exactly-fitting request must be admitted; got {:?}",
+        batch.seq_ids
+    );
+    assert!(
+        engine.running.iter().any(|s| s.id == 1),
+        "the running decoder must NOT be preempted for an exact fit; running = {:?}",
+        engine.running.iter().map(|s| s.id).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        engine
+            .running
+            .iter()
+            .find(|s| s.id == 1)
+            .map(|s| s.kv_blocks.len()),
+        Some(4),
+        "the decoder's table must be untouched"
+    );
+}
+
+/// Graph routing needs BOTH `enabled` and a captured batch size.
+///
+/// `build_batch_with_graph` ends with
+/// `if self.cuda_graph.enabled && self.cuda_graph.supports_batch_size(n)`.
+/// `cargo mutants` relaxed the `&&` to `||`, which survived: nothing exercised
+/// the two halves independently. With `||` a DISABLED graph still routes
+/// through `GraphBatch::Graph` whenever the batch size happens to be captured,
+/// replaying a captured graph the operator explicitly turned off.
+#[test]
+fn graph_routing_requires_both_enabled_and_a_captured_batch_size() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+
+    // Helper: one decode round with `batch_sizes` captured and `enabled`
+    // controlled, returning (is_graph, cuda_graph_hits, cuda_graph_misses).
+    let run = |enabled: bool, batch_sizes: Vec<usize>| {
+        let config = SchedulerConfig {
+            cuda_graph: SchedulerCudaGraphConfig {
+                enabled,
+                batch_sizes,
+            },
+            ..Default::default()
+        };
+        let mut engine = create_test_engine(config, 64);
+        let mut decoder = Sequence {
+            id: 7,
+            tokens: vec![1; block_size],
+            kv_blocks: Arc::new(vec![]),
+            num_computed_tokens: block_size,
+            prompt_len: block_size,
+            status: Status::Decoding,
+            max_tokens: 10,
+            sampling_params: SamplingParams::default(),
+            consecutive_decode_rounds: 1,
+            priority: Priority::default(),
+            degraded_draft: false,
+            draft_model_id: None,
+        };
+        engine.preallocate_kv_blocks(std::slice::from_mut(&mut decoder));
+        engine.running.push(decoder);
+        // The phase selector starts in Prefill and completes it on an empty
+        // prefill queue, so this single round is already a Decode round.
+        let batch = engine.build_batch_with_graph();
+        (
+            batch.is_graph(),
+            engine.metrics.get_counter("cuda_graph_hits_total"),
+            engine.metrics.get_counter("cuda_graph_misses_total"),
+        )
+    };
+
+    let (is_graph, hits, misses) = run(true, vec![1]);
+    assert!(
+        is_graph,
+        "enabled + captured size must route through the graph"
+    );
+    assert_eq!(hits, 1, "a graph-routed round records exactly one hit");
+    assert_eq!(misses, 0, "a graph-routed round records no miss");
+
+    let (is_graph, hits, misses) = run(true, vec![2]);
+    assert!(
+        !is_graph,
+        "an enabled graph that never captured this batch size must fall back"
+    );
+    assert_eq!(hits, 0, "no hit without a captured size");
+    assert_eq!(misses, 1, "the miss must be counted");
+
+    let (is_graph, hits, misses) = run(false, vec![1]);
+    assert!(
+        !is_graph,
+        "a DISABLED graph must never route through it, even with a captured size"
+    );
+    assert_eq!(hits, 0, "a disabled graph must record no hit");
+    assert_eq!(misses, 1, "a disabled graph records the miss");
+}
+
+/// Under `multi-node`, each block's chain hash must cover THAT block's tokens.
+///
+/// `preallocate_kv_blocks` and `grow_running_table` derive the token slice from
+/// the block index with `start = block_idx * BLOCK_SIZE` and
+/// `end = (start + BLOCK_SIZE).min(tokens.len())`, inside
+/// `#[cfg(feature = "multi-node")]` blocks. A default-feature scan cannot see
+/// those mutants at all; with the feature ON, `cargo mutants` still relaxed the
+/// multiplication to `/` and both `+`s to `*`, all surviving — the suite never
+/// ran a multi-node engine over a sequence spanning MORE THAN ONE block, where
+/// those expressions stop coinciding with the first block's slice.
+///
+/// A wrong slice silently poisons the distributed prefix cache: peers compute
+/// their hashes from the real block contents, so a node that hashed block 0's
+/// tokens for block 1 can never match a peer's entry and `TransferKVBlock`
+/// resolves to nothing.
+#[cfg(feature = "multi-node")]
+#[test]
+fn multi_node_chain_hashes_cover_each_blocks_own_tokens() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    // Two full blocks plus one token, so block 1 has both a non-zero start and
+    // a partial end.
+    let prompt: Vec<u32> = (0..block_size * 2 + 1).map(|t| t as u32 + 1).collect();
+    let mut engine = create_test_engine(SchedulerConfig::default(), 64);
+    let seq_id = engine.add_request(Request::new(0, prompt.clone(), 5));
+
+    let _batch = engine.build_batch();
+
+    // Expected chain, computed with the manager's own hasher: block 0 chains
+    // from 0, each later block from its predecessor. The prompt spans THREE
+    // blocks (16 + 16 + 1 tokens), so the final cursor is block 2's hash —
+    // computed from the one-token slice `[32..33]`. A `block_idx / BLOCK_SIZE`
+    // mutant collapses every start back to 0 and re-hashes block 0's tokens.
+    let hasher = engine.memory.hasher();
+    let mut expected = 0u64;
+    let mut seen = Vec::new();
+    for start in (0..prompt.len()).step_by(block_size) {
+        let end = (start + block_size).min(prompt.len());
+        expected = hasher.hash_block(expected, &prompt[start..end]);
+        seen.push(expected);
+    }
+    assert_eq!(seen.len(), 3, "fixture: the prompt spans three blocks");
+    assert_ne!(
+        seen[0], seen[1],
+        "fixture: distinct slices hash differently"
+    );
+    assert_ne!(
+        seen[1], seen[2],
+        "fixture: distinct slices hash differently"
+    );
+
+    assert_eq!(
+        engine.chain_cursors.get(&seq_id).copied(),
+        Some(expected),
+        "the per-sequence cursor must be the LAST block's hash, chained over \
+         that block's own token slice"
+    );
+}
+
+/// The decode-growth path must chain each NEW block from the previous hash.
+///
+/// `grow_running_table` records each freshly-added block's tokens with
+/// `start = (have + offset) * BLOCK_SIZE`, `end = (start + BLOCK_SIZE).min(..)`.
+/// `cargo mutants` relaxed both `+`s to `*` and they survived because no
+/// multi-node test grew a decode table across a block boundary. A wrong start
+/// re-feeds the previous block's tokens, so the new block's hash — and every
+/// hash chained after it — diverges from what peers compute, making the
+/// distributed prefix cache miss forever.
+///
+/// The fixture grows TWO blocks at once (a 48-token decoder holding a single
+/// block): with only one growth block the `.min(tokens.len())` clamp hides the
+/// `end` mutant, because at that point the sequence has no tokens past the
+/// block being filled.
+#[cfg(feature = "multi-node")]
+#[test]
+fn multi_node_decode_growth_chains_the_new_block_from_the_previous_hash() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 64);
+
+    // 48 tokens span three blocks but only one is held, so admission grows two.
+    let tokens: Vec<u32> = (0..block_size * 3).map(|t| t as u32 + 1).collect();
+    let mut decoder = Sequence {
+        id: 5,
+        tokens: tokens.clone(),
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: tokens.len(),
+        prompt_len: tokens.len(),
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 1,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    // Seed exactly one block by hand: preallocate only the first block's worth.
+    let mut head = Sequence {
+        tokens: tokens[..block_size].to_vec(),
+        ..decoder.clone()
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut head));
+    decoder.kv_blocks = head.kv_blocks.clone();
+    assert_eq!(decoder.kv_blocks.len(), 1, "setup: one block held");
+    engine.running.push(decoder);
+
+    let _batch = engine.build_batch();
+    assert!(
+        engine.running.iter().any(|s| s.id == 5),
+        "setup: the decoder was admitted (table grown), not deferred"
+    );
+
+    let hasher = engine.memory.hasher();
+    let mut expected = 0u64;
+    for start in (0..tokens.len()).step_by(block_size) {
+        let end = (start + block_size).min(tokens.len());
+        expected = hasher.hash_block(expected, &tokens[start..end]);
+    }
+    assert_eq!(
+        engine.chain_cursors.get(&5).copied(),
+        Some(expected),
+        "the grown blocks must chain over their OWN slices: block 1 from \
+         tokens[{block_size}..{}], block 2 from tokens[{}..{}]",
+        block_size * 2,
+        block_size * 2,
+        block_size * 3
+    );
+}

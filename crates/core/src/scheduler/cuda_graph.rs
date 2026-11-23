@@ -152,6 +152,69 @@ mod tests {
         assert!(!graph_batch.is_graph());
     }
 
+    /// `batch_size()` must report the batch's real size for BOTH variants.
+    ///
+    /// The Graph arm reads its cached `batch_size` and the Regular arm counts
+    /// `seq_ids`. `cargo mutants` replaced the whole method with the constants
+    /// 0 and 1 and both survived: the only caller in the suite is
+    /// `cuda_graph_integration.rs`, whose single assertion uses a size-3
+    /// Regular batch and therefore misses both constants. That matters because
+    /// `graph_step` uses `batch_size() == 0` as its empty-batch guard — a
+    /// constant 0 would skip every real batch and a constant 1 would dispatch
+    /// an empty one. Three sizes across BOTH variants make each constant fail.
+    #[test]
+    fn test_batch_size_reports_the_real_size_for_both_variants() {
+        for size in [1usize, 3, 7] {
+            let batch = create_test_batch(size);
+            let regular = GraphBatch::Regular(batch);
+            assert_eq!(
+                regular.batch_size(),
+                size,
+                "Regular must count seq_ids, not return a constant"
+            );
+
+            let batch = create_test_batch(size);
+            let graph = GraphBatch::Graph(GraphPreparedBatch::new(batch));
+            assert_eq!(
+                graph.batch_size(),
+                size,
+                "Graph must report its cached size, not return a constant"
+            );
+        }
+    }
+
+    /// `builder().build()` must carry every `with_*` override through.
+    ///
+    /// `cargo mutants` replaced `build` with `Default::default()` and it
+    /// survived: no test used the builder at all, so a scheduler configured
+    /// through it would silently run with the DEFAULT cuda-graph settings —
+    /// `with_enabled(false)` ignored, i.e. captured graphs replayed for an
+    /// operator who explicitly disabled them.
+    #[test]
+    fn test_builder_applies_overrides_and_defaults() {
+        let built = SchedulerCudaGraphConfig::builder()
+            .with_enabled(false)
+            .build();
+        assert!(!built.enabled, "with_enabled(false) must reach the config");
+
+        let built = SchedulerCudaGraphConfig::builder()
+            .with_enabled(true)
+            .build();
+        assert!(built.enabled);
+
+        // The fields `build` must NOT reset stay at their documented defaults.
+        let default = SchedulerCudaGraphConfig::default();
+        assert_eq!(
+            built.batch_sizes, default.batch_sizes,
+            "untouched fields keep the documented defaults"
+        );
+
+        // An unconfigured builder is the default config.
+        let plain = SchedulerCudaGraphConfig::builder().build();
+        assert_eq!(plain.enabled, default.enabled);
+        assert_eq!(plain.batch_sizes, default.batch_sizes);
+    }
+
     #[test]
     fn test_config_supports_batch_size() {
         let config = SchedulerCudaGraphConfig::default();
