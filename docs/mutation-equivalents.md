@@ -388,6 +388,21 @@ real gap and is killed by `builder_clear_stop_sequences_keeps_other_fields`: the
 pre-existing test set only the field it then cleared, so a builder reset that
 discarded every other field passed it too.
 
+### `engine/lifecycle.rs:90` — `Some(s) if !s.is_empty()` → `if true`
+
+The match arm only chooses between the caller's stop list and `&[]`. With the
+guard relaxed, an EMPTY stop list (`Some(&[..])` holding zero entries) is passed
+through instead of being replaced by `&[]`, and the consumer
+(`crate::sampling::matches_stop_sequences`) starts with
+
+```rust
+if stop.is_empty() || stop.len() > generated_tokens.len() { continue; }
+```
+
+so an empty inner list is skipped exactly like an absent one. `[]` and `[[]]`
+therefore produce the same answer for every input, which is why no fixture can
+tell them apart. Verified against the implementation, not assumed.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

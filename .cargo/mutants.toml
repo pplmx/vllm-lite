@@ -132,6 +132,10 @@ exclude_re = [
   # `SpeculationConfigBuilder::default()` verbatim.
   'config\.rs:49:9: replace SpeculationConfig::builder -> SpeculationConfigBuilder with Default::default()',
 
+  # `matches_stop_sequences` skips an empty inner stop list itself, so passing
+  # `[]` and `[[]]` produces the same answer for every input.
+  'lifecycle\.rs:90:28: replace match guard !s\.is_empty\(\) with true in Engine::finalize_stop_sequences',
+
   # `builder()` returns `SamplingParamsBuilder::default()` verbatim, and the
   # builder derives `Default` over the one `SamplingParams` field whose own
   # `Default` is the documented impl, so the replacement is the same expression.

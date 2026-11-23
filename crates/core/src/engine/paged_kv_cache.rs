@@ -73,14 +73,4 @@ impl crate::engine::Engine {
     pub fn paged_kv_cache(&self) -> Option<Arc<parking_lot::Mutex<PagedKvCache>>> {
         self.paged_kv_cache.as_ref().map(Arc::clone)
     }
-
-    /// Always-`None` stub for non-`multi-node` builds. Mirrors
-    /// `distributed_kv_enabled` so call sites compile unchanged.
-    #[cfg(not(feature = "multi-node"))]
-    #[must_use]
-    pub const fn paged_kv_cache_wrapper(
-        &self,
-    ) -> Option<Arc<dyn vllm_dist::BlockDataSource + Send + Sync>> {
-        None
-    }
 }

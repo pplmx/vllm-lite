@@ -1429,3 +1429,302 @@ fn step_takes_the_regular_path_when_speculative_mode_is_off() {
          the speculative path ran with speculative_mode off"
     );
 }
+
+/// `SleepPolicy::next_interval` must implement the documented backoff curve.
+///
+/// `cargo mutants` flipped `consecutive_idle == 1` to `!=`, changed the
+/// multiplier to `/` and `+`, and the exponent's `- 1` to `+` / `/` — six
+/// survivors. The idle loop is the ONE place the engine sleeps, so a wrong
+/// curve is either a busy-spin (100% CPU on an idle server) or a stall (a
+/// request waits seconds after an idle period). The fixture pins every
+/// transition: base interval on work and on the FIRST idle tick, then the
+/// geometric growth, then the cap.
+#[test]
+fn sleep_policy_backoff_curve_is_pinned() {
+    let mut policy = SleepPolicy {
+        base_interval: 10,
+        max_interval: 100,
+        backoff_factor: 2.0,
+        consecutive_idle: 0,
+    };
+
+    // Work resets the counter and returns the base interval.
+    assert_eq!(policy.next_interval(true), 10);
+    assert_eq!(policy.next_interval(true), 10);
+    assert_eq!(policy.consecutive_idle, 0, "work must reset the idle count");
+
+    // The FIRST idle tick returns the base interval (a 1-tick idle gap must
+    // not sleep longer than the scheduler tick).
+    assert_eq!(policy.next_interval(false), 10);
+    assert_eq!(policy.consecutive_idle, 1);
+
+    // Then geometric growth: base * factor^(n-1).
+    assert_eq!(policy.next_interval(false), 20, "10 * 2^1");
+    assert_eq!(policy.next_interval(false), 40, "10 * 2^2");
+    assert_eq!(policy.next_interval(false), 80, "10 * 2^3");
+
+    // And the cap.
+    assert_eq!(policy.next_interval(false), 100, "clamped to max_interval");
+    assert_eq!(policy.next_interval(false), 100, "stays clamped");
+
+    // Work returns the base interval immediately, even after a long idle run.
+    assert_eq!(policy.next_interval(true), 10);
+    assert_eq!(policy.consecutive_idle, 0);
+}
+
+/// `get_last_error` must report the recorded error, not a constant.
+///
+/// Replaced by `None`, `Some("")` and `Some("xyzzy")` — three survivors. The
+/// accessor feeds the server's health probe: a constant `None` says "healthy"
+/// no matter what happened, and a fabricated string says the opposite.
+#[test]
+fn last_error_accessor_reports_what_was_recorded() {
+    let mut engine = Engine::new(StubModel::returning(42), None);
+    assert_eq!(engine.get_last_error(), None, "a fresh engine has no error");
+
+    engine.last_error = Some("boom: kernel fault".to_string());
+    assert_eq!(engine.get_last_error(), Some("boom: kernel fault"));
+
+    // Overwrite, as the run loop does on each new failure.
+    engine.last_error = Some("second failure".to_string());
+    assert_eq!(
+        engine.get_last_error(),
+        Some("second failure"),
+        "the accessor must reflect the LATEST error"
+    );
+}
+
+/// The adaptive-speculative switch must be observable from both sides.
+///
+/// `enable_adaptive_speculative` and `disable_adaptive_speculative` replaced by
+/// `()`, plus `is_adaptive_speculative_enabled` replaced by the constants
+/// `true` and `false` — four survivors. The switch routes requests into the
+/// adaptive draft path and back out again; a no-op disable leaves the engine
+/// paying for drafts it was told to stop generating.
+#[test]
+fn adaptive_speculative_toggle_is_observable() {
+    let mut engine = Engine::new(StubModel::returning(42), None);
+    assert!(!engine.is_adaptive_speculative_enabled());
+    assert!(!engine.speculative_mode);
+
+    engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
+    assert!(
+        engine.is_adaptive_speculative_enabled(),
+        "enable must install the decoder"
+    );
+    assert!(engine.speculative_mode, "enable must switch the mode on");
+
+    engine.disable_adaptive_speculative();
+    assert!(!engine.is_adaptive_speculative_enabled());
+    assert!(!engine.speculative_mode, "disable must switch the mode off");
+
+    // Enabling again after a disable must work (the decoder is re-created).
+    engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
+    assert!(engine.is_adaptive_speculative_enabled());
+}
+
+/// `set_draft_loader` must report whether a resolver was present.
+///
+/// Replaced by the constants `true` and `false` — two survivors. The server
+/// calls this once at startup and logs a warning on `false`; a constant `false`
+/// reports a misconfigured engine that is actually fine, and a constant `true`
+/// hides the case where lazy draft loading is silently unavailable.
+#[test]
+fn set_draft_loader_reports_resolver_presence() {
+    let loader: Arc<dyn DraftLoader> = Arc::new(NoopLoader);
+
+    let mut without = Engine::new(StubModel::returning(42), None);
+    assert!(
+        !without.set_draft_loader(Arc::clone(&loader)),
+        "an engine built without a resolver must report false"
+    );
+
+    let drafts = vec![DraftSpec::new(
+        "d",
+        std::path::PathBuf::from("/tmp/d"),
+        1024,
+    )];
+    let mut with = Engine::with_drafts(
+        StubModel::returning(42),
+        None,
+        drafts,
+        SchedulerConfig::default(),
+        4,
+        1024,
+    );
+    assert!(
+        with.set_draft_loader(loader),
+        "an engine with a resolver must report true"
+    );
+}
+
+/// `Engine`'s and `EngineBuilder`'s `Debug` impls must describe their fields.
+///
+/// Both were replaced by `Ok(())` and survived; they are what an operator sees
+/// when a startup failure is logged with `{engine:?}`.
+#[test]
+fn engine_and_builder_debug_name_their_fields() {
+    let engine = Engine::new(StubModel::returning(42), None);
+    let rendered = format!("{engine:?}");
+    assert!(
+        rendered.contains("Engine"),
+        "Debug must name the type; got {rendered}"
+    );
+    assert!(
+        rendered.contains("scheduler") || rendered.contains("error_count"),
+        "Debug must include engine state; got {rendered}"
+    );
+
+    let builder = EngineBuilder::new(Box::new(StubModel::returning(42)));
+    let rendered = format!("{builder:?}");
+    assert!(
+        rendered.contains("EngineBuilder"),
+        "Debug must name the type; got {rendered}"
+    );
+}
+
+/// `cuda_graph_enabled` and `capture_cuda_graphs` must reflect the installed
+/// executor, not a constant.
+///
+/// `cargo mutants` replaced both with `Ok(())` / `false` / `true` — five
+/// survivors in `cuda_graph.rs`. `cuda_graph_enabled` is what the run loop
+/// consults on EVERY step to choose between `step_with_graph` and `step`, so a
+/// constant `false` silently disables the fast path for every deployment and a
+/// constant `true` sends unmapped shapes into graph replay.
+#[test]
+#[cfg(all(feature = "cuda-graph", feature = "multi-node"))]
+fn cuda_graph_enabled_follows_the_executor() {
+    use vllm_traits::{BatchOutput, GraphExecutionError};
+
+    /// Executor whose `is_enabled` is a field, so the accessor can be observed.
+    #[derive(Debug)]
+    struct ToggleExecutor {
+        enabled: bool,
+        captures: Arc<std::sync::atomic::AtomicUsize>,
+        fail_capture: bool,
+    }
+
+    impl vllm_traits::CudaGraphExecutor for ToggleExecutor {
+        fn is_enabled(&self) -> bool {
+            self.enabled
+        }
+        fn execute(
+            &self,
+            _batch: &vllm_traits::Batch,
+        ) -> std::result::Result<BatchOutput, GraphExecutionError> {
+            Err(GraphExecutionError::GraphNotFound(0))
+        }
+        fn capture_all_graphs(&mut self) -> std::result::Result<(), GraphExecutionError> {
+            self.captures
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if self.fail_capture {
+                Err(GraphExecutionError::GraphCaptureFailed("synthetic".into()))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    let captures = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+    // No executor installed: disabled, and capture is a harmless success.
+    let mut bare = Engine::new(StubModel::returning(42), None);
+    assert!(!bare.cuda_graph_enabled(), "no executor means not enabled");
+    bare.capture_cuda_graphs()
+        .expect("no executor is not an error");
+
+    // An executor reporting "not captured yet": still disabled.
+    let mut pending = EngineBuilder::new(Box::new(StubModel::returning(42)))
+        .with_cuda_graph_executor(Box::new(ToggleExecutor {
+            enabled: false,
+            captures: Arc::clone(&captures),
+            fail_capture: false,
+        }))
+        .build();
+    assert!(
+        !pending.cuda_graph_enabled(),
+        "an executor that has not captured must report false"
+    );
+    pending.capture_cuda_graphs().expect("capture succeeds");
+    assert_eq!(
+        captures.load(std::sync::atomic::Ordering::Relaxed),
+        1,
+        "capture_cuda_graphs must reach the executor"
+    );
+
+    // An executor reporting "ready": enabled.
+    let ready = EngineBuilder::new(Box::new(StubModel::returning(42)))
+        .with_cuda_graph_executor(Box::new(ToggleExecutor {
+            enabled: true,
+            captures: Arc::clone(&captures),
+            fail_capture: false,
+        }))
+        .build();
+    assert!(
+        ready.cuda_graph_enabled(),
+        "a ready executor must report true, not a constant"
+    );
+
+    // A capture failure must surface as an engine error.
+    let mut failing = EngineBuilder::new(Box::new(StubModel::returning(42)))
+        .with_cuda_graph_executor(Box::new(ToggleExecutor {
+            enabled: false,
+            captures,
+            fail_capture: true,
+        }))
+        .build();
+    assert!(
+        failing.capture_cuda_graphs().is_err(),
+        "a failed capture must not be swallowed"
+    );
+}
+
+/// `distributed_kv_enabled` must report presence, not a constant.
+///
+/// `cargo mutants` replaced the `multi-node` body with the constant `true` and
+/// the stub with `true`/`false` — three survivors. The server uses this before
+/// calling `distributed_kv_stats`, so a constant `true` makes a single-node
+/// engine claim a cache it does not have.
+#[test]
+#[cfg(feature = "multi-node")]
+fn distributed_kv_enabled_reports_presence() {
+    let without = Engine::new(StubModel::returning(42), None);
+    assert!(
+        !without.distributed_kv_enabled(),
+        "an engine with no cache must report false, not a constant true"
+    );
+    assert!(without.distributed_kv_stats().is_none());
+    assert!(without.distributed_kv_cache().is_none());
+
+    // With a cache installed, all three accessors must report it. The
+    // `cargo mutants` variants that return a constant `None`/`()` survive
+    // against an engine that has nothing wired; only a positive case shows
+    // that `set_distributed_kv` actually stores what it is given.
+    let cache = Arc::new(vllm_dist::DistributedKVCache::new(
+        vllm_dist::CacheConfig::new(vllm_dist::distributed_kv::protocol::NodeId(0), 4),
+    ));
+    let mut with = Engine::new(StubModel::returning(42), None);
+    with.set_distributed_kv(Arc::clone(&cache));
+    assert!(
+        with.distributed_kv_enabled(),
+        "set_distributed_kv must flip the flag"
+    );
+    assert!(
+        with.distributed_kv_stats().is_some(),
+        "the stats accessor must report the installed cache"
+    );
+    assert!(
+        with.distributed_kv_cache().is_some(),
+        "the cache accessor must return the installed cache, not None"
+    );
+}
+
+#[test]
+#[cfg(not(feature = "multi-node"))]
+fn distributed_kv_enabled_stub_is_false() {
+    let engine = Engine::new(StubModel::returning(42), None);
+    assert!(
+        !engine.distributed_kv_enabled(),
+        "the non-multi-node stub must report false"
+    );
+}
