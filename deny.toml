@@ -21,6 +21,11 @@ no-default-features = false
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "warn"
+# Report UNMAINTAINED advisories for transitive crates too. The crate default
+# is `workspace`, which silently drops them — the `paste` ignore below then
+# matched nothing (`advisory-not-detected`) and the config claimed coverage it
+# did not have.
+unmaintained = "all"
 ignore = [
   # RUSTSEC-2024-0436 — `paste` crate is unmaintained. INFO severity (no
   # vulnerability, no patch). Deep transitive via gemm → candle-core.
@@ -73,14 +78,16 @@ external-default-features = "allow"
 
 # Banned crates — pull these out if you see them in `cargo tree`.
 deny = [
-    # Use `jsonwebtoken` instead (already in deps).
-    { name = "openssl", wrappers = ["openssl-sys"] },
+    # Use `jsonwebtoken` / `rustls` instead. Kept as a guard even though the
+    # graph does not contain `openssl` today: a future dependency would pull a
+    # second TLS stack and its own C toolchain in.
+    { name = "openssl" },
 ]
 skip = [
-    # Allowed: only used as Cargo build script helpers, no runtime.
-    "openssl-sys",
-    # Allowed: required by tokio-rustls 0.26; consider dropping when 0.27 ships.
-    "aws-lc-sys",
+    # `openssl-sys` and `aws-lc-sys` used to be skipped here. Both entries went
+    # stale: `openssl-sys` is no longer in the graph at all (the ban above still
+    # guards against it), and `aws-lc-sys` now resolves to a single version, so
+    # the skip only produced an `unnecessary-skip` warning.
 ]
 skip-tree = []
 
