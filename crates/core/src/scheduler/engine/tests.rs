@@ -3447,3 +3447,59 @@ fn requeue_seq_preserves_an_advanced_prefills_frontier_and_blocks() {
     );
     assert_eq!(queued.status, Status::Waiting);
 }
+
+/// The decode-token push must chain its NEW block from the previous hash.
+///
+/// `push_token_and_allocate` grows the table when a pushed token crosses a block
+/// boundary and, under `multi-node`, feeds the new block's tokens to the hasher
+/// with `start = block_idx * BLOCK_SIZE`. `cargo mutants` relaxed that
+/// multiplication to `/` and it survived every scan, feature-enabled ones
+/// included: the admission-path fixtures grow tables through
+/// `grow_running_table`, a DIFFERENT copy of the same arithmetic, so this path
+/// never ran with a real slice.
+///
+/// Fixture: a decoder holding exactly one full block. One more token makes it
+/// 17, so the second block is allocated with `block_idx == 1` — where `* 16`
+/// and `/ 16` disagree (16 vs 0).
+#[cfg(feature = "multi-node")]
+#[test]
+fn push_token_allocate_chains_the_new_block_from_the_previous_hash() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 64);
+    let prompt: Vec<u32> = vec![3; block_size];
+    let id = engine.add_request(Request::new(0, prompt.clone(), 10));
+    let _batch = engine.build_batch();
+    assert_eq!(
+        engine.running[0].kv_blocks.len(),
+        1,
+        "setup: the prefill holds one block"
+    );
+
+    // The cursor after the prefill is block 0's hash, over the whole prompt.
+    let hash0 = engine.memory.hasher().hash_block(0, &prompt);
+    assert_eq!(
+        engine.chain_cursors.get(&id).copied(),
+        Some(hash0),
+        "setup: the prefill chained block 0 from hash 0"
+    );
+
+    // One generated token crosses the block boundary.
+    let next = 99u32;
+    engine.update(
+        &[id],
+        &[SampledToken {
+            token: next,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[block_size],
+    );
+
+    let expected = engine.memory.hasher().hash_block(hash0, &[next]);
+    assert_ne!(hash0, expected, "fixture: the chained hash must differ");
+    assert_eq!(
+        engine.chain_cursors.get(&id).copied(),
+        Some(expected),
+        "the grown block must chain from block 0's hash over the NEW token only"
+    );
+}
