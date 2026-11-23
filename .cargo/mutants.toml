@@ -113,6 +113,11 @@ exclude_re = [
   # current length is a no-op too, so `<=` performs the same work.
   'mod\.rs:550:25: replace < with <= in MemoryManager::rollback',
 
+  # Both `builder()` bodies return `XBuilder::default()` verbatim, and each
+  # builder's `Default` already carries the documented field values.
+  'breaker\.rs:49:9: replace CircuitBreakerConfig::builder -> CircuitBreakerConfigBuilder with Default::default()',
+  'strategy\.rs:69:9: replace RetryStrategy::builder -> RetryStrategyBuilder with Default::default()',
+
   # `PhaseSwitchPolicyBuilder` derives `Default` over a single `inner` field
   # whose own `Default` is the documented one, and `builder()` already returns
   # `PhaseSwitchPolicyBuilder::default()` verbatim.

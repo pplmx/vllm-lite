@@ -224,6 +224,19 @@ The other builder mutants in this file are NOT equivalent and are killed:
 the three `with_*` setters replaced by `Default::default()` drop their
 respective field.
 
+### `circuit_breaker/breaker.rs:49` and `strategy.rs:69` — `builder()` -> `Default::default()`
+
+`CircuitBreakerConfig::builder()` and `RetryStrategy::builder()` both return
+`XBuilder::default()` verbatim. `CircuitBreakerConfigBuilder` derives `Default`
+over a single `inner: CircuitBreakerConfig` field whose own `Default` is the
+documented 5 / 30s / 3, and `RetryStrategyBuilder`'s hand-written `Default`
+sets the same 3 attempts / 100ms as `RetryStrategy::default()`. The mutant body
+is therefore textually the original body, and no fixture can separate them.
+
+The sibling builder mutants in both files are NOT equivalent and are killed:
+replacing `build` with `Default::default()` ignores every `with_*` override,
+and replacing a `with_*` setter drops its field.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

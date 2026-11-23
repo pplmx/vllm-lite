@@ -49,6 +49,9 @@ optional = true
 
 [dev-dependencies]
 candle-core = { workspace = true }
+# `test-util` gives the retry-delay tests a paused clock, so the backoff
+# schedule is asserted exactly instead of by wall-clock window.
+tokio = { workspace = true, features = ["time", "test-util"] }
 criterion = "0.8"
 proptest = { workspace = true }
 vllm-testing = { path = "../testing", version = "0.1.0" }

@@ -257,6 +257,64 @@ mod tests {
         assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 1);
     }
 
+    /// The retry delay is exponential backoff, and the LAST attempt must not
+    /// sleep.
+    ///
+    /// `calculate_delay` was only reachable through a successful retry, and the
+    /// suite used 1 ms delays, so both `base_delay * 2^attempt` operators and
+    /// the whole function replaced by `Duration::default()` survived. The guard
+    /// `attempt < attempts - 1` decides whether the final failed attempt sleeps:
+    /// sleeping there delays the error by a whole backoff step for nothing.
+    ///
+    /// The clock is paused, so `Instant::now()` advances only when every task is
+    /// idle — measured elapsed time is then the sum of the requested sleeps, not
+    /// a wall-clock guess.
+    #[tokio::test(start_paused = true)]
+    async fn retry_strategy_backs_off_between_attempts_but_not_after_the_last() {
+        let strategy = RetryStrategy::new(3, Duration::from_millis(100));
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = std::sync::Arc::clone(&attempts);
+        let started = tokio::time::Instant::now();
+        let result: Result<i32, ()> = strategy
+            .execute(|| {
+                let seen = std::sync::Arc::clone(&seen);
+                async move {
+                    seen.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    Err(())
+                }
+            })
+            .await;
+        let elapsed = started.elapsed();
+
+        assert_eq!(result, Err(()));
+        assert_eq!(
+            attempts.load(std::sync::atomic::Ordering::Relaxed),
+            3,
+            "3 attempts are made"
+        );
+        // Two sleeps: 100ms * 2^0 and 100ms * 2^1. The final attempt is the
+        // error path, so it must NOT add a third (400ms) sleep.
+        assert_eq!(
+            elapsed,
+            Duration::from_millis(300),
+            "backoff is 100ms then 200ms; the last attempt must not sleep"
+        );
+    }
+
+    /// A single attempt never sleeps, whatever the base delay is.
+    #[tokio::test(start_paused = true)]
+    async fn retry_strategy_single_attempt_does_not_sleep() {
+        let strategy = RetryStrategy::new(1, Duration::from_secs(60));
+        let started = tokio::time::Instant::now();
+        let result: Result<i32, ()> = strategy.execute(|| async { Err(()) }).await;
+        assert_eq!(result, Err(()));
+        assert_eq!(
+            started.elapsed(),
+            Duration::ZERO,
+            "one attempt is the last attempt and must not back off"
+        );
+    }
+
     // ────── Builder ──────
 
     #[test]
@@ -267,6 +325,14 @@ mod tests {
             .build();
         assert_eq!(strategy.max_attempts, 5);
         assert_eq!(strategy.base_delay, Duration::from_millis(50));
+    }
+
+    /// `RetryStrategy::builder()` starts from `RetryStrategy::default()`'s values.
+    #[test]
+    fn retry_strategy_builder_starts_from_the_documented_defaults() {
+        let built = RetryStrategy::builder().build();
+        assert_eq!(built.max_attempts, 3);
+        assert_eq!(built.base_delay, Duration::from_millis(100));
     }
 
     // ────── Object safety ──────
