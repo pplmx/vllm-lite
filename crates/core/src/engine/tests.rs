@@ -1387,3 +1387,45 @@ fn set_block_data_source_reaches_the_memory_manager() {
         "set_block_data_source must reach the MemoryManager"
     );
 }
+
+/// A speculative-mode flag of `false` must take the REGULAR path even when a
+/// draft model is attached.
+///
+/// `Engine::step` dispatches on
+/// `self.speculative_mode && (self.draft_model.is_some() || self.draft_resolver.is_some())`.
+/// `cargo mutants` relaxed that `&&` to `||` and it survived: no test ran a
+/// step with a draft model attached but speculative mode OFF. With `||` the
+/// engine drafts and verifies anyway, so a caller who turned speculation off
+/// still pays for draft generation — and, as pinned below, reserves KV blocks
+/// for a verification span it will never use.
+#[test]
+fn step_takes_the_regular_path_when_speculative_mode_is_off() {
+    let mut engine = EngineBuilder::new(Box::new(StubModel::default()))
+        .with_draft_model(Box::new(StubModel::default()))
+        .with_max_draft_tokens(20)
+        .with_num_kv_blocks(256)
+        .build();
+    assert!(!engine.speculative_mode, "setup: speculative mode is off");
+    assert!(
+        engine.draft_model.is_some(),
+        "setup: a draft model IS attached"
+    );
+
+    // 8-token prompt: the regular path holds one KV block for it plus the
+    // token it generates, while the speculative path reserves
+    // `input + max_draft = 28` tokens => two blocks.
+    let (tx, _rx) = mpsc::channel(64);
+    let seq_id = engine.add_request(Request::new(0, vec![7; 8], 8), tx);
+    let _ = engine.step();
+
+    let blocks = engine
+        .scheduler
+        .get_sequence(seq_id)
+        .map(|s| s.kv_blocks.len());
+    assert_eq!(
+        blocks,
+        Some(1),
+        "a regular step must not reserve a verification span; two blocks means \
+         the speculative path ran with speculative_mode off"
+    );
+}
