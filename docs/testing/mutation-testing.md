@@ -145,25 +145,28 @@ scan started.
 
 `--all-features`, `--lib` test scope, `cargo-mutants 27.x`:
 
-| Module               | Mutants | Caught |   Missed | Timeout | Unviable |
-| -------------------- | ------: | -----: | -------: | ------: | -------: |
-| `scheduler/**`       |     591 |    515 |       2* |      12 |       62 |
-| `speculative/**`     |     218 |    157 |        0 |       0 |       61 |
-| `metrics/**`         |     231 |    150 | 18 -> 0* |       0 |       63 |
-| `ha/**`              |      28 |     26 |        0 |       1 |        1 |
-| `circuit_breaker/**` |      32 |     19 |        0 |       0 |       13 |
-| `error/**`           |      12 |      1 |        0 |       0 |       11 |
-| `routing/**`         |      30 |     17 |  12 -> 0 |       0 |        0 |
-| `tracing_init.rs`    |       7 |      4 |   4 -> 0 |       0 |        3 |
+| Module               | Mutants | Caught |  Missed | Timeout | Unviable |
+| -------------------- | ------: | -----: | ------: | ------: | -------: |
+| `scheduler/**`       |     591 |    515 |      2* |      12 |       62 |
+| `speculative/**`     |     218 |    157 |       0 |       0 |       61 |
+| `metrics/**`         |     228 |    220 | 18 -> 0 |       0 |        8 |
+| `ha/**`              |      28 |     26 |       0 |       1 |        1 |
+| `circuit_breaker/**` |      32 |     19 |       0 |       0 |       13 |
+| `error/**`           |      12 |      1 |       0 |       0 |       11 |
+| `routing/**`         |      29 |     29 | 12 -> 0 |       0 |        0 |
+| `tracing_init.rs`    |       7 |      4 |  4 -> 0 |       0 |        3 |
 
 \* one is a registered equivalence, the other was fixed after that scan ran.
 
-`Missed` shows `before -> after` for the modules that were re-scanned after
-their survivors were closed by tests; the `after` column is 0 for every module
-that has been re-scanned. `speculative/**` was re-scanned (started at 47 / 111);
-`metrics/**` is the one row still estimated from its survivor list (16 closed by
-hand-verified tests, 2 registered as measured equivalences) and should be
-confirmed by a re-scan before it is quoted anywhere.
+`Missed` shows `before -> after`: every module listed has been re-scanned since
+its survivors were closed by tests, and the `after` column is 0 for all of them.
+`metrics/**` and `speculative/**` needed three and two full scans respectively —
+the first scan of each used a test scope that missed the module's own tests, so
+its survivor list mixed real gaps with artefacts of the filter.
+
+The `Mutants` total moves between scans because adding a `#[cfg(test)]` helper,
+registering an equivalence or deleting dead code changes the count; compare the
+`Missed` column across runs, not the totals.
 
 ### Timeouts are a class, not gaps
 
