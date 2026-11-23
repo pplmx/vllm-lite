@@ -132,6 +132,11 @@ exclude_re = [
   # `SpeculationConfigBuilder::default()` verbatim.
   'config\.rs:49:9: replace SpeculationConfig::builder -> SpeculationConfigBuilder with Default::default()',
 
+  # The comparison is the `unwrap_or` argument: it runs only once
+  # `i64::try_from` has failed, i.e. `delta` is outside i64's range, so `delta`
+  # is never 0 there and `<` and `<=` agree on every reachable input.
+  'otlp\.rs:425:53: replace < with <= in updown_delta',
+
   # `SdkTracerProvider`'s inner `Drop` calls `shutdown()` too, so emptying the
   # guard's `Drop` still shuts the processor down exactly once (measured with a
   # counting `SpanProcessor`).

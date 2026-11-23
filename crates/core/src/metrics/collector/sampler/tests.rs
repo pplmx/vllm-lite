@@ -354,3 +354,29 @@ fn speculative_wire_names_read_back_their_recorders() {
         "removing a sequence must shrink the gauge"
     );
 }
+
+/// A zero-total acceptance sample must leave the gauge untouched.
+///
+/// `record_speculative_acceptance` guards with `if total > 0` because
+/// `accepted / total` is undefined at zero. `cargo mutants` relaxed that guard
+/// to `>=`: at `total == 0` the division yields `0.0 / 0.0 = NaN`, the
+/// `as u64` cast turns that into 0, and the gauge is OVERWRITTEN with 0 — so a
+/// later empty batch erases the last real acceptance rate that `/metrics` was
+/// reporting.
+#[test]
+fn zero_total_acceptance_sample_does_not_reset_the_gauge() {
+    let collector = EnhancedMetricsCollector::new();
+    collector.record_speculative_acceptance(8, 10);
+    assert_eq!(
+        collector.get_gauge("speculative_acceptance_rate"),
+        80_000,
+        "8 of 10 accepted is a 0.8 rate in fixed point"
+    );
+
+    collector.record_speculative_acceptance(1, 0);
+    assert_eq!(
+        collector.get_gauge("speculative_acceptance_rate"),
+        80_000,
+        "a zero-total sample must be a no-op, not a reset to 0"
+    );
+}

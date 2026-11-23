@@ -153,12 +153,17 @@ scan started.
 | `ha/**`              |      28 |     26 |        0 |       1 |        1 |
 | `circuit_breaker/**` |      32 |     19 |        0 |       0 |       13 |
 | `error/**`           |      12 |      1 |        0 |       0 |       11 |
+| `routing/**`         |      30 |     17 |  12 -> 0 |       0 |        0 |
+| `tracing_init.rs`    |       7 |      4 |   4 -> 0 |       0 |        3 |
 
 \* one is a registered equivalence, the other was fixed after that scan ran.
-The `speculative` row is a post-fix re-scan (it started at 47 missed / 111
-caught); the `metrics` row is estimated from that scan's 18 survivors — 16
-closed by hand-verified tests and 2 registered as measured equivalences — and
-should be confirmed by a re-scan before it is quoted anywhere.
+
+`Missed` shows `before -> after` for the modules that were re-scanned after
+their survivors were closed by tests; the `after` column is 0 for every module
+that has been re-scanned. `speculative/**` was re-scanned (started at 47 / 111);
+`metrics/**` is the one row still estimated from its survivor list (16 closed by
+hand-verified tests, 2 registered as measured equivalences) and should be
+confirmed by a re-scan before it is quoted anywhere.
 
 ### Timeouts are a class, not gaps
 

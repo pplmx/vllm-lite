@@ -336,6 +336,19 @@ count is 1 both with the real `Drop` and with the mutant. The other two mutants
 on this type (`is_enabled` → `false`, `Debug` → `Ok(())`) are NOT equivalent and
 are killed by `otlp_guard_debug_and_drop_shuts_the_provider_down`.
 
+### `metrics/exporter/otlp.rs:425` — `delta < 0` → `<= 0` in `updown_delta`
+
+The comparison sits inside the `unwrap_or(...)` argument, so it is evaluated
+ONLY when `i64::try_from(delta)` has already failed — that is, when `delta` is
+outside `i64`'s range. Probed directly: `0`, `1` and `-1` all convert
+successfully and never reach the closure; only `±(i64::MAX + 1)` do. Since the
+reachable `delta` values are all non-zero, `< 0` and `<= 0` select the same
+branch for every input.
+
+The neighbouring `-` → `+` / `/` on the subtraction and the `>`/`==` variants on
+this comparison are NOT equivalent and are killed by
+`updown_delta_clamps_at_the_i64_bounds`.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

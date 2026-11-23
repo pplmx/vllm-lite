@@ -563,6 +563,26 @@ impl OtlpExporter {
         &self.inner.provider
     }
 
+    /// Build an exporter around a caller-supplied provider (test-only).
+    ///
+    /// The production constructor builds its own OTLP-backed provider, which a
+    /// test cannot inspect. This hook accepts a provider wired to an in-memory
+    /// reader, so `run()` and `shutdown()` can be observed.
+    #[cfg(all(test, feature = "opentelemetry"))]
+    pub(crate) fn with_provider_for_test(
+        collector: Arc<EnhancedMetricsCollector>,
+        config: OtlpConfig,
+        provider: SdkMeterProvider,
+    ) -> Self {
+        Self {
+            inner: Arc::new(OtlpExporterInner {
+                collector,
+                config,
+                provider,
+            }),
+        }
+    }
+
     /// Background task body. Polls the collector and records each metric
     /// into the `OTel` instrument. Returns on cancellation; the caller is
     /// expected to `shutdown()` the exporter to flush.
@@ -788,6 +808,91 @@ impl OtlpExporterBuilder {
 #[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
+
+    /// `Debug for OtlpExporter` must name the type and its fields.
+    ///
+    /// Replaced by `Ok(())` it survived — nothing formatted an exporter. This
+    /// is the value an operator sees when the bootstrap logs the exporter it
+    /// built, so an empty rendering removes the only diagnostic on that path.
+    #[tokio::test]
+    async fn otlp_exporter_debug_names_its_fields() {
+        // `new` builds a tonic channel, which needs a tokio reactor.
+        let collector = Arc::new(EnhancedMetricsCollector::new());
+        let exporter = OtlpExporter::new(collector, OtlpConfig::default())
+            .expect("an OTLP exporter builds without a live collector");
+        let rendered = format!("{exporter:?}");
+        assert!(
+            rendered.contains("OtlpExporter"),
+            "Debug must name the type; got {rendered}"
+        );
+        assert!(
+            rendered.contains("config") && rendered.contains("collector_strong_count"),
+            "Debug must include its fields; got {rendered}"
+        );
+    }
+
+    /// `meter_provider()` must hand back the exporter's OWN provider.
+    ///
+    /// `cargo mutants` replaced it with a leaked `Default::default()`, which
+    /// returns a provider that exports nowhere — the bootstrap installs the
+    /// tracing bridge on whatever this returns, so spans would be created and
+    /// silently dropped. The seam lets the test compare identity against an
+    /// injected provider.
+    #[tokio::test]
+    async fn meter_provider_returns_the_exporters_provider() {
+        let collector = Arc::new(EnhancedMetricsCollector::new());
+        let injected = SdkMeterProvider::builder().build();
+        let exporter = OtlpExporter::with_provider_for_test(
+            collector,
+            OtlpConfig::default(),
+            injected.clone(),
+        );
+
+        // Identity is not observable through `Debug` (two providers render the
+        // same) and `&T` addresses differ because the handle is cloned. What IS
+        // observable: shutting a provider down is one-shot, so if the accessor
+        // hands out the SAME provider twice, the second shutdown reports the
+        // provider's already-shut state; a fresh leaked default each call would
+        // accept it.
+        exporter
+            .meter_provider()
+            .clone()
+            .shutdown()
+            .expect("the injected provider shuts down once");
+        assert!(
+            exporter.meter_provider().clone().shutdown().is_err(),
+            "meter_provider must return the exporter's own provider, not a \
+             freshly built one"
+        );
+    }
+
+    /// `shutdown()` must propagate the provider's result.
+    ///
+    /// Replaced by `Ok(())` it survived: nothing shut an exporter down in a
+    /// test. The bootstrap calls this on SIGTERM to flush pending metric
+    /// exports; a stub that always reports success hides a failed final flush,
+    /// which is exactly the case an operator needs to see.
+    #[tokio::test]
+    async fn shutdown_reaches_the_provider() {
+        let collector = Arc::new(EnhancedMetricsCollector::new());
+        let provider = SdkMeterProvider::builder().build();
+        let exporter = OtlpExporter::with_provider_for_test(
+            collector,
+            OtlpConfig::default(),
+            provider.clone(),
+        );
+
+        exporter.shutdown().expect("the first shutdown succeeds");
+
+        // The call must actually reach the provider: a second shutdown on an
+        // already-shut provider is NOT silently accepted by the SDK, so an
+        // always-`Ok(())` stub and the real path differ here.
+        assert!(
+            exporter.shutdown().is_err(),
+            "a second shutdown must surface the provider's own state, which is \
+             what distinguishes the real call from an `Ok(())` stub"
+        );
+    }
 
     #[test]
     fn otlp_config_default_matches_spec() {
@@ -1061,6 +1166,34 @@ mod tests {
         assert_eq!(updown_delta(None, 5), 5);
         assert_eq!(updown_delta(Some(5), 8), 3);
         assert_eq!(updown_delta(Some(5), 3), -2);
+    }
+
+    /// `updown_delta`'s first-tick path must convert, not saturate.
+    ///
+    /// `prev.map_or_else(|| i64::try_from(value).unwrap_or(i64::MAX), ...)`
+    /// handles a `u64` that does not FIT in `i64`: the first tick after a
+    /// restart can legitimately report a cumulative counter above `i64::MAX`,
+    /// and the clamp is what keeps the signed delta from wrapping negative
+    /// (which the backend would subtract, driving the series wrong).
+    /// `cargo mutants` relaxed the `try_from` fallback's `<` to `<=`, and
+    /// nothing pinned the boundary.
+    #[test]
+    fn updown_delta_saturates_on_the_first_tick_above_i64_max() {
+        assert_eq!(
+            updown_delta(None, i64::MAX as u64),
+            i64::MAX,
+            "a value that fits converts exactly"
+        );
+        assert_eq!(
+            updown_delta(None, i64::MAX as u64 + 1),
+            i64::MAX,
+            "one above the signed maximum must clamp, not wrap negative"
+        );
+        assert_eq!(
+            updown_delta(None, u64::MAX),
+            i64::MAX,
+            "the extreme value clamps too"
+        );
     }
 
     /// `updown_delta` must clamp to the CORRECT i64 bound at u64 extremes.
