@@ -3224,57 +3224,9 @@ fn multi_node_decode_growth_chains_the_new_block_from_the_previous_hash() {
 /// whether the event is emitted. With `==`/`<` the line fires exactly when the
 /// peer match count is ZERO — a trace that claims a distributed hit that never
 /// happened — and with `>=` it fires on every request.
-///
-/// The harness is a minimal `Subscriber` installed for the duration of the
-/// call, so the assertion is on the real emitted events, not on internals.
 #[test]
 fn distributed_prefix_hit_trace_stays_silent_without_a_match() {
-    use std::sync::Mutex;
-    use tracing::field::{Field, Visit};
-    use tracing::span::{Attributes, Id, Record};
-    use tracing::{Event, Metadata, Subscriber};
-
-    struct MessageVisitor<'a>(&'a mut Option<String>);
-
-    impl Visit for MessageVisitor<'_> {
-        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-            if field.name() == "message" {
-                *self.0 = Some(format!("{value:?}"));
-            }
-        }
-    }
-
-    #[derive(Clone, Default)]
-    struct Capture(std::sync::Arc<Mutex<Vec<String>>>);
-
-    impl Subscriber for Capture {
-        fn enabled(&self, _: &Metadata<'_>) -> bool {
-            true
-        }
-        fn new_span(&self, _: &Attributes<'_>) -> Id {
-            Id::from_u64(1)
-        }
-        fn record(&self, _: &Id, _: &Record<'_>) {}
-        fn record_follows_from(&self, _: &Id, _: &Id) {}
-        fn event(&self, event: &Event<'_>) {
-            let mut message = None;
-            event.record(&mut MessageVisitor(&mut message));
-            if let Some(message) = message {
-                // invariant: the mutex is held only for this push, and a
-                // poisoned lock still has a readable vector.
-                self.0
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push(message);
-            }
-        }
-        fn enter(&self, _: &Id) {}
-        fn exit(&self, _: &Id) {}
-    }
-
-    let capture = Capture::default();
-    let handle = capture.0.clone();
-    tracing::subscriber::with_default(capture, || {
+    let capture = crate::scheduler::trace_capture::capture(|| {
         // Control: the harness really does capture TRACE events.
         tracing::trace!("capture-harness-control");
 
@@ -3282,19 +3234,16 @@ fn distributed_prefix_hit_trace_stays_silent_without_a_match() {
         let _ = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
     });
 
-    // invariant: the closure above is the only writer and it has returned.
-    let events = handle
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone();
     assert!(
-        events.iter().any(|e| e.contains("capture-harness-control")),
-        "control: the subscriber must capture TRACE events; got {events:?}"
+        capture.contains("capture-harness-control"),
+        "control: the subscriber must capture TRACE events; got {:?}",
+        capture.messages()
     );
     assert!(
-        !events.iter().any(|e| e.contains("Distributed prefix hit")),
+        !capture.contains("Distributed prefix hit"),
         "no peer matched any tokens, so the distributed-hit trace must NOT fire; \
-         got {events:?}"
+         got {:?}",
+        capture.messages()
     );
 }
 
@@ -3310,45 +3259,7 @@ fn distributed_prefix_hit_trace_stays_silent_without_a_match() {
 #[cfg(feature = "multi-node")]
 #[test]
 fn distributed_prefix_hit_trace_fires_when_a_peer_holds_the_prefix() {
-    use std::sync::Mutex;
-    use tracing::field::{Field, Visit};
-    use tracing::span::{Attributes, Id, Record};
-    use tracing::{Event, Metadata, Subscriber};
     use vllm_dist::{CacheConfig, DistributedKVCache, NodeId};
-
-    struct MessageVisitor<'a>(&'a mut Option<String>);
-    impl Visit for MessageVisitor<'_> {
-        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-            if field.name() == "message" {
-                *self.0 = Some(format!("{value:?}"));
-            }
-        }
-    }
-
-    #[derive(Clone, Default)]
-    struct Capture(std::sync::Arc<Mutex<Vec<String>>>);
-    impl Subscriber for Capture {
-        fn enabled(&self, _: &Metadata<'_>) -> bool {
-            true
-        }
-        fn new_span(&self, _: &Attributes<'_>) -> Id {
-            Id::from_u64(1)
-        }
-        fn record(&self, _: &Id, _: &Record<'_>) {}
-        fn record_follows_from(&self, _: &Id, _: &Id) {}
-        fn event(&self, event: &Event<'_>) {
-            let mut message = None;
-            event.record(&mut MessageVisitor(&mut message));
-            if let Some(message) = message {
-                self.0
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push(message);
-            }
-        }
-        fn enter(&self, _: &Id) {}
-        fn exit(&self, _: &Id) {}
-    }
 
     let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 8)));
     let prompt: Vec<u32> = (0..vllm_traits::BLOCK_SIZE * 2)
@@ -3369,22 +3280,17 @@ fn distributed_prefix_hit_trace_fires_when_a_peer_holds_the_prefix() {
         );
     }
 
-    let capture = Capture::default();
-    let handle = capture.0.clone();
-    tracing::subscriber::with_default(capture, || {
+    let capture = crate::scheduler::trace_capture::capture(|| {
         let mut consumer = create_test_engine(SchedulerConfig::default(), 64);
         consumer.set_distributed_kv(Arc::clone(&cache));
         let _ = consumer.add_request(Request::new(0, prompt, 5));
     });
 
-    let events = handle
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone();
     assert!(
-        events.iter().any(|e| e.contains("Distributed prefix hit")),
+        capture.contains("Distributed prefix hit"),
         "a prompt whose block chain is already in the distributed cache must \
-         emit the hit trace; got {events:?}"
+         emit the hit trace; got {:?}",
+        capture.messages()
     );
 }
 
@@ -3489,4 +3395,55 @@ fn ensure_blocks_for_tokens_chains_each_added_block_over_its_own_slice() {
         hash_before,
         "a block with no tokens yet must NOT advance the chain cursor"
     );
+}
+
+/// Re-queueing an ADVANCED prefill must keep its frontier and KV blocks.
+///
+/// `requeue_seq` branches on `seq.num_computed_tokens > 0`: an advanced
+/// (chunked) prefill keeps the KV it already computed and resumes from its
+/// frontier, while a never-advanced sequence is reset. `cargo mutants` relaxed
+/// that `>` to `==`, which sends every ADVANCED sequence down the reset branch —
+/// releasing its whole table and zeroing the frontier, so a long prompt is
+/// recomputed from scratch on every contention round.
+///
+/// The reset branch is a no-op for a fresh sequence (nothing to release, zero
+/// already zero), which is why only an advanced fixture can separate the two.
+#[test]
+fn requeue_seq_preserves_an_advanced_prefills_frontier_and_blocks() {
+    let block_size = vllm_traits::BLOCK_SIZE;
+    let mut engine = create_test_engine(SchedulerConfig::default(), 64);
+
+    let mut seq = Sequence {
+        id: 21,
+        tokens: vec![1; block_size * 2],
+        kv_blocks: Arc::new(vec![]),
+        num_computed_tokens: block_size,
+        prompt_len: block_size * 4,
+        status: Status::Prefilling,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+    engine.preallocate_kv_blocks(std::slice::from_mut(&mut seq));
+    assert_eq!(seq.kv_blocks.len(), 2, "setup: the sequence holds 2 blocks");
+
+    engine.requeue_seq(seq);
+
+    let queued = engine
+        .request_queue
+        .get(21)
+        .expect("the sequence must be back in the waiting queue");
+    assert_eq!(
+        queued.num_computed_tokens, block_size,
+        "an advanced prefill must resume from its frontier, not restart"
+    );
+    assert_eq!(
+        queued.kv_blocks.len(),
+        2,
+        "an advanced prefill must keep the KV it already computed"
+    );
+    assert_eq!(queued.status, Status::Waiting);
 }

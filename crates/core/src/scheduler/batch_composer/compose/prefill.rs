@@ -284,6 +284,48 @@ mod tests {
         );
     }
 
+    /// The chunk log must fire for a genuine chunk and NOT for a resumed
+    /// prefill that finishes in one round.
+    ///
+    /// `classify_prefill_seq` logs "sequence exceeds the token budget;
+    /// processing a chunk" behind `token_count < seq_len - start`.
+    /// `cargo mutants` relaxed that to `==` and to `seq_len + start`; both
+    /// survived, because the guard's ONLY effect is the log line and nothing
+    /// captured events. With `==` a real chunk never logs (operators lose the
+    /// diagnostic); with `+` a resumed prefill that completes in one round logs
+    /// a chunk that did not happen.
+    #[test]
+    fn chunk_log_fires_for_a_chunk_but_not_for_a_final_round() {
+        let c = composer(1000, 8);
+
+        // A RESUMED 40-token prefill (8 already computed) keeps chunking:
+        // 8 tokens now, 24 still to go.
+        let chunked = crate::scheduler::trace_capture::capture(|| {
+            let _ = c.classify_prefill_seq(sequenced(40, 8), 0);
+        });
+        assert!(
+            chunked.contains("processing a chunk"),
+            "a chunked round must log the chunk diagnostic; got {:?}",
+            chunked.messages()
+        );
+
+        // A resumed prefill 8 tokens from the end is served whole: no chunk.
+        let final_round = crate::scheduler::trace_capture::capture(|| {
+            let _ = c.classify_prefill_seq(sequenced(40, 32), 0);
+        });
+        assert_eq!(
+            chunk_len(&c.classify_prefill_seq(sequenced(40, 32), 0)),
+            8,
+            "setup: this round covers the remainder in one piece"
+        );
+        assert!(
+            !final_round.contains("processing a chunk"),
+            "a round that covers the remainder must NOT claim to be a chunk; \
+             got {:?}",
+            final_round.messages()
+        );
+    }
+
     /// A resumed prefill still longer than one chunk keeps chunking.
     #[test]
     fn resumed_prefill_longer_than_chunk_is_split() {

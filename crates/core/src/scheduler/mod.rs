@@ -119,6 +119,10 @@ pub mod engine;
 /// Observer hooks for metrics and tracing integration.
 pub mod observer;
 
+/// Test-only capture of tracing events (used to pin log-only guards).
+#[cfg(test)]
+pub(crate) mod trace_capture;
+
 // === Public Re-exports ===
 
 pub use batch_composer::{BatchComposer, BatchCompositionConfig};

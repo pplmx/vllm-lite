@@ -270,6 +270,21 @@ only at exactly `0`, where both skip the sample. (The `<` and `==` variants of
 this line are NOT equivalent — they drop every sample — and are killed by the
 latency-recording test.)
 
+### `scheduler/engine/state/batch.rs:405` — `num_computed_tokens > 0` → `>=`
+
+`requeue_seq` branches on `seq.num_computed_tokens > 0`. At exactly `0` the two
+variants take different branches, but the branches coincide: the reset branch
+for a never-advanced sequence releases an empty block table, sets
+`kv_blocks = vec![]` (already empty), `num_computed_tokens = 0` (already zero)
+and `status = Waiting` (what the preserve branch also sets). Measured with the
+fresh-sequence fixture used by the requeue tests: both variants leave the same
+queue entry with the same fields.
+
+The `<` and `==` variants of the same line are NOT equivalent — they send an
+ADVANCED sequence down the reset branch, releasing its KV and zeroing its
+frontier — and are killed by
+`requeue_seq_preserves_an_advanced_prefills_frontier_and_blocks`.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

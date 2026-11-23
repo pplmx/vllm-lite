@@ -113,6 +113,11 @@ exclude_re = [
   # current length is a no-op too, so `<=` performs the same work.
   'mod\.rs:550:25: replace < with <= in MemoryManager::rollback',
 
+  # At `num_computed_tokens == 0` the reset branch releases an empty table,
+  # rewrites the same zero/empty values, and sets the same `Waiting` status the
+  # preserve branch would. The `<`/`==` variants are NOT equivalent.
+  'batch\.rs:405:36: replace > with >= in SchedulerEngine::requeue_seq',
+
   # `elapsed` is `as_millis() as f64`; `>` and `>=` differ only at 0, where
   # both skip the sample. (Same class as dispatch.rs:227 / graph_step.rs:280.)
   'batch\.rs:404:20: replace > with >= in crate::engine::Engine::finalize_and_record',
