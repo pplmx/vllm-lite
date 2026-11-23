@@ -321,6 +321,21 @@ The probe start is `(hash % len) as usize`, and the walk is
 the probe order is identical for every key. The `/` variant of the same line is
 NOT equivalent and is killed by `cache_probe_starts_at_hash_modulo_node_count`.
 
+### `tracing_init.rs:116` — `Drop for OtlpGuard` → `()`
+
+The guard's whole job is to call `provider.shutdown()` so buffered spans are
+flushed. Dropping the provider does the same thing: `SdkTracerProvider` holds an
+`Arc<TracerProviderInner>`, and `TracerProviderInner`'s own `Drop` runs
+`self.shutdown()` unless `is_shutdown` is already set
+(`opentelemetry_sdk 0.32`, `src/trace/provider.rs:137`). With the guard's `Drop`
+emptied, the `Option<SdkTracerProvider>` field is still dropped as part of the
+same drop glue, so the processor sees exactly one shutdown either way.
+
+Measured with a counting `SpanProcessor` on a provider built for the test: the
+count is 1 both with the real `Drop` and with the mutant. The other two mutants
+on this type (`is_enabled` → `false`, `Debug` → `Ok(())`) are NOT equivalent and
+are killed by `otlp_guard_debug_and_drop_shuts_the_provider_down`.
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

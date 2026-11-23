@@ -132,6 +132,11 @@ exclude_re = [
   # `SpeculationConfigBuilder::default()` verbatim.
   'config\.rs:49:9: replace SpeculationConfig::builder -> SpeculationConfigBuilder with Default::default()',
 
+  # `SdkTracerProvider`'s inner `Drop` calls `shutdown()` too, so emptying the
+  # guard's `Drop` still shuts the processor down exactly once (measured with a
+  # counting `SpanProcessor`).
+  'tracing_init\.rs:116:9: replace <impl Drop for OtlpGuard>::drop with \(\)',
+
   # `(hash % len)` -> `(hash + len)` is the same residue; the walk re-applies
   # `% len`, so the probe order is identical.
   'hash_router\.rs:94:31: replace % with \+ in HashRouter::route',

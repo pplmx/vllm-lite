@@ -93,6 +93,17 @@ impl OtlpGuard {
         }
     }
 
+    /// Wrap a caller-built provider (test-only).
+    ///
+    /// The production path builds its own `SdkTracerProvider` around an OTLP
+    /// exporter, which cannot be observed from a test. This hook lets a test
+    /// supply a provider whose span processor counts `shutdown()` calls, which
+    /// is the whole point of the guard.
+    #[cfg(test)]
+    pub(crate) const fn with_provider_for_test(provider: SdkTracerProvider) -> Self {
+        Self::enabled(provider)
+    }
+
     /// Returns `true` if OTLP tracing was initialised (drop will flush).
     #[must_use]
     pub const fn is_enabled(&self) -> bool {
@@ -120,6 +131,9 @@ impl std::fmt::Debug for OtlpGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opentelemetry_sdk::error::OTelSdkResult;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
     fn otlp_guard_disabled_reports_not_enabled() {
@@ -127,6 +141,114 @@ mod tests {
         assert!(!guard.is_enabled());
         // Drop is a no-op when disabled.
         drop(guard);
+    }
+
+    /// The guard's `Debug` must name the struct and show the enabled flag, and
+    /// dropping an ENABLED guard must shut the provider down.
+    ///
+    /// `cargo mutants` replaced the `Debug` body with `Ok(())` and the whole
+    /// `Drop` impl with `()`. Dropping without `shutdown()` loses every span
+    /// still buffered in the batch processor — the graceful-shutdown contract
+    /// the guard exists for. The provider is built around a counting span
+    /// processor so the shutdown is an observable fact, not a doc comment.
+    #[test]
+    fn otlp_guard_debug_and_drop_shuts_the_provider_down() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let provider = SdkTracerProvider::builder()
+            .with_span_processor(CountingProcessor {
+                shutdowns: Arc::clone(&counter),
+            })
+            .build();
+        let guard = OtlpGuard::with_provider_for_test(provider);
+
+        let rendered = format!("{guard:?}");
+        assert!(
+            rendered.contains("OtlpGuard"),
+            "Debug must name the type; got {rendered}"
+        );
+        assert!(
+            rendered.contains("is_enabled: true"),
+            "Debug must report the enabled flag; got {rendered}"
+        );
+        assert!(guard.is_enabled());
+        assert_eq!(counter.load(Ordering::Relaxed), 0, "nothing shut down yet");
+
+        drop(guard);
+        assert_eq!(
+            counter.load(Ordering::Relaxed),
+            1,
+            "dropping an enabled guard must shut the provider down exactly once"
+        );
+    }
+
+    /// A DISABLED config must install the plain subscriber and return a guard
+    /// that is not enabled.
+    ///
+    /// `cargo mutants` deleted the `!` in `if !config.enabled`, which sends a
+    /// disabled config down the OTLP path: it builds a real exporter and hands
+    /// back a guard whose drop then shuts down a provider the operator never
+    /// asked for. This is the only place in the process that installs a global
+    /// subscriber, so the test runs exactly once (it is the sole `try_init`
+    /// caller in this crate's test binary).
+    #[test]
+    fn disabled_config_installs_no_otel_layer() {
+        let cfg = OtlpConfig {
+            enabled: false,
+            ..OtlpConfig::default()
+        };
+        let guard = init_tracing_with_otlp(EnvFilter::new("error"), &cfg)
+            .expect("a disabled config never fails to install");
+        assert!(
+            !guard.is_enabled(),
+            "a disabled config must not return an enabled guard"
+        );
+        assert!(
+            format!("{guard:?}").contains("is_enabled: false"),
+            "Debug must report the disabled state"
+        );
+        drop(guard);
+    }
+
+    #[derive(Debug)]
+    struct CountingProcessor {
+        shutdowns: Arc<AtomicUsize>,
+    }
+
+    impl opentelemetry_sdk::trace::SpanProcessor for CountingProcessor {
+        fn on_start(
+            &self,
+            _span: &mut opentelemetry_sdk::trace::Span,
+            _cx: &opentelemetry::Context,
+        ) {
+        }
+        fn on_end(&self, _span: opentelemetry_sdk::trace::SpanData) {}
+        fn force_flush(&self) -> OTelSdkResult {
+            Ok(())
+        }
+        fn shutdown_with_timeout(&self, _timeout: std::time::Duration) -> OTelSdkResult {
+            self.shutdowns.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        }
+    }
+
+    /// The provider's `shutdown()` reaches the span processor only through the
+    /// `OtlpGuard::drop` path, so a `Drop` impl replaced by `()` must show up
+    /// as a zero count. This documents the mechanism the previous test relies
+    /// on, so a future provider change cannot make that test vacuous.
+    #[test]
+    fn provider_shutdown_is_observable_through_the_span_processor() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let provider = SdkTracerProvider::builder()
+            .with_span_processor(CountingProcessor {
+                shutdowns: Arc::clone(&counter),
+            })
+            .build();
+        provider.shutdown().expect("shutdown succeeds");
+        assert_eq!(
+            counter.load(Ordering::Relaxed),
+            1,
+            "SdkTracerProvider::shutdown must call the span processor exactly once"
+        );
     }
 
     #[test]
