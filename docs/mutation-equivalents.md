@@ -285,6 +285,19 @@ ADVANCED sequence down the reset branch, releasing its KV and zeroing its
 frontier — and are killed by
 `requeue_seq_preserves_an_advanced_prefills_frontier_and_blocks`.
 
+### `metrics/lock_free.rs:282` / `:287` — the throughput `uptime > 0.0` guards
+
+Both guards read `if uptime > 0.0 { tokens / uptime } else { 0.0 }`, where
+`uptime` is `self.start_time.elapsed().as_secs_f64()`. The `>=` variants differ
+only when `elapsed()` is EXACTLY zero. Measured on the dev container:
+1,000,000 back-to-back `Instant::now()` / `elapsed()` pairs produced no zero and
+a minimum of 20 ns, so the equality case the mutant would newly divide into is
+not reachable on this platform — and even if it were, `tokens / 0.0` is `inf`,
+not a panic, which the zero-rate assertion on an idle collector already pins.
+
+(The `/` -> `*` and `/` -> `%` variants of the same division are NOT equivalent —
+they are killed by `throughput_is_tokens_divided_by_measured_uptime`.)
+
 ### Unobservable rather than equivalent
 
 `RequestQueue::cleanup_priority_queue` (replace with `()`) cannot be

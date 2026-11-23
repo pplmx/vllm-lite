@@ -277,3 +277,62 @@ fn test_snapshot_averages_match_the_recorded_samples() {
         snapshot.prefix_cache_hit_rate
     );
 }
+
+/// The throughput guards must be strict `> 0.0`, and the division must be a
+/// division.
+///
+/// `snapshot()` computes `prefill_throughput` / `decode_throughput` as
+/// `tokens / uptime` behind `if uptime > 0.0`. `cargo mutants` relaxed the two
+/// guards to `>=` and the divide to `*` / `%`; all four survived because the
+/// existing throughput test only asserts "positive" and "decode < prefill",
+/// which the broken versions also satisfy (a ratio check cannot see `*` at all:
+/// both rates scale identically).
+///
+/// The bound is absolute. The collector's uptime starts when it is built, so
+/// after a 20 ms sleep the internal uptime lies in `[0.018, measured_total]`,
+/// which puts the true rate in `[1000/measured_total, 1000/0.018]`. A multiply
+/// yields ~`1000 * 0.02 = 20` and a modulo a few units — both far below the
+/// floor; a `>=` guard would divide by an uptime of exactly zero, which only
+/// happens for an idle collector created in the same instant (covered by the
+/// existing zero-rate assertion).
+#[test]
+fn throughput_is_tokens_divided_by_measured_uptime() {
+    // Taken BEFORE construction, so the measured span is never shorter than
+    // the collector's own uptime and `1000 / measured` is a true lower bound.
+    let created = std::time::Instant::now();
+    let collector = MetricsCollector::new();
+    collector.record_prefill_tokens(1_000);
+    collector.record_decode_tokens(250);
+
+    std::thread::sleep(std::time::Duration::from_millis(20));
+
+    let snapshot = collector.snapshot();
+    let measured_total = created.elapsed().as_secs_f64();
+    assert!(measured_total >= 0.018, "fixture: the sleep was observed");
+
+    let floor = 1_000.0 / measured_total;
+    // The collector's uptime is at least the sleep, so the rate is at most
+    // `1000 / sleep`; 0.015 s leaves room for clock granularity.
+    let ceiling = 1_000.0 / 0.015;
+    assert!(
+        (floor..=ceiling).contains(&snapshot.prefill_throughput),
+        "1000 prefill tokens over ~{measured_total}s must be {floor}..={ceiling}; \
+         got {} (a `*` mutant lands near 20, a `%` mutant near 0)",
+        snapshot.prefill_throughput
+    );
+    assert!(
+        (250.0 / measured_total..=250.0 / 0.015).contains(&snapshot.decode_throughput),
+        "250 decode tokens over ~{measured_total}s must be a quarter of the \
+         prefill rate; got {}",
+        snapshot.decode_throughput
+    );
+
+    // A collector with no phase tokens reports exactly zero, not NaN.
+    let idle = MetricsCollector::new();
+    let snapshot = idle.snapshot();
+    assert!(
+        snapshot.prefill_throughput.abs() < f64::EPSILON,
+        "an idle collector must report exactly 0 throughput, got {}",
+        snapshot.prefill_throughput
+    );
+}

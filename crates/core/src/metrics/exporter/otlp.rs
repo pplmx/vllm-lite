@@ -800,6 +800,43 @@ mod tests {
         assert!(matches!(cfg.protocol, OtlpProtocol::Grpc));
     }
 
+    /// The `#[serde(default = "...")]` hooks are the SECOND source of the
+    /// documented defaults, and `impl Default` never calls them: a config file
+    /// that omits a field goes through these instead. `cargo mutants` replaced
+    /// each hook with an empty / `"xyzzy"` / `0` / `0.0` / `-1.0` value and all
+    /// ten survived, because the only defaults test built `OtlpConfig::default()`
+    /// — so a YAML file omitting `endpoint` would silently get an empty
+    /// endpoint, and one omitting the sampling ratio an out-of-range `-1.0`.
+    #[test]
+    fn otlp_config_serde_defaults_match_the_documented_values() {
+        // Only `enabled` is present: every other field must come from its hook.
+        let cfg: OtlpConfig =
+            serde_json::from_str(r#"{"enabled":true}"#).expect("minimal config deserialises");
+
+        assert!(cfg.enabled, "the explicit field is preserved");
+        assert_eq!(
+            cfg.endpoint, "http://localhost:4317",
+            "a config omitting `endpoint` must get the documented default"
+        );
+        assert_eq!(cfg.service_name, "vllm-lite");
+        assert_eq!(cfg.service_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(cfg.metrics_export_interval_secs, 30);
+        assert!((cfg.trace_sampling_ratio - 1.0).abs() < f64::EPSILON);
+        assert!(matches!(cfg.protocol, OtlpProtocol::Grpc));
+
+        // The hooks must agree with `impl Default`, so the two sources cannot
+        // drift apart again.
+        let default = OtlpConfig::default();
+        assert_eq!(cfg.endpoint, default.endpoint);
+        assert_eq!(cfg.service_name, default.service_name);
+        assert_eq!(cfg.service_version, default.service_version);
+        assert_eq!(
+            cfg.metrics_export_interval_secs,
+            default.metrics_export_interval_secs
+        );
+        assert!((cfg.trace_sampling_ratio - default.trace_sampling_ratio).abs() < f64::EPSILON);
+    }
+
     #[test]
     fn otlp_config_rejects_negative_sampling_ratio() {
         let cfg = OtlpConfig {

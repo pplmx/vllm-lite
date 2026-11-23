@@ -54,6 +54,10 @@ candle-core = { workspace = true }
 tokio = { workspace = true, features = ["time", "test-util"] }
 criterion = "0.8"
 proptest = { workspace = true }
+# Deserialisation tests for the `#[serde(default = ...)]` hooks on `OtlpConfig`
+# (feature `opentelemetry`): those hooks are a second, hand-duplicated source of
+# the defaults that `impl Default` never calls.
+serde_json = { workspace = true }
 vllm-testing = { path = "../testing", version = "0.1.0" }
 vllm-model = { path = "../model", version = "0.1.0" }
 

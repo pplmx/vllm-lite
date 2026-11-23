@@ -309,3 +309,48 @@ fn test_enhanced_collector_recorders_move_their_getters() {
         snapshot.avg_scheduler_wait_time_ms
     );
 }
+
+/// The two speculative wire names must read back what their recorders wrote.
+///
+/// `get_counter("speculative_adjustments_total")` and
+/// `get_gauge("speculative_per_request_count")` are the `/metrics` names for
+/// the adaptive-decoder adjustment count and the live per-request acceptance
+/// table size. `cargo mutants` DELETED each match arm and both survived, since
+/// no test read those two names — the arm's absence returns the `_ => 0`
+/// fallback, so an operator sees two metrics pinned at zero forever.
+#[test]
+fn speculative_wire_names_read_back_their_recorders() {
+    let collector = EnhancedMetricsCollector::new();
+
+    assert_eq!(
+        collector.get_counter("speculative_adjustments_total"),
+        0,
+        "fresh collector reports zero adjustments"
+    );
+    collector.record_speculative_adjustment();
+    collector.record_speculative_adjustment();
+    assert_eq!(
+        collector.get_counter("speculative_adjustments_total"),
+        2,
+        "each adjustment must be visible under its wire name"
+    );
+
+    assert_eq!(
+        collector.get_gauge("speculative_per_request_count"),
+        0,
+        "no per-request entries yet"
+    );
+    collector.record_per_request_acceptance(1, 3, 4);
+    collector.record_per_request_acceptance(2, 1, 2);
+    assert_eq!(
+        collector.get_gauge("speculative_per_request_count"),
+        2,
+        "the gauge tracks the number of tracked sequences"
+    );
+    collector.remove_per_request(1);
+    assert_eq!(
+        collector.get_gauge("speculative_per_request_count"),
+        1,
+        "removing a sequence must shrink the gauge"
+    );
+}

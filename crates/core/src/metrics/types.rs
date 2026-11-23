@@ -115,6 +115,42 @@ mod tests {
         assert_eq!(counter.as_u64(), 1);
     }
 
+    /// `set` writes gauges and must not disturb counters or histograms, and
+    /// `as_u64` must read the stored value back for both live variants.
+    ///
+    /// `cargo mutants` replaced `set` with `()` (a gauge silently never
+    /// changes) and `as_u64` with the constants 0 / 1 (every counter reads the
+    /// same), and both survived: the suite only ever exercised
+    /// `new_counter()` + `increment`.
+    #[test]
+    fn test_metric_value_set_and_read_back() {
+        let gauge = MetricValue::new_gauge();
+        assert_eq!(gauge.as_u64(), 0, "a fresh gauge reads zero");
+        gauge.set(42);
+        assert_eq!(gauge.as_u64(), 42, "set must store the gauge value");
+        gauge.set(7);
+        assert_eq!(gauge.as_u64(), 7, "set overwrites rather than accumulating");
+
+        // A counter must ignore `set` (its writer is `increment`).
+        let counter = MetricValue::new_counter();
+        counter.set(99);
+        assert_eq!(
+            counter.as_u64(),
+            0,
+            "set on a Counter must be a no-op, not a store"
+        );
+        counter.increment(3);
+        assert_eq!(counter.as_u64(), 3);
+
+        // A histogram has no scalar value.
+        let hist = MetricValue::Histogram(vec![1, 2, 3]);
+        assert_eq!(
+            hist.as_u64(),
+            0,
+            "Histogram must report 0 from as_u64, not a constant"
+        );
+    }
+
     #[test]
     fn test_metric_labels() {
         let labels = MetricLabels::new()

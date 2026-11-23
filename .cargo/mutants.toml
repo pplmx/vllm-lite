@@ -122,6 +122,11 @@ exclude_re = [
   # both skip the sample. (Same class as dispatch.rs:227 / graph_step.rs:280.)
   'batch\.rs:404:20: replace > with >= in crate::engine::Engine::finalize_and_record',
 
+  # `uptime` is `Instant::elapsed()`; measured minimum 20 ns over 1e6 samples,
+  # so the `elapsed() == 0` case `>=` would newly divide into is unreachable.
+  'lock_free\.rs:282:44: replace > with >= in LockFreeMetrics::snapshot',
+  'lock_free\.rs:287:43: replace > with >= in LockFreeMetrics::snapshot',
+
   # `compose` routes to `compose_prefill_with_packing`, whose whole body is
   # `self.compose_prefill_batch(sequences)`: every guard variant picks between
   # two calls that run the same code on the same argument.
