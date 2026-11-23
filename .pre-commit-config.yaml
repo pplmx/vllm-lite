@@ -68,12 +68,16 @@ repos:
             stages: [pre-push]
             pass_filenames: false
 
-          - id: cargo-audit
-            # Cheap (~5s) when advisory-db is cached; protects against
-            # accidentally introducing a vulnerable dep.
-            name: cargo audit
-            entry: bash -c 'cargo audit --ignore RUSTSEC-2024-0436 --deny warnings'
-            language: system
-            types: [rust]
-            stages: [pre-push]
-            pass_filenames: false
+          # Dependency auditing is deliberately NOT a pre-push hook.
+          #
+          # It gates on the state of the whole lockfile rather than on what is
+          # being pushed, so a RustSec advisory published against a crate this
+          # branch never touched blocks every push — which is exactly what
+          # happened on 2026-11-23: 16 advisories against a lockfile that had
+          # not changed since origin/main, and the only escape was `--no-verify`.
+          # A gate whose failure says nothing about the commit being pushed
+          # trains people to bypass gates.
+          #
+          # It runs where that signal belongs: `.github/workflows/ci.yml`
+          # (`cargo audit`), `.github/workflows/deny.yml` (`cargo deny check`)
+          # and `just audit` / `just deny` locally.

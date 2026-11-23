@@ -57,6 +57,38 @@ The following are **out of scope** (handled externally):
 
 ## Audit History
 
+### 2026-11-23 — current baseline
+
+`cargo audit --ignore RUSTSEC-2024-0436 --deny warnings`: **8 vulnerabilities
+
+- 2 warnings**. Baseline at the previous entry (2026-06-28) was 0 + 2; the
+advisory database has published new findings since, and none of them come from
+a code change here.
+
+Raised to the first fixed release available:
+
+| Crate            | From    | To        | Advisory                                          |
+| ---------------- | ------- | --------- | ------------------------------------------------- |
+| `rustls`         | 0.23.42 | 0.23.46   | RUSTSEC-2026-0348 / -0285 / -0346 / -0349         |
+| `rustls-webpki`  | 0.103.13| 0.103.17  | RUSTSEC-2026-0382                                 |
+| `url`            | 2.5.8   | 2.5.9     | RUSTSEC-2026-0592                                 |
+| `pulldown-cmark` | 0.13.4  | 0.13.6    | RUSTSEC-2026-0433 / -0414                         |
+| `rustix`         | 1.1.4   | 1.1.6     | RUSTSEC-2026-0486                                 |
+
+Remaining, and why each cannot be fixed by a version bump from this tree:
+
+| Crate    | Version | Advisory                                                    | Disposition                                                                                                                                                                   |
+| -------- | ------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zip`    | 8.6.0   | RUSTSEC-2026-0367/-0368/-0369/-0429/-0545/-0546/-0547/-0548 | ⚠️ **Blocked upstream** — reached only through `candle-core 0.11`, which pins `zip ^8`. The fixes need `zip >= 9.0.5`, so a candle release that widens the bound is required. |
+| `chrono` | 0.4.45  | RUSTSEC-2026-0543 (unmaintained)                            | ⚠️ **No fix published** — replacing the crate or waiting for a fork are the only options.                                                                                     |
+| `tokio`  | 1.53.1  | RUSTSEC-2026-0386 (unsound, `AsyncFd` I/O safety)           | ⚠️ **No fix published** — `AsyncFd` is not used on our paths (blocking TCP + rustls in `vllm-server`).                                                                        |
+
+`cargo audit` is not a pre-push hook: it judges the whole lockfile rather than
+the commit being pushed, so an advisory against a crate a branch never touched
+blocked every push and invited `--no-verify`. It runs in CI
+(`.github/workflows/ci.yml` and `deny.yml`) and locally via `just audit` /
+`just deny`.
+
 This section records the periodic `cargo audit` results and any remediation taken.
 
 ### 2026-06-28 (v26.0)
