@@ -141,6 +141,25 @@ The two misses in the latest scan are not gaps: one is `requeue_seq`'s
 (`push_token_and_allocate`'s block index) is covered by a test added after that
 scan started.
 
+### Current module sweep
+
+`--all-features`, `--lib` test scope, `cargo-mutants 27.x`:
+
+| Module               | Mutants | Caught |   Missed | Timeout | Unviable |
+| -------------------- | ------: | -----: | -------: | ------: | -------: |
+| `scheduler/**`       |     591 |    515 |       2* |      12 |       62 |
+| `speculative/**`     |     218 |    157 |        0 |       0 |       61 |
+| `metrics/**`         |     231 |    150 | 18 -> 0* |       0 |       63 |
+| `ha/**`              |      28 |     26 |        0 |       1 |        1 |
+| `circuit_breaker/**` |      32 |     19 |        0 |       0 |       13 |
+| `error/**`           |      12 |      1 |        0 |       0 |       11 |
+
+\* one is a registered equivalence, the other was fixed after that scan ran.
+The `speculative` row is a post-fix re-scan (it started at 47 missed / 111
+caught); the `metrics` row is estimated from that scan's 18 survivors — 16
+closed by hand-verified tests and 2 registered as measured equivalences — and
+should be confirmed by a re-scan before it is quoted anywhere.
+
 ### Timeouts are a class, not gaps
 
 The 12 TIMEOUT verdicts in the latest scan are `+=` -> `*=` / `-=` loop-counter
