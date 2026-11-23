@@ -72,10 +72,29 @@ jobs:
         run: cargo check --workspace --all-features --all-targets
 
       - name: MSRV drift guard
-        # If you bump rust-version in Cargo.toml, update the matrix above.
+        # The MSRV is declared in FOUR places. Checking only `Cargo.toml`
+        # against the matrix lets the others drift silently — `Dockerfile`
+        # would still build on an older image, and `fuzz/` would claim a
+        # different minimum than the workspace it fuzzes. This guard was
+        # widened after the 1.88 -> 1.94 bump, which had to touch all of them
+        # by hand.
         run: |
-          actual=$(grep '^rust-version' Cargo.toml | head -1 | awk -F'"' '{print $2}')
-          if [ "$actual" != "${{ matrix.rust }}" ]; then
-            echo "::error::Cargo.toml rust-version ($actual) != MSRV matrix (${{ matrix.rust }})"
-            exit 1
-          fi
+          expected="${{ matrix.rust }}"
+          status=0
+          check() {
+            if [ "$2" != "$expected" ]; then
+              echo "::error::$1 says $2, but the MSRV matrix says $expected"
+              status=1
+            else
+              echo "ok  $1 = $2"
+            fi
+          }
+          check "Cargo.toml rust-version" \
+            "$(grep '^rust-version' Cargo.toml | head -1 | awk -F'"' '{print $2}')"
+          check "rust-toolchain.toml channel" \
+            "$(grep '^channel' rust-toolchain.toml | awk -F'"' '{print $2}')"
+          check "fuzz/Cargo.toml rust-version" \
+            "$(grep '^rust-version' fuzz/Cargo.toml | awk -F'"' '{print $2}')"
+          check "Dockerfile builder image" \
+            "$(grep -m1 '^FROM rust:' Dockerfile | sed -E 's/^FROM rust:([0-9.]+)-.*/\1/')"
+          exit $status
